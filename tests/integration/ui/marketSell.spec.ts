@@ -100,11 +100,10 @@ test.describe('TEST-07 — Sell market order via UI (Path-B)', () => {
 		await page.click('[data-testid="side-toggle"][data-side="sell"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
-		// Sell side is asset-anchored by default; the spend-input/asset-input
-		// testid auto-switches to `asset-input` for sell. Fill the asset amount
-		// directly (no input-mode toggle needed on sell — only buy exposes the
-		// USD-anchored "spend up to" path).
-		await page.locator('[data-testid="asset-input"] input').first().fill('0.05');
+		// Sell side anchors on the wrapped (wt*) field of the TradeAmountTriField;
+		// type into it directly. The other two fields (USDC + t* shares) auto-
+		// derive but aren't asserted on here.
+		await page.locator('[data-testid="trifield-wrapped"]').fill('0.05');
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="sell"]');
 		await expect(submit).toBeEnabled({ timeout: 60_000 });

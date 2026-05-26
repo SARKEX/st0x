@@ -30,6 +30,12 @@
 		OHLCBucket
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+	import WrapRatioChip from '$lib/components/wrap/WrapRatioChip.svelte';
+	import WrapRatioCard from '$lib/components/wrap/WrapRatioCard.svelte';
+	import WrapExplainerModal from '$lib/components/wrap/WrapExplainerModal.svelte';
+	import DenomToggle from '$lib/components/wrap/DenomToggle.svelte';
+	import RatioHistoryTab from '$lib/components/wrap/RatioHistoryTab.svelte';
+	import { createExchangeRatesQuery, resolveRatio } from '$lib/queries/exchangeRates';
 	import { extractBaseSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
@@ -103,6 +109,7 @@
 		currentToken?.address ?? null
 	);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	const exchangeRatesQuery = createExchangeRatesQuery();
 	$: {
 		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
 			$currentNetwork,
@@ -110,6 +117,73 @@
 		);
 		tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	}
+
+	// Wrap ratio (assetsPerShare) for the current wrapped token. Defaults to 1
+	// when the API lookup is missing — parity wrappers stay 1:1 and the chip /
+	// callouts hide themselves.
+	$: currentRatio = resolveRatio(
+		$exchangeRatesQuery.data ?? null,
+		currentPythToken?.address ?? currentToken?.address ?? null
+	);
+	$: hasRatio = Number.isFinite(currentRatio) && currentRatio !== 1;
+
+	// "Ratio History" tab only shows when this wrapper actually has a non-1
+	// ratio — keeps the tab strip lean for parity tokens.
+	$: TOKEN_TABS = (
+		hasRatio
+			? [
+					{ id: 'contract', label: 'Contract' },
+					{ id: 'ratio', label: 'Ratio History' },
+					{ id: 'supply', label: 'Supply' },
+					{ id: 'mints', label: 'Mints' },
+					{ id: 'burns', label: 'Burns' }
+				]
+			: [
+					{ id: 'contract', label: 'Contract' },
+					{ id: 'supply', label: 'Supply' },
+					{ id: 'mints', label: 'Mints' },
+					{ id: 'burns', label: 'Burns' }
+				]
+	) as ReadonlyArray<{ id: string; label: string; badge?: number | string | null }>;
+
+	// Table denomination — shares (t*) matches chart/oracle, wrapped (wt*)
+	// matches wallet balance. Default to shares; user toggles via DenomToggle.
+	let tableDenom: 'unwrapped' | 'wrapped' = 'unwrapped';
+	function handleDenomChange(event: CustomEvent<'unwrapped' | 'wrapped'>) {
+		tableDenom = event.detail;
+	}
+
+	// Price scaling for charts: OHLC + depth arrive in USD per wt* (the
+	// orderbook's native unit). Toggling to 'unwrapped' rescales by dividing
+	// by the ratio so the chart axis labels become USD per share. Identity
+	// transform when ratio is 1 (most tokens today).
+	$: priceScale = tableDenom === 'unwrapped' && currentRatio > 0 ? 1 / currentRatio : 1;
+	$: displayOhlcData =
+		priceScale === 1
+			? ohlcData
+			: ohlcData.map((c) => ({
+					x: c.x,
+					o: c.o * priceScale,
+					h: c.h * priceScale,
+					l: c.l * priceScale,
+					c: c.c * priceScale
+				}));
+	$: displayOrderbookDepth =
+		priceScale === 1
+			? orderbookDepth
+			: {
+					bids: orderbookDepth.bids.map((b) => ({ ...b, price: b.price * priceScale })),
+					asks: orderbookDepth.asks.map((a) => ({ ...a, price: a.price * priceScale }))
+				};
+
+	// Explainer modal state (opened from chip / "How it works" buttons).
+	let showWrapExplainer = false;
+	function openWrapExplainer() {
+		showWrapExplainer = true;
+	}
+	function closeWrapExplainer() {
+		showWrapExplainer = false;
 	}
 
 	// One-shot: fetch legacy address quotes once per token
@@ -271,13 +345,7 @@
 	] as const;
 	type AssetTabId = (typeof ASSET_TABS)[number]['id'];
 	let activeAssetTab: AssetTabId = 'company';
-	const TOKEN_TABS = [
-		{ id: 'contract', label: 'Contract' },
-		{ id: 'supply', label: 'Supply' },
-		{ id: 'mints', label: 'Mints' },
-		{ id: 'burns', label: 'Burns' }
-	] as const;
-	type TokenTabId = (typeof TOKEN_TABS)[number]['id'];
+	type TokenTabId = 'contract' | 'ratio' | 'supply' | 'mints' | 'burns';
 	let activeTokenTab: TokenTabId = 'contract';
 	const ONCHAIN_TABS = [
 		{ id: 'market', label: 'Market Data' },
@@ -919,6 +987,32 @@
 	</div>
 {:else}
 	<div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
+		{#if hasRatio}
+			<!-- Token title row with wrap-ratio chip — only when the token is a
+				 non-parity wrapper, otherwise it's noise. -->
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div class="min-w-0 leading-tight">
+					<h1 class="text-xl font-semibold leading-tight text-white sm:text-2xl">
+						{tokenDisplayName}
+					</h1>
+					<div
+						class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-400 sm:text-sm"
+					>
+						<span class="font-mono tabular-nums"
+							>{currentPythToken?.symbol ?? currentToken.symbol}</span
+						>
+						<span class="text-gray-600">·</span>
+						<span>Wrapped tStock on {$currentNetwork.displayName}</span>
+					</div>
+				</div>
+				<WrapRatioChip
+					ratio={currentRatio}
+					wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+					assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+					onLearnMore={openWrapExplainer}
+				/>
+			</div>
+		{/if}
 		<!-- Header Section with Chart -->
 		<div class="space-y-4 sm:space-y-6">
 			<div class="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-5">
@@ -1118,6 +1212,15 @@
 								View on-chain trades, liquidity, orders, and vaults
 							</p>
 						</div>
+						<div class="flex items-center gap-2">
+							{#if hasRatio}
+								<DenomToggle
+									value={tableDenom}
+									wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+									on:change={handleDenomChange}
+								/>
+							{/if}
 						{#if $isAuthenticated && !isEmbeddedWallet}
 							<button
 								type="button"
@@ -1168,6 +1271,7 @@
 								<span class="hidden sm:inline">Track in Wallet</span>
 							</button>
 						{/if}
+						</div>
 					</div>
 					<TabNav
 						tabs={ONCHAIN_TABS}
@@ -1192,8 +1296,8 @@
 							<svelte:component
 								this={Mod.default}
 								volumeBuckets={tradeVolumeBuckets}
-								depth={orderbookDepth}
-								{ohlcData}
+								depth={displayOrderbookDepth}
+								ohlcData={displayOhlcData}
 								rangeStartMs={historyRangeStartMs}
 								rangeEndMs={historyRangeEndMs}
 								isLoading={chartsLoading}
@@ -1203,7 +1307,11 @@
 								on:rangeChange={(e) => (historyRange = e.detail.key)}
 							/>
 							<div class="mt-2 hidden text-xs text-gray-400 sm:block">
-								All times are displayed in your local timezone
+								All times are displayed in your local timezone{#if hasRatio}
+									· prices in USD per {tableDenom === 'unwrapped'
+										? (currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't') +
+											' (share)'
+										: currentPythToken?.symbol ?? currentToken.symbol + ' (wrapped)'}{/if}
 							</div>
 						{:catch _err}
 							<div class="min-h-[320px] p-4 text-sm text-red-400 sm:min-h-[440px]">
@@ -1219,6 +1327,8 @@
 								errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
 								tokenAddress={currentToken?.address ?? null}
 								showTokenColumn={false}
+								denomination={tableDenom}
+								wrapRatio={currentRatio}
 							/>
 						</div>
 					{:else if activeOnchainTab === 'vaults'}
@@ -1425,6 +1535,15 @@
 					</div>
 					{#if activeTokenTab === 'contract'}
 						<div>
+							{#if hasRatio}
+								<WrapRatioCard
+									ratio={currentRatio}
+									wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+									onLearnMore={openWrapExplainer}
+									onViewHistory={() => (activeTokenTab = 'ratio')}
+								/>
+							{/if}
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex items-center justify-between gap-2">
@@ -1483,6 +1602,21 @@
 									<span class="text-gray-400">Decimals</span>
 									<span>18</span>
 								</div>
+								{#if hasRatio}
+									<div class="flex justify-between">
+										<span class="text-gray-400">Wrap ratio</span>
+										<span class="font-mono tabular-nums"
+											>1 {currentPythToken?.symbol ?? currentToken.symbol} ↔ {Number.isInteger(
+												currentRatio
+											)
+												? currentRatio
+												: currentRatio.toLocaleString('en-US', {
+														maximumFractionDigits: 4
+													})}
+											{(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}</span
+										>
+									</div>
+								{/if}
 								<div class="flex items-center justify-between">
 									<span class="text-gray-400">Proofs</span>
 									<a href={`/trade/${tokenId}/proofs`} class="text-blue-400 hover:text-blue-300">
@@ -1491,6 +1625,15 @@
 								</div>
 							</div>
 						</div>
+					{:else if activeTokenTab === 'ratio' && hasRatio}
+						<RatioHistoryTab
+							wrappedTokenAddress={currentPythToken?.address ?? currentToken.address}
+							wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+							assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+							currentRatio={currentRatio}
+							onLearnMore={openWrapExplainer}
+							txHrefBuilder={(tx) => `${$currentNetwork.blockExplorer}/tx/${tx}`}
+						/>
 					{:else if activeTokenTab === 'supply'}
 						<div>
 							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
@@ -1734,7 +1877,25 @@
 							<div>
 								<h2 class="text-base font-semibold sm:text-lg">{tokenDisplayName}</h2>
 								{#if tokenDisplaySymbol}
-									<p class="text-xs text-gray-400 sm:text-sm">{tokenDisplaySymbol}</p>
+									<p class="text-xs text-gray-400 sm:text-sm">
+										<span class="font-mono tabular-nums">{tokenDisplaySymbol}</span>
+										{#if hasRatio}
+											<span class="text-gray-600">·</span>
+											<button
+												type="button"
+												class="font-mono tabular-nums text-gray-300 hover:text-yellow-200 hover:underline"
+												title="What's the wrap ratio?"
+												on:click={openWrapExplainer}
+											>
+												1 {tokenDisplaySymbol} = {Number.isInteger(currentRatio)
+													? currentRatio
+													: currentRatio.toLocaleString('en-US', {
+															maximumFractionDigits: 4
+														})}
+												{tokenDisplaySymbol.replace(/^wt/, 't')}
+											</button>
+										{/if}
+									</p>
 								{/if}
 							</div>
 						</div>
@@ -2098,3 +2259,15 @@
 
 <!-- Vault Tutorial -->
 <VaultTutorial onSelectDexTab={handleVaultTutorialTabChange} />
+
+<!-- Wrap-ratio explainer (opened from chip / Contract-tab card / About) -->
+{#if currentToken && hasRatio}
+	<WrapExplainerModal
+		show={showWrapExplainer}
+		ratio={currentRatio}
+		wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+		assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+		equityName={currentToken.name ?? currentToken.symbol}
+		onClose={closeWrapExplainer}
+	/>
+{/if}

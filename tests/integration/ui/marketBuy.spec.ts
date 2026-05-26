@@ -111,13 +111,11 @@ test.describe('TEST-06 — Buy market order via UI (Path-B)', () => {
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
-		// UI default flipped to 'amount' in 5b3c81d — toggle back to spend so we
-		// can drive the dollar-anchored entry.
-		const modeToggle = page.locator('[data-testid="input-mode-toggle"]');
-		if ((await modeToggle.getAttribute('data-mode')) !== 'spend') {
-			await modeToggle.click();
-		}
-		await page.locator('[data-testid="spend-input"] input').first().fill('10');
+		// The Buy/Spend mode toggle was retired when MarketOrder switched to the
+		// three-field TradeAmountTriField (USDC + wt* + t*). Filling
+		// `trifield-usdc` directly anchors the form to 'spend' mode and the
+		// other two fields auto-derive.
+		await page.locator('[data-testid="trifield-usdc"]').fill('10');
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="buy"]');
 		await expect(submit).toBeEnabled({ timeout: 60_000 });

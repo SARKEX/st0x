@@ -8,6 +8,8 @@
 	} from '$lib/types/orderPerspective';
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
+	import TradeAmountTriField from '$lib/components/wrap/TradeAmountTriField.svelte';
+	import { createExchangeRatesQuery, resolveRatio } from '$lib/queries/exchangeRates';
 	import { formatUnits } from 'viem';
 	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -32,8 +34,13 @@
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
-	// Input mode: 'amount' = specify asset quantity, 'spend' = specify payment amount
-	let inputMode: 'amount' | 'spend' = 'amount';
+	// Input mode: 'amount' = specify asset quantity, 'spend' = specify payment amount.
+	// Driven by the TradeAmountTriField's active anchor (USDC → 'spend',
+	// wrapped/shares → 'amount'). The widening cast keeps Svelte's TS narrowing
+	// from collapsing the union to the initial literal — without it, the
+	// bind:inputMode flow leaves the type as just `'amount'`.
+	type InputMode = 'amount' | 'spend';
+	let inputMode = 'amount' as InputMode;
 	/**
 	 * assetToken: The non-settlement token being traded (tSTOX, tNVDA, etc.)
 	 *
@@ -261,6 +268,17 @@
 
 	// Reference to TradeAmountInput for programmatic updates
 	let tradeAmountInputRef: { setAmountValue: (amount: bigint) => void } | undefined;
+
+	// Wrap-ratio context for the tri-field. The query is a single shared cache
+	// entry (all wrappers at once) so it's cheap. Defaults to ratio=1 when the
+	// API can't resolve the token, which makes the tri-field's third "shares"
+	// row numerically agree with the wrapped row — safe fallback.
+	const exchangeRatesQuery = createExchangeRatesQuery();
+	$: wrapRatio = resolveRatio($exchangeRatesQuery.data ?? null, assetToken?.address ?? null);
+	// Active anchor for the tri-field — drives `inputMode` underneath. The
+	// "shares" anchor maps to inputMode='amount' (selectedAmount in wt
+	// decimals), with the user typing in t* shares — see TradeAmountTriField.
+	let triFieldAnchor: 'usdc' | 'wrapped' | 'shares' = 'wrapped';
 
 	// Token being spent
 	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
@@ -1023,69 +1041,45 @@
 			<!-- Main inputs stacked -->
 			<div class="space-y-4">
 				<div>
-					<!-- Unified input with integrated toggle and token -->
-					<div
-						class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50"
-					>
-						<!-- Left side: Buy/Spend or Sell toggle -->
-						{#if orderSide === 'Buy'}
-							<button
-								type="button"
-								data-testid="input-mode-toggle"
-								data-mode={inputMode}
-								on:click={() => {
-									inputMode = inputMode === 'amount' ? 'spend' : 'amount';
-									selectedAmount = 0n;
-								}}
-								class="flex items-center gap-1.5 py-3 pl-4 pr-2 text-sm font-medium text-green-400 transition-colors hover:text-green-300"
-							>
-								{inputMode === 'amount' ? 'Buy' : 'Spend'}
-								<svg
-									class="h-3 w-3 opacity-50"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M8 9l4-4 4 4m0 6l-4 4-4-4"
-									/>
-								</svg>
-							</button>
-						{:else}
-							<span class="py-3 pl-4 pr-2 text-sm font-medium text-red-400"> Sell </span>
-						{/if}
-
-						<!-- Middle: Amount input -->
-						<!-- D-09 testid: spend-input when inputMode is 'spend' (payment amount),
-					     asset-input when inputMode is 'amount' (asset quantity). The same
-					     TradeAmountInput renders both; the testid follows the mode so E2E can
-					     compose `[data-testid="asset-input"]` for asset-anchored entry and
-					     `[data-testid="spend-input"]` for payment-anchored entry. -->
-						<div class="flex-1" data-testid={inputMode === 'spend' ? 'spend-input' : 'asset-input'}>
-							<TradeAmountInput
-								bind:this={tradeAmountInputRef}
-								aria-label={inputMode === 'spend' ? 'Spend Amount' : 'Quantity'}
-								amountToken={inputMode === 'spend' ? paymentToken : assetToken}
-								balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
-								bind:amount={selectedAmount}
-								bind:balance={spendingTokenBalance}
-								bind:balanceDecimals={spendingTokenBalanceDecimals}
-								validate={validateSelectedAmount}
-								bind:isError={selectedAmountError}
-								showUnit={false}
-								showMaxButton={false}
-								compact={true}
-								noBorder={true}
-							/>
-						</div>
-
-						<!-- Right side: Token symbol -->
-						<span class="py-3 pl-2 pr-4 text-sm font-medium text-gray-300">
-							{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
-						</span>
+					<!-- Three-field amount entry: USDC + wt* + t* (shares). All three are
+						 visible at all times so the user never has to convert in their
+						 head; type in any field and the other two recompute. The "anchor"
+						 (last-typed field) drives the underlying inputMode + selectedAmount
+						 the existing order machinery already expects. The container keeps
+						 the original testid mapping for E2E. -->
+					<div data-testid={inputMode === 'spend' ? 'spend-input' : 'asset-input'}>
+						<TradeAmountTriField
+							bind:this={tradeAmountInputRef}
+							bind:selectedAmount
+							bind:inputMode
+							bind:anchor={triFieldAnchor}
+							{paymentToken}
+							wrappedToken={assetToken}
+							ratio={wrapRatio}
+							bestPrice={bestOrderbookPrice ?? (oracleEntry?.price ?? 0)}
+							side={orderSide}
+							isError={selectedAmountError}
+						/>
+					</div>
+					<!-- Hidden TradeAmountInput drives validation on selectedAmount via
+						 the existing validate hook and reads the user's balance. It's
+						 invisible but keeps `isError`, `spendingTokenBalance`, and
+						 `spendingTokenBalanceDecimals` populated for the percentage
+						 buttons + insufficient-balance logic without rewriting any of it. -->
+					<div class="sr-only" aria-hidden="true">
+						<TradeAmountInput
+							amountToken={inputMode === 'spend' ? paymentToken : assetToken}
+							balanceToken={orderSide === 'Buy' ? paymentToken : assetToken}
+							amount={selectedAmount}
+							bind:balance={spendingTokenBalance}
+							bind:balanceDecimals={spendingTokenBalanceDecimals}
+							validate={validateSelectedAmount}
+							bind:isError={selectedAmountError}
+							showUnit={false}
+							showMaxButton={false}
+							compact={true}
+							noBorder={true}
+						/>
 					</div>
 
 					<!-- Balance display -->
