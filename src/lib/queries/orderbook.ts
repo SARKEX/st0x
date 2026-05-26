@@ -261,14 +261,28 @@ export function createTokenOrderbookQuotesQuery(
 		refetchInterval: pollInterval, // Poll every 15s by default on trade pages
 		refetchOnWindowFocus: true, // Only refetch on focus if stale
 		refetchIntervalInBackground: false,
-		// Use global cache as initial data for instant display
+		// Seed from global cache only when it was updated recently (avoid minutes-old books).
 		initialData: () => {
 			if (!network || !tokenAddress) return undefined;
+			const globalState = queryClient.getQueryState(['orderbookQuotes', network.id]);
+			if (
+				!globalState?.dataUpdatedAt ||
+				Date.now() - globalState.dataUpdatedAt > 15_000
+			) {
+				return undefined;
+			}
 			return getQuotesForToken(network.id, tokenAddress);
 		},
 		initialDataUpdatedAt: () => {
 			if (!network) return undefined;
-			return queryClient.getQueryState(['orderbookQuotes', network.id])?.dataUpdatedAt;
+			const globalState = queryClient.getQueryState(['orderbookQuotes', network.id]);
+			if (
+				!globalState?.dataUpdatedAt ||
+				Date.now() - globalState.dataUpdatedAt > 15_000
+			) {
+				return undefined;
+			}
+			return globalState.dataUpdatedAt;
 		},
 		queryFn: async () => {
 			if (!network || !tokenAddress) {
@@ -288,15 +302,20 @@ export function createTokenOrderbookQuotesQuery(
  */
 export function invalidateOrderQueries(networkId?: number, tokenAddress?: string) {
 	if (tokenAddress && networkId) {
-		// Token-specific: fetch fresh data for this token and merge
+		queryClient.invalidateQueries({
+			queryKey: ['tokenOrderbookQuotes', networkId, tokenAddress]
+		});
 		refreshTokenQuotes(networkId, tokenAddress).catch((err) =>
 			console.error('[OrderbookQueries] Token refresh failed:', err)
 		);
 	} else {
-		// Full invalidation: refetch entire global cache
 		queryClient.invalidateQueries({ queryKey: ['orderbookQuotes'] });
+		if (networkId !== undefined) {
+			queryClient.invalidateQueries({ queryKey: ['tokenOrderbookQuotes', networkId] });
+		} else {
+			queryClient.invalidateQueries({ queryKey: ['tokenOrderbookQuotes'] });
+		}
 	}
-	// Always invalidate closed orders query
 	queryClient.invalidateQueries({ queryKey: ['closedOrders'] });
 }
 

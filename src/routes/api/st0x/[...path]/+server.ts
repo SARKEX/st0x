@@ -27,18 +27,31 @@ function getAuthHeader(): string {
 	return 'Basic ' + btoa(`${key}:${secret}`);
 }
 
-const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
+/** Vercel CDN TTL for shared token orderbook/trade list responses (~30s max staleness). */
+const TOKEN_LIST_EDGE_CACHE = 'public, s-maxage=15, stale-while-revalidate=15';
+
+/** Browsers must not cache orderbook JSON (fetch respects Cache-Control). */
+const TOKEN_LIST_BROWSER_CACHE = 'private, no-cache, max-age=0, must-revalidate';
+
+const ALLOWED_PROXY_ROUTES: Array<{
+	method: string;
+	pattern: RegExp;
+	edgeCache?: string;
+	browserCache?: string;
+}> = [
 	{ method: 'GET', pattern: /^health$/ },
-	// Token orderbook/trades: short shared edge cache (max ~30s stale vs ~2min before).
+	// Token orderbook/trades: CDN-Cache-Control for edge; no browser HTTP cache.
 	{
 		method: 'GET',
 		pattern: /^v1\/orders\/token\/[^/]+$/,
-		cache: 'public, s-maxage=15, stale-while-revalidate=15'
+		edgeCache: TOKEN_LIST_EDGE_CACHE,
+		browserCache: TOKEN_LIST_BROWSER_CACHE
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
-		cache: 'public, s-maxage=15, stale-while-revalidate=15'
+		edgeCache: TOKEN_LIST_EDGE_CACHE,
+		browserCache: TOKEN_LIST_BROWSER_CACHE
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
@@ -50,11 +63,13 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 function matchProxyRoute(
 	method: string,
 	pathSuffix: string
-): { cache?: string } | null {
+): { edgeCache?: string; browserCache?: string } | null {
 	const route = ALLOWED_PROXY_ROUTES.find(
 		(r) => r.method === method && r.pattern.test(pathSuffix)
 	);
-	return route ? { cache: route.cache } : null;
+	return route
+		? { edgeCache: route.edgeCache, browserCache: route.browserCache }
+		: null;
 }
 
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
@@ -109,8 +124,15 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
-	if (matched.cache && response.ok) {
-		responseHeaders.set('Cache-Control', matched.cache);
+	if (response.ok) {
+		if (matched.browserCache) {
+			responseHeaders.set('Cache-Control', matched.browserCache);
+		}
+		if (matched.edgeCache) {
+			// Vercel uses CDN-Cache-Control / Vercel-CDN-Cache-Control for edge; Cache-Control for browsers.
+			responseHeaders.set('CDN-Cache-Control', matched.edgeCache);
+			responseHeaders.set('Vercel-CDN-Cache-Control', matched.edgeCache);
+		}
 	}
 
 	return new Response(response.body, {
