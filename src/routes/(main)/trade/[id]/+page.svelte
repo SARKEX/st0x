@@ -179,8 +179,23 @@
 
 	// Explainer modal state (opened from chip / "How it works" buttons).
 	let showWrapExplainer = false;
+	// Explicit reactive forwarding so the modal at the bottom of the template
+	// receives prop updates. Top-level `let` writes don't always invalidate
+	// downstream prop bindings when the consumer is outside every `{#if}`
+	// block — observed during E2E: chip click → openWrapExplainer fires →
+	// `showWrapExplainer = true` runs, but the modal's `show` prop never
+	// updated until we threaded the value through a `$:` derived variable.
+	$: explainerOpen = showWrapExplainer;
 	function openWrapExplainer() {
-		showWrapExplainer = true;
+		// Defer the state change to the next tick so the click event that
+		// triggered the open completes BEFORE the modal's backdrop button
+		// mounts. Without this defer, the same click bubbles into the newly-
+		// mounted backdrop (full-viewport absolute element) and immediately
+		// closes the modal — reproducible in E2E (Playwright shows show prop
+		// flipping true→false ~275ms after the trigger click fires).
+		setTimeout(() => {
+			showWrapExplainer = true;
+		}, 0);
 	}
 	function closeWrapExplainer() {
 		showWrapExplainer = false;
@@ -2260,14 +2275,18 @@
 <!-- Vault Tutorial -->
 <VaultTutorial onSelectDexTab={handleVaultTutorialTabChange} />
 
-<!-- Wrap-ratio explainer (opened from chip / Contract-tab card / About) -->
-{#if currentToken && hasRatio}
-	<WrapExplainerModal
-		show={showWrapExplainer}
-		ratio={currentRatio}
-		wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
-		assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
-		equityName={currentToken.name ?? currentToken.symbol}
-		onClose={closeWrapExplainer}
-	/>
-{/if}
+<!-- Wrap-ratio explainer (opened from chip / Contract-tab card / About).
+	 Mounted unconditionally so its internal `show` state survives parent
+	 re-renders (singleTokenQuery refetches briefly null currentToken, which
+	 would otherwise unmount the modal and reset `show` to false). Props
+	 fall back to safe empty strings when currentToken hasn't loaded — the
+	 user can't trigger the modal until the chip is visible, so this only
+	 matters during the initial-render window. -->
+<WrapExplainerModal
+	show={explainerOpen}
+	ratio={currentRatio}
+	wrappedSymbol={currentPythToken?.symbol ?? currentToken?.symbol ?? ''}
+	assetSymbol={(currentPythToken?.symbol ?? currentToken?.symbol ?? '').replace(/^wt/, 't')}
+	equityName={currentToken?.name ?? currentToken?.symbol ?? ''}
+	onClose={closeWrapExplainer}
+/>
