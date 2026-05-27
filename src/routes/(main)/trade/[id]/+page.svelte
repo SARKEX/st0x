@@ -18,6 +18,7 @@
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
+	import { writable } from 'svelte/store';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
 	import type { SgTrade } from '@rainlanguage/orderbook';
@@ -178,27 +179,17 @@
 				};
 
 	// Explainer modal state (opened from chip / "How it works" buttons).
-	let showWrapExplainer = false;
-	// Explicit reactive forwarding so the modal at the bottom of the template
-	// receives prop updates. Top-level `let` writes don't always invalidate
-	// downstream prop bindings when the consumer is outside every `{#if}`
-	// block — observed during E2E: chip click → openWrapExplainer fires →
-	// `showWrapExplainer = true` runs, but the modal's `show` prop never
-	// updated until we threaded the value through a `$:` derived variable.
-	$: explainerOpen = showWrapExplainer;
+	// Use a writable store rather than a top-level `let` — Svelte 4's compile-
+	// time reactivity intermittently fails to propagate updates from event
+	// handlers in deeply-nested child component prop callbacks on this very
+	// large component (200+ reactive vars, 6 dirty-bit words). The store's
+	// subscribe-based propagation is unaffected.
+	const showWrapExplainer = writable(false);
 	function openWrapExplainer() {
-		// Defer the state change to the next tick so the click event that
-		// triggered the open completes BEFORE the modal's backdrop button
-		// mounts. Without this defer, the same click bubbles into the newly-
-		// mounted backdrop (full-viewport absolute element) and immediately
-		// closes the modal — reproducible in E2E (Playwright shows show prop
-		// flipping true→false ~275ms after the trigger click fires).
-		setTimeout(() => {
-			showWrapExplainer = true;
-		}, 0);
+		showWrapExplainer.set(true);
 	}
 	function closeWrapExplainer() {
-		showWrapExplainer = false;
+		showWrapExplainer.set(false);
 	}
 
 	// One-shot: fetch legacy address quotes once per token
@@ -687,12 +678,12 @@
 		}
 	};
 	$: currentFeedId = browser ? currentPythToken?.priceFeedId ?? null : null;
-	const handleTokenTabChange = (event: CustomEvent<{ id: string }>) => {
+	function handleTokenTabChange(event: CustomEvent<{ id: string }>) {
 		const nextId = event.detail.id;
 		if (TOKEN_TABS.some((tab) => tab.id === nextId)) {
 			activeTokenTab = nextId as TokenTabId;
 		}
-	};
+	}
 	let showChartModal = false;
 	function openChartModal(event?: Event) {
 		event?.stopPropagation?.();
@@ -2283,7 +2274,7 @@
 	 user can't trigger the modal until the chip is visible, so this only
 	 matters during the initial-render window. -->
 <WrapExplainerModal
-	show={explainerOpen}
+	show={$showWrapExplainer}
 	ratio={currentRatio}
 	wrappedSymbol={currentPythToken?.symbol ?? currentToken?.symbol ?? ''}
 	assetSymbol={(currentPythToken?.symbol ?? currentToken?.symbol ?? '').replace(/^wt/, 't')}

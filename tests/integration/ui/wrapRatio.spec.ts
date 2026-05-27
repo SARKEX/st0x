@@ -4,17 +4,17 @@
 //
 // Target token: **wtSGOV** (iShares 0-3 Month T-Bill ETF). SGOV's wrap ratio
 // will grow over time as T-bill yield accrues into the vault — see
-// st0x.registry PR #22 + rain.pyth PR #20. Today every wrapper in the
-// preview registry still reports `assetsPerShare: "1.0"`, so this spec
-// stubs the /v1/tokens/exchange-rates endpoints to inject a representative
-// 1.0123 ratio (~1.23% accrued) and a synthetic donation/snapshot history.
+// st0x.registry PR #22 + rain.pyth PR #20. Today every wrapper in the preview
+// registry reports `assetsPerShare: "1.0"`, so this spec stubs the
+// /v1/tokens/exchange-rates endpoints to inject a representative 1.0123 ratio
+// (~1.23% accrued) and a synthetic donation/snapshot history.
 //
-// Why SGOV works in this spec even though it isn't in Goldsky yet: the
-// trade page's `singleTokenQuery` is forgiving — when the SFT subgraph
-// returns nothing the page still uses tokens.ts metadata for the token
-// header, symbol, and the wrap-ratio plumbing. The chart panes show
-// "Invalid Symbol" (TradingView doesn't have SGOV indexed either) but the
-// wrap-ratio UX renders independently and is what we're asserting on.
+// Why SGOV: SGOV isn't in the SFT subgraph yet, so `getSftById` returns null
+// quickly — `singleTokenQuery` resolves fast, the page falls back to tokens.ts
+// metadata for header/symbols/wrap-ratio plumbing, and the chip renders
+// without waiting on subgraph hydration of trades/orders/etc. (Switching the
+// target to a fully-indexed token like wtNVDA made the page hang on token-
+// data loading and the chip never rendered within the 30s spec budget.)
 //
 // This spec deliberately does NOT use the `testClient` (anvil) fixture —
 // every assertion is UI-only and reads from the stubbed API. The
@@ -79,15 +79,7 @@ function buildHistoryResponse() {
 	};
 }
 
-// SKIPPED — see PR comment for details. Manual QA confirmed all surfaces
-// (chip, explainer, ratio history, denom toggle, OrdersTable + chart
-// rescaling) render correctly with the SGOV stub. Two real production bugs
-// were found and fixed while writing this spec (modal unmount race; click-
-// bubble-into-backdrop) — see cbd6b25 + follow-up. The spec itself still
-// hits an intermittent rebuild/anvil port collision during local dev runs
-// that prevented a green final run before the manual-QA handoff window
-// closed. Re-enable once that flake is resolved.
-test.describe.skip('Wrap ratio UX — non-1:1 wtSGOV', () => {
+test.describe('Wrap ratio UX — non-1:1 wtSGOV (stubbed)', () => {
 	test('chip, explainer, ratio history, denom toggle render with stubbed ratio', async ({
 		page
 	}) => {
@@ -106,6 +98,48 @@ test.describe.skip('Wrap ratio UX — non-1:1 wtSGOV', () => {
 				contentType: 'application/json',
 				body: JSON.stringify(buildHistoryResponse())
 			});
+		});
+		// Stub the SFT subgraph for the SGOV singleTokenQuery so it resolves fast
+		// and deterministically. SGOV's Goldsky entry is sparse / cold so the
+		// upstream request can rate-limit or hit the fixtures.ts retry loop
+		// (~25s of backoff), pushing `$singleTokenQuery.isPending` past the chip
+		// timeout. We return a minimal `OffchainAssetReceiptVault` matching what
+		// `getSftById` shapes the response into — the page then renders the chip
+		// from this stub + tokens.ts metadata.
+		await page.route(/api\.goldsky\.com\/.*\/sft-base\//, async (route) => {
+			const body = route.request().postData() ?? '';
+			if (body.toLowerCase().includes(WT_SGOV_ADDRESS.toLowerCase().slice(2))) {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					headers: { 'access-control-allow-origin': '*' },
+					body: JSON.stringify({
+						data: {
+							offchainAssetReceiptVaults: [
+								{
+									id: T_SGOV_ADDRESS.toLowerCase(),
+									totalShares: '0',
+									address: T_SGOV_ADDRESS.toLowerCase(),
+									deployer: '0x0000000000000000000000000000000000000000',
+									admin: '0x0000000000000000000000000000000000000000',
+									name: 'Wrapped iShares 0-3 Month Treasury Bond ETF ST0x',
+									symbol: 'wtSGOV',
+									deployTimestamp: '0',
+									receiptContractAddress: '0x0000000000000000000000000000000000000000',
+									wrappedTokenContractAddress: WT_SGOV_ADDRESS.toLowerCase(),
+									tokenHolders: [],
+									receiptVaultInformations: [],
+									withdraws: [],
+									deposits: [],
+									shareTransfers: []
+								}
+							]
+						}
+					})
+				});
+				return;
+			}
+			await route.fallback();
 		});
 
 		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
@@ -148,8 +182,16 @@ test.describe.skip('Wrap ratio UX — non-1:1 wtSGOV', () => {
 		).toBeVisible();
 
 		// ───────── 4. Ratio History tab — timeline + events ─────────
-		await page.getByRole('tab', { name: /Ratio History/i }).first().click();
-		await expect(page.getByText('Wrap Ratio History')).toBeVisible({ timeout: 5_000 });
+		// Tab click sometimes drops on the floor if hasRatio briefly flips while
+		// the page is still hydrating the exchange-rates query (it's reactive
+		// over the same currentRatio that drives the tab strip). Retry until
+		// the panel content appears.
+		const ratioTab = page.getByRole('tab', { name: /Ratio History/i }).first();
+		await ratioTab.scrollIntoViewIfNeeded();
+		await expect(async () => {
+			await ratioTab.click();
+			await expect(page.getByText('Wrap Ratio History')).toBeVisible({ timeout: 1_500 });
+		}).toPass({ timeout: 15_000, intervals: [500, 1_000, 2_000] });
 		// Two donations in the stub — both should appear in the timeline.
 		await expect(page.getByText(/Donation \/ rebase/i).first()).toBeVisible();
 		await expect(page.getByText('current').first()).toBeVisible();
@@ -162,5 +204,12 @@ test.describe.skip('Wrap ratio UX — non-1:1 wtSGOV', () => {
 		await expect(sharesBtn).toHaveAttribute('aria-selected', 'true');
 		await tokensBtn.click();
 		await expect(tokensBtn).toHaveAttribute('aria-selected', 'true');
+
+		// Drain any in-flight route handlers — the page keeps polling the orders
+		// REST endpoint (15s pollInterval), and if a route.fetch is mid-flight
+		// when the test tears down, Playwright reports the resulting "Target
+		// page closed" as a test failure rather than a warning. Without this
+		// drain the spec is green by assertions but red overall.
+		await page.unrouteAll({ behavior: 'ignoreErrors' });
 	});
 });
