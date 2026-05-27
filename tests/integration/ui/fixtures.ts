@@ -509,6 +509,21 @@ export async function openTradePanel(
 	const openSelector = `[data-testid="open-trade"][data-side="${side}"]`;
 	const panelReadySelector = `[data-testid="mode-tab"][data-mode="market"]`;
 	await page.waitForSelector(openSelector, { state: 'visible', timeout: 60_000 });
+	// Wait for the "My Dashboard ...XXXX" button to render — Header.svelte only
+	// renders it once ALL THREE of $isAuthenticated && $walletAddress &&
+	// $walletRegistered are truthy. That gates the entire openTradePanel()
+	// auto-return chain: clicking before this button exists means
+	// openTradePanel calls promptWalletConnection/promptLogin and never sets
+	// showTradePanel = true. Wait deterministically rather than racing the
+	// click against the wagmi-init + access-check fetch.
+	await page
+		.getByRole('button', { name: /My Dashboard\s+\.\.\./i })
+		.first()
+		.waitFor({ state: 'visible', timeout: 60_000 })
+		.catch(() => {
+			// Fallback — older / Dynamic-auth header may render differently. The
+			// retry-click below covers the race in any case.
+		});
 	await expect(async () => {
 		await page.click(openSelector);
 		await page.waitForSelector(panelReadySelector, { state: 'attached', timeout: 2_000 });
