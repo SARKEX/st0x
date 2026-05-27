@@ -5,9 +5,7 @@ import {
 	apiGetTradesByToken,
 	apiGetTakerTrades,
 	apiGetTradesBatch,
-	type ApiTradeByAddress,
-	type ApiMarketOrder,
-	type ApiOrderTradeEntry
+	type ApiTradeByAddress
 } from '$lib/api/st0xApi';
 
 export type TokenTradeActivityPayload = {
@@ -67,15 +65,15 @@ export function createBatchTradesQuery(
 	// Stable query key: sort hashes so order doesn't matter
 	const sortedKey = orderHashes.slice().sort().join(',');
 
-	return createQuery<Map<string, ApiOrderTradeEntry[]>>({
+	return createQuery<Map<string, ApiTradeByAddress[]>>({
 		queryKey: ['batchTrades', network?.id, sortedKey],
 		enabled: Boolean(network && orderHashes.length > 0),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
 			const response = await apiGetTradesBatch(orderHashes);
-			const map = new Map<string, ApiOrderTradeEntry[]>();
-			for (const entry of response.orders) {
+			const map = new Map<string, ApiTradeByAddress[]>();
+			for (const entry of response.tradesByOrderHash) {
 				map.set(entry.orderHash.toLowerCase(), entry.trades);
 			}
 			return map;
@@ -84,7 +82,7 @@ export function createBatchTradesQuery(
 }
 
 export type TakerTradesPayload = {
-	marketOrders: ApiMarketOrder[];
+	trades: ApiTradeByAddress[];
 };
 
 export function createTakerTradesQuery(
@@ -100,17 +98,17 @@ export function createTakerTradesQuery(
 		retry: 2,
 		queryFn: async () => {
 			const PAGE_SIZE = 50;
-			let allOrders: ApiMarketOrder[] = [];
+			let allTrades: ApiTradeByAddress[] = [];
 			let page = 1;
 
 			while (page <= 10) {
 				const response = await apiGetTakerTrades(walletAddress!, { page, pageSize: PAGE_SIZE });
-				allOrders = allOrders.concat(response.marketOrders);
+				allTrades = allTrades.concat(response.trades);
 				if (!response.pagination.hasMore) break;
 				page++;
 			}
 
-			return { marketOrders: allOrders };
+			return { trades: allTrades };
 		}
 	});
 }

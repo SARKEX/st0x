@@ -48,9 +48,9 @@ const ALLOWED_PROXY_ROUTES: Array<{
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|batch$)[^/]+$/ },
+	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|query$)[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
-	{ method: 'POST', pattern: /^v1\/trades\/batch$/ }
+	{ method: 'POST', pattern: /^v1\/trades\/query$/ }
 ];
 
 function matchProxyRoute(
