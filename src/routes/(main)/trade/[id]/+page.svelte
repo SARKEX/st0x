@@ -131,7 +131,24 @@
 		$exchangeRatesQuery.data ?? null,
 		currentPythToken?.address ?? currentToken?.address ?? null
 	);
-	$: hasRatio = Number.isFinite(currentRatio) && currentRatio !== 1;
+	// Sticky `hasRatio`: once we've ever resolved a non-1 ratio for the current
+	// token, keep the chip + Ratio History tab visible even if a later refetch
+	// transiently flips currentRatio back to 1 (the safe fallback inside
+	// resolveRatio). Without this stickiness, the chip flickers in/out during
+	// exchange-rates polling, TOKEN_TABS recomputes, and handleTokenTabChange
+	// rejects ratio-tab clicks that race the dropout window. Keyed by the
+	// resolved token address so navigating between tokens correctly resets.
+	let hasEverHadRatioForToken: { address: string; value: boolean } | null = null;
+	$: {
+		const addr = (currentPythToken?.address ?? currentToken?.address ?? '').toLowerCase();
+		const isNonOne = Number.isFinite(currentRatio) && currentRatio !== 1;
+		if (!hasEverHadRatioForToken || hasEverHadRatioForToken.address !== addr) {
+			hasEverHadRatioForToken = { address: addr, value: isNonOne };
+		} else if (isNonOne && !hasEverHadRatioForToken.value) {
+			hasEverHadRatioForToken = { address: addr, value: true };
+		}
+	}
+	$: hasRatio = hasEverHadRatioForToken?.value ?? false;
 
 	// "Ratio History" tab only shows when this wrapper actually has a non-1
 	// ratio — keeps the tab strip lean for parity tokens.
