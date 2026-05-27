@@ -105,17 +105,28 @@ test.describe('TEST-07 — Sell market order via UI (Path-B)', () => {
 		// testid auto-switches to `asset-input` for sell. Fill the asset amount
 		// directly (no input-mode toggle needed on sell — only buy exposes the
 		// USD-anchored "spend up to" path).
-		// Wait for the wagmi balance read of wtCOIN to settle BEFORE filling
-		// the asset input. TradeAmountInput's `$: balancePromise` is reactive
-		// over `$walletAddress` and `$wagmiConfig`; a race between the initial
-		// null-walletAddress invocation and the post-connection one
-		// occasionally leaves `spendingTokenBalance` at the default `0n` even
-		// after wagmi has resolved. Waiting for the visible "Balance: 1.000"
-		// row in the panel proves the second balancePromise resolution landed.
+		// Wait for the wagmi balance read of wtCOIN to settle AND the orderbook
+		// quote to compute the bid price BEFORE filling the asset input.
+		// TradeAmountInput holds `inputAmount` as a string and re-derives
+		// `amount` from it via `$: amount = parseUnits(inputAmount,
+		// amountDecimals)` — but ONLY when amountDecimals is already set.
+		// amountDecimals is populated from the balance read's decimals lookup;
+		// fill before that lands and the string "0.05" parses to `undefined`,
+		// `selectedAmount` in MarketOrder stays `0n`, and the submit gate
+		// stays disabled even though the input visually shows "0.05".
 		await expect(
 			page.getByText(/Balance:\s*1\.000?/i).first()
 		).toBeVisible({ timeout: 30_000 });
+		// Also wait for the orderbook to surface the maker bid so marketPrice
+		// can be computed once selectedAmount lands.
+		await expect(page.getByText(/Bid Price/i).first()).toBeVisible({ timeout: 30_000 });
+		await expect(
+			page.locator('text=Bid Price').locator('xpath=following::*[1]')
+		).toContainText(/\$[1-9]/, { timeout: 30_000 });
 		await page.locator('[data-testid="asset-input"] input').first().fill('0.05');
+		// Give Svelte one tick to flush the inputAmount → amount → selectedAmount
+		// reactive cascade before checking submit-enabled.
+		await page.waitForTimeout(100);
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="sell"]');
 		await expect(submit).toBeEnabled({ timeout: 60_000 });
