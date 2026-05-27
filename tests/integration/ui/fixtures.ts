@@ -483,3 +483,33 @@ export async function clickModeTab(
 		el.click();
 	}, mode);
 }
+
+/**
+ * Open the trade panel with a retry-until-mounted guard.
+ *
+ * `openTradePanel()` on the trade page returns early when `walletRegistered`
+ * is still `null` (the auto-check fired by walletAddress.subscribe hasn't
+ * resolved yet). The first click after `page.goto()` races with the
+ * background `/api/access/check` fetch and intermittently drops on the floor
+ * — the button gets focus, but the panel never opens, and the next
+ * `clickModeTab()` call times out waiting for `mode-tab`.
+ *
+ * This helper retries the click until either:
+ *   1. The mode-tab buttons (gated on showTradePanel) are in the DOM, or
+ *   2. The 30s budget is exhausted.
+ *
+ * Use this instead of `page.click('[data-testid="open-trade"]…')` for any
+ * spec that immediately follows the open-trade click with a panel-internal
+ * assertion.
+ */
+export async function openTradePanel(
+	page: import('@playwright/test').Page,
+	side: 'buy' | 'sell'
+): Promise<void> {
+	const openSelector = `[data-testid="open-trade"][data-side="${side}"]`;
+	const panelReadySelector = `[data-testid="mode-tab"][data-mode="market"]`;
+	await expect(async () => {
+		await page.click(openSelector);
+		await page.waitForSelector(panelReadySelector, { state: 'attached', timeout: 2_000 });
+	}).toPass({ timeout: 30_000, intervals: [500, 1_000, 2_000] });
+}

@@ -46,7 +46,7 @@
 //     submit button to be DISABLED by the error itself (insufficient_balance,
 //     market_closed) or to surface the error class on click. Letting
 //     Playwright wait-for-enabled would time out.
-import { test, expect, fundErc20, fundToken, UNFUNDED_ACCOUNT, clickModeTab } from './fixtures';
+import { test, expect, fundErc20, fundToken, UNFUNDED_ACCOUNT, clickModeTab, openTradePanel } from './fixtures';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
 import { advanceTime } from '../../helpers/anvilControl';
 import { parseUnits } from 'viem';
@@ -113,7 +113,7 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		});
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtSPYM.id}`);
-		await page.click('[data-testid="open-trade"][data-side="sell"]');
+		await openTradePanel(page, "sell");
 		await clickModeTab(page, 'market');
 		await page.click('[data-testid="side-toggle"][data-side="sell"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
@@ -152,7 +152,7 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		})();`);
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtCOIN.id}`);
-		await page.click('[data-testid="open-trade"][data-side="buy"]');
+		await openTradePanel(page, "buy");
 		await clickModeTab(page, 'market');
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
@@ -177,7 +177,7 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		await page.addInitScript(eip1193StubSource({ address: UNFUNDED_ACCOUNT.address }));
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtCOIN.id}`);
-		await page.click('[data-testid="open-trade"][data-side="buy"]');
+		await openTradePanel(page, "buy");
 		await clickModeTab(page, 'market');
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
@@ -225,7 +225,7 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 		await page.addInitScript(`Date.now = () => ${saturdayTs * 1000};`);
 
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtCOIN.id}`);
-		await page.click('[data-testid="open-trade"][data-side="buy"]');
+		await openTradePanel(page, "buy");
 		await clickModeTab(page, 'market');
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
