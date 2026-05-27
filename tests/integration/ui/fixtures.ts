@@ -26,10 +26,44 @@ import {
 	getMakerOrders,
 	handleGoldskyRequest
 } from './syntheticOrdersStub';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // Goldsky GraphQL response cache. Module-scoped so all tests in a workers=1
 // run share it. See the page.route for `api.goldsky.com` below for rationale.
+//
+// Disk persistence: Goldsky free-tier rate-limits hard after even a handful
+// of cold runs. The first run after a quota reset warms the cache; every
+// subsequent run replays from disk and never touches upstream, so the suite
+// is immune to mid-day rate-limit blowups. Cache files are committed to the
+// repo so CI has a warm start too. Bust the cache by deleting the directory.
+const GOLDSKY_CACHE_DIR = join(
+	process.cwd(),
+	'tests/integration/ui/__fixtures__/goldsky-cache'
+);
 const goldskyCache = new Map<string, { status: number; body: string }>();
+
+function goldskyCacheKeyHash(key: string): string {
+	return createHash('sha256').update(key).digest('hex').slice(0, 32);
+}
+
+function loadGoldskyCacheFromDisk(key: string): { status: number; body: string } | null {
+	const path = join(GOLDSKY_CACHE_DIR, `${goldskyCacheKeyHash(key)}.json`);
+	if (!existsSync(path)) return null;
+	try {
+		return JSON.parse(readFileSync(path, 'utf8')) as { status: number; body: string };
+	} catch {
+		return null;
+	}
+}
+
+function saveGoldskyCacheToDisk(key: string, value: { status: number; body: string }): void {
+	if (!existsSync(GOLDSKY_CACHE_DIR)) {
+		mkdirSync(GOLDSKY_CACHE_DIR, { recursive: true });
+	}
+	writeFileSync(join(GOLDSKY_CACHE_DIR, `${goldskyCacheKeyHash(key)}.json`), JSON.stringify(value));
+}
 
 // Anvil default accounts — these are PUBLIC test keys baked into the anvil
 // pre-funded set. No real-money risk; documented as such in the threat register
@@ -294,9 +328,18 @@ export const test = base.extend<UiFixtures>({
 				return;
 			}
 			const key = `${req.method()}|${req.url()}|${body}`;
-			const cached = goldskyCache.get(key);
+			let cached = goldskyCache.get(key);
+			let source: 'mem' | 'disk' | null = cached ? 'mem' : null;
+			if (!cached) {
+				const disk = loadGoldskyCacheFromDisk(key);
+				if (disk) {
+					cached = disk;
+					goldskyCache.set(key, disk);
+					source = 'disk';
+				}
+			}
 			console.log(
-				`[goldsky-cache] ${cached ? 'HIT' : 'MISS'} ${req.method()} body-len=${body.length}`
+				`[goldsky-cache] ${cached ? `HIT(${source})` : 'MISS'} ${req.method()} body-len=${body.length}`
 			);
 			if (cached) {
 				await route.fulfill({
@@ -323,7 +366,11 @@ export const test = base.extend<UiFixtures>({
 				`[goldsky-cache] upstream status=${status} body-len=${respBody.length}` +
 					(status !== 200 ? ` body=${respBody.slice(0, 200)}` : '')
 			);
-			if (status === 200) goldskyCache.set(key, { status, body: respBody });
+			if (status === 200) {
+				const entry = { status, body: respBody };
+				goldskyCache.set(key, entry);
+				saveGoldskyCacheToDisk(key, entry);
+			}
 			await route.fulfill({
 				status,
 				contentType: 'application/json',
@@ -399,6 +446,13 @@ export const test = base.extend<UiFixtures>({
 			}
 		);
 		await use(page);
+		// Drain in-flight route handlers BEFORE Playwright tears down the
+		// page/context. The trade page polls /api/st0x/v1/orders/token/* every
+		// 15s, and a `route.fetch` mid-flight at teardown throws "Target page
+		// closed" — Playwright then reports that as a test failure even though
+		// the assertions all passed. `ignoreErrors` swallows still-pending
+		// callbacks gracefully.
+		await page.unrouteAll({ behavior: 'ignoreErrors' });
 	}
 });
 
