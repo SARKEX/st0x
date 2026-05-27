@@ -42,7 +42,7 @@ export const SWAP_ORDER_HASHES: Record<string, string> = {
 	tSIVR: '0x192421975c1385cf575692446c10f164f8994e1f932569c72a11e047d86f8fc7',
 	tCRCL: '0x97af9eed666eb12c5eea5275460e8e96161af40cd9af77152d96a5cb12f51111',
 	tBMNR: '0xc4a5e19079ded34f2e51400d51b914aeea2feeba29a6e186b1d967e1f02865d4',
-	tPPLT: '0xaa628d1fdc9de3b99343104b206b9f92ca32c65c5ad50dd9b47b3de3ae1922fc'
+	tPPLT: '0x401c3be3eef4cdd68243339bbf3bf4f122e4ac39aab719d584951880e2d7b97d'
 	// tSTOX temporarily disabled
 	// tSTOX: '0x9cb21c2dbdd39fbd45c863cead8bccd205014f57fbafafb2c93e519229a6ab48'
 };

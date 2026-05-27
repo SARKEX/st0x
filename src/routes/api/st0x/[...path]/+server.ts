@@ -27,18 +27,24 @@ function getAuthHeader(): string {
 	return 'Basic ' + btoa(`${key}:${secret}`);
 }
 
-const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
+/** No browser or Vercel edge cache — prod CDN was serving stale books vs upstream API. */
+const TOKEN_LIST_NO_STORE = 'private, no-store, max-age=0, must-revalidate';
+
+const ALLOWED_PROXY_ROUTES: Array<{
+	method: string;
+	pattern: RegExp;
+	noStore?: boolean;
+}> = [
 	{ method: 'GET', pattern: /^health$/ },
-	// Shared endpoints — same response for all users, cache at Vercel edge
 	{
 		method: 'GET',
 		pattern: /^v1\/orders\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=120'
+		noStore: true
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=120'
+		noStore: true
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
@@ -50,11 +56,11 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 function matchProxyRoute(
 	method: string,
 	pathSuffix: string
-): { cache?: string } | null {
+): { noStore?: boolean } | null {
 	const route = ALLOWED_PROXY_ROUTES.find(
 		(r) => r.method === method && r.pattern.test(pathSuffix)
 	);
-	return route ? { cache: route.cache } : null;
+	return route ? { noStore: route.noStore } : null;
 }
 
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
@@ -87,7 +93,9 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	const init: RequestInit = {
 		method: request.method,
 		headers: headers as HeadersInit,
-		signal: request.signal
+		signal: request.signal,
+		// Bypass any runtime fetch cache when proxying live orderbook data.
+		...(matched.noStore ? { cache: 'no-store' as RequestCache } : {})
 	};
 
 	if (!['GET', 'HEAD'].includes(request.method)) {
@@ -109,8 +117,10 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
-	if (matched.cache && response.ok) {
-		responseHeaders.set('Cache-Control', matched.cache);
+	if (response.ok && matched.noStore) {
+		responseHeaders.set('Cache-Control', TOKEN_LIST_NO_STORE);
+		responseHeaders.set('CDN-Cache-Control', TOKEN_LIST_NO_STORE);
+		responseHeaders.set('Vercel-CDN-Cache-Control', TOKEN_LIST_NO_STORE);
 	}
 
 	return new Response(response.body, {

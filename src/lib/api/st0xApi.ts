@@ -145,7 +145,7 @@ export async function apiGetOrdersByToken(
 		pageSize: options?.pageSize,
 		side: options?.side
 	});
-	return fetchJson<ApiOrdersListResponse>(url);
+	return fetchJson<ApiOrdersListResponse>(url, { cache: 'no-store' });
 }
 
 /**
@@ -226,6 +226,7 @@ export async function apiGetTradesByToken(
 	if (startTime !== undefined) params.set('startTime', String(startTime));
 	if (endTime !== undefined) params.set('endTime', String(endTime));
 	return fetchJson<ApiTradesByAddressResponse>(
-		`/api/st0x/v1/trades/token/${tokenAddress}?${params}`
+		`/api/st0x/v1/trades/token/${tokenAddress}?${params}`,
+		{ cache: 'no-store' }
 	);
 }

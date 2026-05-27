@@ -44,6 +44,7 @@ import { ensureAllowance } from './approvalStore';
 import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
+import { invalidateOrderQueries } from '$lib/queries/orderbook';
 import { walletAddress, authMethod } from '$lib/stores/authStore';
 import { currentNetwork } from '$lib/stores';
 import { getTrades } from '$lib/api/subgraph';
@@ -126,6 +127,17 @@ function isSkippableMakerLegError(message: string | undefined): boolean {
 		normalized.includes('execution reverted') ||
 		normalized.includes('reverted')
 	);
+}
+
+/**
+ * Aggregated `getTakeOrdersCalldata` often fails for Pyth-oracle maker orders (needs signed
+ * context). Return false from handleAggregatedTakeOrdersCalldata so callers use per-order
+ * `getTakeCalldata` / handleOracleOrders instead of surfacing a terminal error.
+ */
+function shouldFallbackFromAggregatedTake(sdkMsg: string | undefined): boolean {
+	if (!sdkMsg) return false;
+	if (sdkMsg.includes('No liquidity')) return true;
+	return isSkippableMakerLegError(sdkMsg);
 }
 
 function extractAvailableLiquidityAmount(
@@ -440,6 +452,7 @@ export const pollAndFinalizeTakeOrders = async (
 	// could render with stale on-chain balance reads (the user just got tokens
 	// the cache hasn't seen yet).
 	invalidateDashboardBalances();
+	invalidateOrderQueries(network.id);
 
 	// Partial-fill detection anchors on whichever side the user typed their amount.
 	// For spend modes (Sell-by-asset, Buy-by-spend) the anchor is the pays side; for
@@ -504,10 +517,9 @@ export const handleAggregatedTakeOrdersCalldata = async (
 		const sdkMsg = calldataWrapped.error?.readableMsg;
 		console.log(`${TX_LOG_PREFIX} SDK error`, { msg: sdkMsg, request: takeRequest });
 		if (sdkMsg) {
-			// "No liquidity" from SDK is often a false negative when subgraph vault
-			// balances are stale. Return false to let callers try per-order fallback.
-			if (sdkMsg.includes('No liquidity')) {
-				console.warn(`${TX_LOG_PREFIX} SDK reported no liquidity — allowing per-order fallback`);
+			// Stale subgraph / oracle orders: aggregated simulation fails but per-order take may work.
+			if (shouldFallbackFromAggregatedTake(sdkMsg)) {
+				console.warn(`${TX_LOG_PREFIX} SDK error — allowing per-order fallback`, { msg: sdkMsg });
 				return false;
 			}
 			transactionError(sdkMsg as TransactionErrorMessage);
