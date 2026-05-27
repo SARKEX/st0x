@@ -508,6 +508,7 @@ export async function openTradePanel(
 ): Promise<void> {
 	const openSelector = `[data-testid="open-trade"][data-side="${side}"]`;
 	const panelReadySelector = `[data-testid="mode-tab"][data-mode="market"]`;
+	await page.waitForSelector(openSelector, { state: 'visible', timeout: 60_000 });
 	await expect(async () => {
 		await page.click(openSelector);
 		await page.waitForSelector(panelReadySelector, { state: 'attached', timeout: 2_000 });
