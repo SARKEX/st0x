@@ -204,12 +204,5 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (stubbed)', () => {
 		await expect(sharesBtn).toHaveAttribute('aria-selected', 'true');
 		await tokensBtn.click();
 		await expect(tokensBtn).toHaveAttribute('aria-selected', 'true');
-
-		// Drain any in-flight route handlers — the page keeps polling the orders
-		// REST endpoint (15s pollInterval), and if a route.fetch is mid-flight
-		// when the test tears down, Playwright reports the resulting "Target
-		// page closed" as a test failure rather than a warning. Without this
-		// drain the spec is green by assertions but red overall.
-		await page.unrouteAll({ behavior: 'ignoreErrors' });
 	});
 });
