@@ -105,6 +105,16 @@ test.describe('TEST-07 — Sell market order via UI (Path-B)', () => {
 		// testid auto-switches to `asset-input` for sell. Fill the asset amount
 		// directly (no input-mode toggle needed on sell — only buy exposes the
 		// USD-anchored "spend up to" path).
+		// Wait for the wagmi balance read of wtCOIN to settle BEFORE filling
+		// the asset input. TradeAmountInput's `$: balancePromise` is reactive
+		// over `$walletAddress` and `$wagmiConfig`; a race between the initial
+		// null-walletAddress invocation and the post-connection one
+		// occasionally leaves `spendingTokenBalance` at the default `0n` even
+		// after wagmi has resolved. Waiting for the visible "Balance: 1.000"
+		// row in the panel proves the second balancePromise resolution landed.
+		await expect(
+			page.getByText(/Balance:\s*1\.000?/i).first()
+		).toBeVisible({ timeout: 30_000 });
 		await page.locator('[data-testid="asset-input"] input').first().fill('0.05');
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="sell"]');
