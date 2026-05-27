@@ -18,7 +18,11 @@
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
-	import { writable } from 'svelte/store';
+	import {
+		wrapExplainerOpen,
+		openWrapExplainer,
+		closeWrapExplainer
+	} from '$lib/stores/wrapExplainerStore';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
 	import type { SgTrade } from '@rainlanguage/orderbook';
@@ -178,19 +182,14 @@
 					asks: orderbookDepth.asks.map((a) => ({ ...a, price: a.price * priceScale }))
 				};
 
-	// Explainer modal state (opened from chip / "How it works" buttons).
-	// Use a writable store rather than a top-level `let` — Svelte 4's compile-
-	// time reactivity intermittently fails to propagate updates from event
-	// handlers in deeply-nested child component prop callbacks on this very
-	// large component (200+ reactive vars, 6 dirty-bit words). The store's
-	// subscribe-based propagation is unaffected.
-	const showWrapExplainer = writable(false);
-	function openWrapExplainer() {
-		showWrapExplainer.set(true);
-	}
-	function closeWrapExplainer() {
-		showWrapExplainer.set(false);
-	}
+	// Explainer modal state imported from $lib/stores/wrapExplainerStore.ts.
+	// Module-level store decouples open/close propagation from this component's
+	// 100+-var reactive graph — clicks on the chip's onLearnMore prop callback
+	// flow directly through Svelte's store subscription machinery rather than
+	// through the trade page's per-component dirty-bit accounting (which races
+	// on the 6th word boundary under suite-level load and intermittently
+	// dropped updates when the state lived as a top-level `let` or per-
+	// component `writable`).
 
 	// One-shot: fetch legacy address quotes once per token
 	let legacyQuotesFetchedFor: string | null = null;
@@ -2274,7 +2273,7 @@
 	 user can't trigger the modal until the chip is visible, so this only
 	 matters during the initial-render window. -->
 <WrapExplainerModal
-	show={$showWrapExplainer}
+	show={$wrapExplainerOpen}
 	ratio={currentRatio}
 	wrappedSymbol={currentPythToken?.symbol ?? currentToken?.symbol ?? ''}
 	assetSymbol={(currentPythToken?.symbol ?? currentToken?.symbol ?? '').replace(/^wt/, 't')}
