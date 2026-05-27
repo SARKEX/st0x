@@ -21,6 +21,7 @@ import {
 	expect,
 	fundToken,
 	clickModeTab,
+	openTradePanel,
 	MAKER_ACCOUNT
 } from './fixtures';
 import { deployMakerLimitOrder } from '../../helpers/makerOrders';
@@ -106,7 +107,7 @@ test.describe('TEST-06 — Buy market order via UI (Path-B)', () => {
 		// 4) Drive UI: market BUY 10 USDC → wtCOIN.
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtCOIN.id}`);
 
-		await page.click('[data-testid="open-trade"][data-side="buy"]');
+		await openTradePanel(page, 'buy');
 		await clickModeTab(page, 'market');
 		await page.click('[data-testid="side-toggle"][data-side="buy"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');

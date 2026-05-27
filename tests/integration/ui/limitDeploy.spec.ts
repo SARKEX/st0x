@@ -24,7 +24,7 @@
 // via `{#await import()}` (PERF-01). Wait on the `limit-form-loaded` anchor
 // before any LimitOrder testid resolves; clicking `deploy-submit` before
 // the chunk lands silently no-ops.
-import { test, expect, fundToken, clickModeTab } from './fixtures';
+import { test, expect, fundToken, clickModeTab, openTradePanel } from './fixtures';
 import { erc20Abi, parseUnits } from 'viem';
 
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
@@ -68,7 +68,7 @@ test.describe('TEST-09 — Limit deploy', () => {
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtCOIN.id}`);
 
 		// Open the trade panel via page-level Sell CTA (we want a Sell limit).
-		await page.click('[data-testid="open-trade"][data-side="sell"]');
+		await openTradePanel(page, 'sell');
 		// Programmatic click — page.click({force:true}) lands at the sr-only
 		// button's 1×1px corner where another element captures the hit. See
 		// clickModeTab in fixtures.ts.
