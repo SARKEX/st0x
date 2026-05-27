@@ -46,9 +46,20 @@
 //     submit button to be DISABLED by the error itself (insufficient_balance,
 //     market_closed) or to surface the error class on click. Letting
 //     Playwright wait-for-enabled would time out.
-import { test, expect, fundErc20, fundToken, UNFUNDED_ACCOUNT, clickModeTab, openTradePanel } from './fixtures';
+import {
+	test,
+	expect,
+	fundErc20,
+	fundToken,
+	UNFUNDED_ACCOUNT,
+	MAKER_ACCOUNT,
+	clickModeTab,
+	openTradePanel
+} from './fixtures';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
 import { advanceTime } from '../../helpers/anvilControl';
+import { deployMakerLimitOrder } from '../../helpers/makerOrders';
+import { registerMakerOrders } from './syntheticOrdersStub';
 import { parseUnits } from 'viem';
 
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
@@ -169,8 +180,40 @@ test.describe('TEST-08 — Market order failure modes via UI', () => {
 
 	test('insufficient balance — switch signer to UNFUNDED_ACCOUNT → error-banner[data-error-class="insufficient_balance"]', async ({
 		page,
+		testClient,
 		tokens
 	}) => {
+		// Deploy a Path-B maker ask so the orderbook has a quote inside the
+		// price-guard band regardless of where Pyth oracle has drifted. Without
+		// this, LIVE wtCOIN orders (typically priced at $180-200) fall outside
+		// the 5% band when oracle drifts to ~$175, the form short-circuits to
+		// no_liquidity, and the insufficient_balance classifier never fires.
+		const makerDeposit = parseUnits('1', tokens.wtCOIN.decimals);
+		await fundToken({
+			client: testClient,
+			token: tokens.wtCOIN,
+			holder: MAKER_ACCOUNT.address,
+			amount: makerDeposit
+		});
+		const maker = await deployMakerLimitOrder({
+			testClient,
+			makerPrivateKey: MAKER_ACCOUNT.privateKey,
+			assetToken: {
+				address: tokens.wtCOIN.address,
+				symbol: 'wtCOIN',
+				decimals: tokens.wtCOIN.decimals
+			},
+			paymentToken: {
+				address: tokens.USDC.address,
+				symbol: 'USDC',
+				decimals: tokens.USDC.decimals
+			},
+			side: 'sell',
+			pricePaymentPerAsset: '170',
+			depositAmount: makerDeposit
+		});
+		registerMakerOrders(maker);
+
 		// Re-inject EIP-1193 stub with UNFUNDED_ACCOUNT — overrides the
 		// FUNDED_ACCOUNT stub installed by the page fixture. UNFUNDED_ACCOUNT
 		// has ETH for gas but zero ERC20 balance of any asset/payment token.
