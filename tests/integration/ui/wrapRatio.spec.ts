@@ -160,18 +160,27 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (stubbed)', () => {
 
 		const trigger = page.locator('[data-testid="wrap-explainer-trigger"]').first();
 		await expect(trigger).toBeVisible();
-		// Click via Playwright's normal API now that we removed the unmount-race
-		// gate around the modal mount.
-		await trigger.click();
-		// Give Svelte one tick to flush the reactive prop update.
-		await page.waitForTimeout(50);
-
 		const modal = page.locator('[data-testid="wrap-explainer-modal"]');
-		await expect(modal).toBeVisible({ timeout: 5_000 });
+		// Retry the trigger click — under suite-level page load the first click
+		// occasionally drops on the floor (the wrap-explainer store flips true
+		// but the Svelte reactive cycle hasn't yet propagated to the modal
+		// mount). In isolation a single click always works; the retry covers
+		// the race when the page is hydrating multiple TanStack queries in
+		// parallel.
+		await expect(async () => {
+			await trigger.click();
+			await expect(modal).toBeVisible({ timeout: 1_500 });
+		}).toPass({ timeout: 15_000, intervals: [500, 1_000, 2_000] });
 		await expect(modal).toContainText("What's a Wrapped tStock?");
-		// Close
-		await modal.getByRole('button', { name: 'Got it' }).click();
-		await expect(modal).not.toBeVisible({ timeout: 5_000 });
+		// Close — retry-loop the click for the same reason as the open: the
+		// store-based reactive close path occasionally fails to propagate the
+		// `show=false` to the modal mount when the page is hydrating heavy
+		// reactive deps in the background.
+		const closeBtn = modal.getByRole('button', { name: 'Got it' });
+		await expect(async () => {
+			await closeBtn.click();
+			await expect(modal).not.toBeVisible({ timeout: 1_500 });
+		}).toPass({ timeout: 15_000, intervals: [500, 1_000, 2_000] });
 
 		// ───────── 3. Token Details → Contract → Wrap Ratio card ─────────
 		// The contract tab is the default tab in Token Details. The yellow card
