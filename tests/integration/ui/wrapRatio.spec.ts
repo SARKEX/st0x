@@ -2,103 +2,35 @@
 // token has a non-1:1 wrap ratio (chip, explainer modal, denom toggle,
 // Ratio History tab).
 //
-// Target token: **wtSGOV** (iShares 0-3 Month T-Bill ETF). SGOV's wrap ratio
-// will grow over time as T-bill yield accrues into the vault — see
-// st0x.registry PR #22 + rain.pyth PR #20. Today every wrapper in the preview
-// registry reports `assetsPerShare: "1.0"`, so this spec stubs the
-// /v1/tokens/exchange-rates endpoints to inject a representative 1.0123 ratio
-// (~1.23% accrued) and a synthetic donation/snapshot history.
+// Target token: **wtSGOV** (iShares 0-3 Month T-Bill ETF). SGOV's wrap
+// ratio is 1.002700626096609112 today (verified on Base via
+// `cast call wtSGOV.convertToAssets(1e18)` at block 46604184). The value
+// plus a single historical dividend distribution event are pinned in
+// `src/lib/config/wrapRatioFixture.json`; the UI reads from that file
+// directly (no API call), so this spec doesn't need to mock the rates
+// endpoint anymore.
 //
-// Why SGOV: SGOV isn't in the SFT subgraph yet, so `getSftById` returns null
-// quickly — `singleTokenQuery` resolves fast, the page falls back to tokens.ts
-// metadata for header/symbols/wrap-ratio plumbing, and the chip renders
-// without waiting on subgraph hydration of trades/orders/etc. (Switching the
-// target to a fully-indexed token like wtNVDA made the page hang on token-
-// data loading and the chip never rendered within the 30s spec budget.)
+// Why SGOV: SGOV isn't in the SFT subgraph yet, so `getSftById` returns
+// null quickly — `singleTokenQuery` resolves fast, the page falls back to
+// tokens.ts metadata for header/symbols/wrap-ratio plumbing, and the chip
+// renders without waiting on subgraph hydration of trades/orders/etc.
 //
 // This spec deliberately does NOT use the `testClient` (anvil) fixture —
-// every assertion is UI-only and reads from the stubbed API. The
-// globalSetup still spawns anvil because Playwright globalSetup is global;
-// the spec doesn't read from it.
+// every assertion is UI-only.
 import { test, expect } from './fixtures';
 
 const WT_SGOV_ADDRESS = '0x78c31580c97101694C70022c83D570150c11e935';
 const T_SGOV_ADDRESS = '0xc941C1506B7555Ba8C506Fb6c9b9CC259902d612';
 
-// 1 wtSGOV = 1.0123 tSGOV — small enough to be plausible for an early-life
-// yield-accruing wrapper, large enough that toFixed(4) rounding makes the
-// difference visible in the UI.
-const RATIO = 1.0123;
+// Mirrors the value pinned in `src/lib/config/wrapRatioFixture.json`. The
+// UI renders ratios with `toLocaleString('en-US', { maximumFractionDigits: 4 })`,
+// so 1.002700626096609112 displays as "1.0027".
+const RATIO_DISPLAY = '1.0027';
 
-// ──────────────────────────── stub responses ────────────────────────────
-function buildRatesResponse() {
-	return [
-		{
-			share: { address: WT_SGOV_ADDRESS.toLowerCase(), symbol: 'wtSGOV', decimals: 18 },
-			asset: { address: T_SGOV_ADDRESS.toLowerCase(), symbol: 'tSGOV', decimals: 18 },
-			assetsPerShare: String(RATIO),
-			blockNumber: 46437713,
-			blockTimestamp: 1779664773,
-			capturedAt: '2026-05-24 23:19:35'
-		}
-	];
-}
-
-function buildHistoryResponse() {
-	return {
-		share: { address: WT_SGOV_ADDRESS.toLowerCase(), symbol: 'wtSGOV', decimals: 18 },
-		asset: { address: T_SGOV_ADDRESS.toLowerCase(), symbol: 'tSGOV', decimals: 18 },
-		events: [
-			{
-				type: 'snapshot',
-				blockNumber: 45_000_000,
-				blockTimestamp: 1_777_000_000,
-				assetsPerShare: '1.0',
-				capturedAt: '2026-04-20 00:00:00'
-			},
-			{
-				type: 'donation',
-				blockNumber: 45_500_000,
-				blockTimestamp: 1_778_500_000,
-				txHash: '0x' + 'aa'.repeat(32),
-				donor: '0x' + 'bb'.repeat(20),
-				assetAmount: '12.34',
-				newAssetsPerShare: '1.006'
-			},
-			{
-				type: 'donation',
-				blockNumber: 46_437_713,
-				blockTimestamp: 1_779_664_773,
-				txHash: '0x' + 'cc'.repeat(32),
-				donor: '0x' + 'dd'.repeat(20),
-				assetAmount: '5.5',
-				newAssetsPerShare: String(RATIO)
-			}
-		],
-		pagination: { page: 1, pageSize: 50, totalEvents: 3, totalPages: 1, hasMore: false }
-	};
-}
-
-test.describe('Wrap ratio UX — non-1:1 wtSGOV (stubbed)', () => {
-	test('chip, explainer, ratio history, denom toggle render with stubbed ratio', async ({
+test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
+	test('chip, explainer, ratio history, denom toggle render with the SGOV fixture', async ({
 		page
 	}) => {
-		// Inject stubs BEFORE first navigation so the page's TanStack queries pick
-		// them up on cold start.
-		await page.route('**/api/st0x/v1/tokens/exchange-rates', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify(buildRatesResponse())
-			});
-		});
-		await page.route('**/api/st0x/v1/tokens/exchange-rates/history**', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify(buildHistoryResponse())
-			});
-		});
 		// Stub the SFT subgraph for the SGOV singleTokenQuery so it resolves fast
 		// and deterministically. SGOV's Goldsky entry is sparse / cold so the
 		// upstream request can rate-limit or hit the fixtures.ts retry loop
@@ -150,7 +82,7 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (stubbed)', () => {
 		const chip = page.locator('[data-testid="wrap-ratio-chip"]');
 		await expect(chip).toBeVisible({ timeout: 30_000 });
 		await expect(chip).toContainText('1 wtSGOV');
-		await expect(chip).toContainText('1.0123 tSGOV');
+		await expect(chip).toContainText(`${RATIO_DISPLAY} tSGOV`);
 
 		// ───────── 2. Explainer modal opens from the chip ─────────
 		// Dismiss the "No USDC found" announcement banner so its dismiss-X button
@@ -193,16 +125,16 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (stubbed)', () => {
 
 		// ───────── 4. Ratio History tab — timeline + events ─────────
 		// Tab click sometimes drops on the floor if hasRatio briefly flips while
-		// the page is still hydrating the exchange-rates query (it's reactive
-		// over the same currentRatio that drives the tab strip). Retry until
-		// the panel content appears.
+		// the page is still hydrating (it's reactive over the same currentRatio
+		// that drives the tab strip). Retry until the panel content appears.
 		const ratioTab = page.getByRole('tab', { name: /Ratio History/i }).first();
 		await ratioTab.scrollIntoViewIfNeeded();
 		await expect(async () => {
 			await ratioTab.click();
 			await expect(page.getByText('Wrap Ratio History')).toBeVisible({ timeout: 1_500 });
 		}).toPass({ timeout: 15_000, intervals: [500, 1_000, 2_000] });
-		// Two donations in the stub — both should appear in the timeline.
+		// The fixture has one dividend distribution + bracketing snapshots — the
+		// "Donation / rebase" label and "current" pill should both appear.
 		await expect(page.getByText(/Donation \/ rebase/i).first()).toBeVisible();
 		await expect(page.getByText('current').first()).toBeVisible();
 

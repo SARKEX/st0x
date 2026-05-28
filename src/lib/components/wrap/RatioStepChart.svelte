@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ApiExchangeRateEvent } from '$lib/api/st0xApi';
+	import type { ExchangeRateEvent } from '$lib/queries/exchangeRates';
 
 	/**
 	 * Step chart of the wrap ratio (assetsPerShare) over time. Each input event
@@ -8,11 +8,11 @@
 	 *
 	 * Events are expected sorted ascending by blockTimestamp.
 	 */
-	export let events: ApiExchangeRateEvent[];
+	export let events: ExchangeRateEvent[];
 	export let wrappedSymbol: string;
 	export let assetSymbol: string;
 
-	function rateOf(ev: ApiExchangeRateEvent): number | null {
+	function rateOf(ev: ExchangeRateEvent): number | null {
 		if (ev.type === 'snapshot') {
 			const v = Number(ev.assetsPerShare);
 			return Number.isFinite(v) ? v : null;
@@ -25,7 +25,7 @@
 	// it couldn't price; they'll self-heal on the next read).
 	$: pts = events
 		.map((e) => ({ ev: e, rate: rateOf(e) }))
-		.filter((p): p is { ev: ApiExchangeRateEvent; rate: number } => p.rate != null);
+		.filter((p): p is { ev: ExchangeRateEvent; rate: number } => p.rate != null);
 
 	const w = 640;
 	const h = 140;
