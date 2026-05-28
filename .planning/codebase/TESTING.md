@@ -399,4 +399,58 @@ Use real `Float` math for fidelity; the package is small and synchronous.
 
 ---
 
+## UI Test Selectors
+
+*Added 2026-05-06 — Phase 1 (v1.1 Test & Observe) D-11.*
+
+UI E2E tests under `tests/integration/ui/` drive the trade-page through `data-testid` selectors and MUST NOT import internal-logic modules. The convention survives the planned UI→API migration: refactoring how a button's onClick fires does not break a test that asserts `[data-testid="trade-submit"][data-side="buy"]` is clickable.
+
+### Selector grammar (D-09 compound testids)
+
+A selector is composed of:
+
+- `data-testid="<stable-name>"` — the stable target name (e.g. `trade-submit`, `slippage-input`, `error-banner`, `success-toast`, `mode-tab`).
+- Adjacent `data-*` attributes carry semantic state:
+  - `data-side="buy" | "sell"`
+  - `data-mode="market" | "limit" | "dca"`
+  - `data-error-class="slippage" | "no_liquidity" | "stale_oracle" | "insufficient_balance" | "market_closed"`
+
+Selectors compose them: `[data-testid="trade-submit"][data-side="buy"]`, `[data-testid="error-banner"][data-error-class="slippage"]`.
+
+A new mode adds a `data-mode` value, NOT a new testid. The namespace stays bounded; tests stay readable.
+
+### Retrofit scope (D-10)
+
+- `src/lib/components/orders/MarketOrder.svelte`
+- `src/lib/components/orders/LimitOrder.svelte`
+- `src/routes/(main)/trade/[id]/+page.svelte` (mode tabs, page-level error/success surfaces, wallet-connect button shell)
+
+Out of scope this milestone: DCA, QuickTrade, admin pages, dashboard, strategies. Future phases that add E2E for those flows extend the retrofit incrementally.
+
+Reusable UI primitives (`Button.svelte`, `Input.svelte`, `Select.svelte`, `TxLink.svelte`) forward a `dataTestId` prop. Pass this prop rather than adding raw HTML attributes.
+
+Lazy-loaded forms (LimitOrder, DcaOrder via `{#await import()}`): add a `data-testid="<form>-loaded"` anchor on the post-skeleton root so Playwright can `waitFor` past the chunk-load (Pitfall 4).
+
+### ESLint enforcement (D-11)
+
+`eslint.config.js` registers a scoped `no-restricted-imports` rule. Files under `tests/integration/ui/**` cannot import from:
+
+- `$lib/services/marketOrderExecution`
+- `$lib/stores/transaction`
+- `$lib/services/orderDeployment`
+- `$lib/services/walletService`
+- `$lib/types/orderPerspective`
+
+Companion fixture at `tests/fixtures/eslint/ui-test-import-violation.ts` proves the rule fires. Verify locally:
+
+```bash
+npx eslint tests/fixtures/eslint/ui-test-import-violation.ts  # MUST exit non-zero
+```
+
+### Rationale
+
+The convention erodes silently without a lint gate. We trust the convention doc + code review for selector hygiene (semantic role/text via `getByText` / `getByRole` is sometimes the right tool, especially for accessibility-aligned assertions like the wallet-connect button label) — but forbidden-import drift is mechanical and worth lint enforcement.
+
+---
+
 *Testing analysis: 2026-04-28*

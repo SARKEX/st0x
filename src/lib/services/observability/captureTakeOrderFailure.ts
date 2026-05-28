@@ -25,6 +25,7 @@
 
 import * as Sentry from '@sentry/sveltekit';
 import type { ProcessedQuote } from '$lib/services/marketOrderExecution';
+import { getCurrentTradeId } from './tradeId';
 
 export type TakeOrderFailureReason =
 	| 'no_quotes_available'
@@ -42,8 +43,8 @@ export type TakeOrderFailureReason =
 
 export interface TakeOrderTranscript {
 	// Quote-side state — replay vector for D-08 acceptance test
-	subgraphQuoteHash: string | null;          // SHA-256 hex of fullQuotePayload (Task 2 populates)
-	fullQuotePayload: ProcessedQuote[];        // exact quotes the local walk used
+	subgraphQuoteHash: string | null; // SHA-256 hex of fullQuotePayload (Task 2 populates)
+	fullQuotePayload: ProcessedQuote[]; // exact quotes the local walk used
 	// On-chain read at the moment of submission (D-08 LIMITATION: vaultBalance stays
 	// null in Phase 1 — populating it requires a new on-chain read at submission time
 	// which is Phase 2 / TRADE-03 territory.)
@@ -53,19 +54,19 @@ export interface TakeOrderTranscript {
 		IOIndex: { input: number | null; output: number | null };
 	};
 	// Derivation
-	ratio: string | null;                      // hex Float, from quote.ratio
+	ratio: string | null; // hex Float, from quote.ratio
 	slippageBps: number;
-	priceCap: string | null;                   // human decimal passed to SDK
+	priceCap: string | null; // human decimal passed to SDK
 	// Side semantics (per src/lib/types/orderPerspective.ts)
-	side: 'bid' | 'ask';                       // counterparty side from filterQuotesForSide
+	side: 'bid' | 'ask'; // counterparty side from filterQuotesForSide
 	takerAction: 'Buy' | 'Sell';
 	userAction: 'Buy' | 'Sell';
-	mode: 'buyUpTo' | 'spendUpTo';             // anchored type
+	mode: 'buyUpTo' | 'spendUpTo'; // anchored type
 	// Identity
-	walletAddress: string | null;              // Sentry's beforeSend scrubs the address
+	walletAddress: string | null; // Sentry's beforeSend scrubs the address
 	// Cross-correlation
-	request_id: string | null;                 // null on browser-only paths (logger.ts is server-only)
-	timestamp: string;                         // ISO 8601
+	request_id: string | null; // null on browser-only paths (logger.ts is server-only)
+	timestamp: string; // ISO 8601
 }
 
 /**
@@ -83,10 +84,21 @@ export function captureTakeOrderFailure(
 ): void {
 	const errorMessage = err instanceof Error ? err.message : String(err);
 
+	// OBS-09 (Plan 02-02 Task 2): attach the active trade_id (if any) so the on-error
+	// Sentry Replay is navigable to PostHog events + pino logs. Conditional spread
+	// keeps the tags object clean when no trade is active (no `trade_id: null` noise).
+	// `getCurrentTradeId()` is a pure module-state read and cannot throw (Plan 02-01
+	// Task 1 guarantee), so no extra try/catch is needed beyond the existing one.
+	const tradeId = getCurrentTradeId();
+
 	// Sink 1: Sentry — immediate alert + breadcrumb context with PII scrubbed by beforeSend
 	try {
 		Sentry.captureException(err, {
-			tags: { failure_reason: reason, side: transcript.side },
+			tags: {
+				failure_reason: reason,
+				side: transcript.side,
+				...(tradeId ? { trade_id: tradeId } : {})
+			},
 			extra: {
 				...transcript,
 				errorMessage

@@ -40,3 +40,4 @@ CLAUDE.md
 # rollup-plugin-visualizer build artifact (PERF-01) — never commit
 stats.html
 .svelte-kit/output/client/stats.html
+test-results/

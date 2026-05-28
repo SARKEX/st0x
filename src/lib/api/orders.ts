@@ -62,7 +62,7 @@ function convertApiOrderToProcessedQuote(
 	order: ApiOrderSummary,
 	quoteTokenAddress: string,
 	allTokens: PythToken[],
-	networkId: number
+	_networkId: number
 ): ProcessedQuote | null {
 	// Skip orders with zero balance
 	const balance = parseFloat(order.outputVaultBalance);
@@ -209,7 +209,12 @@ export async function fetchAndQuotePaymentTokenOrders(
 				for (const order of response.orders) {
 					if (seen.has(order.orderHash)) continue;
 					seen.add(order.orderHash);
-					const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens, networkId);
+					const quote = convertApiOrderToProcessedQuote(
+						order,
+						paymentToken.address,
+						allTokens,
+						networkId
+					);
 					if (quote) processedQuotes.push(quote);
 				}
 				hasMore = response.pagination.hasMore;
@@ -254,7 +259,12 @@ export async function fetchAndQuoteTokenOrders(
 			for (const order of response.orders) {
 				if (seen.has(order.orderHash)) continue;
 				seen.add(order.orderHash);
-				const quote = convertApiOrderToProcessedQuote(order, paymentToken.address, allTokens, networkId);
+				const quote = convertApiOrderToProcessedQuote(
+					order,
+					paymentToken.address,
+					allTokens,
+					networkId
+				);
 				if (quote) processedQuotes.push(quote);
 			}
 			hasMore = response.pagination.hasMore;

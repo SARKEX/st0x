@@ -15,8 +15,32 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
+	import { onMount } from 'svelte';
+	import { track } from '$lib/services/analytics';
+	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
+	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
+
+	// OBS-07/OBS-09 (Plan 02-03 Task 2b) — local error classifier (mirrors LimitOrder).
+	function classifyDeployError(err: unknown): ErrorClass {
+		const msg = String((err as { message?: string })?.message ?? err ?? '').toLowerCase();
+		if (msg.includes('user reject') || msg.includes('user denied') || msg.includes('rejected'))
+			return 'user_rejected';
+		if (msg.includes('insufficient') || msg.includes('balance')) return 'insufficient_balance';
+		if (msg.includes('rpc') || msg.includes('network')) return 'rpc_error';
+		return 'unknown';
+	}
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
+
+	// OBS-08 gap-fill: DCA had zero analytics before Plan 02-03. Mirror LimitOrder
+	// mount-event so the funnel breakdown by order_type works for DCA.
+	onMount(() => {
+		track('trade_panel_opened', {
+			order_type: 'dca',
+			token_symbol: assetToken?.symbol,
+			order_side: orderSide.toLowerCase()
+		});
+	});
 
 	$: actionButtonClass =
 		orderSide === 'Buy'
@@ -173,7 +197,27 @@
 			promptLogin();
 			return;
 		}
-		if ($isAuthenticated && $walletRegistered) {
+		if (!($isAuthenticated && $walletRegistered)) return;
+
+		mintTradeId();
+		try {
+			trackTradeEvent('trade_button_clicked', {
+				order_type: 'dca',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: selectedInputToken?.symbol,
+				payment_symbol: selectedOutputToken?.symbol,
+				amount: selectedAmount
+					? formatUnits(
+							selectedAmount,
+							orderSide === 'Buy'
+								? selectedOutputToken?.decimals ?? 6
+								: selectedInputToken?.decimals ?? 18
+						)
+					: '0',
+				period: selectedPeriod,
+				period_unit: selectedPeriodUnit
+			});
+
 			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
 			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
 
@@ -181,22 +225,47 @@
 			// Ask (selling): Accumulate the settlement token over time by selling the asset
 			const inputTok = orderType === 'Bid' ? selectedInputToken : selectedOutputToken;
 			const outputTok = orderType === 'Bid' ? selectedOutputToken : selectedInputToken;
-			transactionStore.handleDcaDeploy({
-				outputToken: outputTok,
-				inputToken: inputTok,
-				budgetAmount: selectedAmount,
-				selectedPeriod: selectedPeriod,
-				selectedPeriodUnit: selectedPeriodUnit,
-				// DCA price inversion logic:
-				// Bid (buying): User specifies price as "quote per asset", orderbook needs "asset/quote" → invert
-				// Ask (selling): User specifies price as "quote per asset", orderbook needs "quote/asset" → no invert
-				baseline: priceToIoratioString(orderType, selectedBaseline, true),
-				kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
-				minTradeAmount: minTradeAmount,
-				maxTradeAmount: maxTradeAmount,
-				depositAmount: depositAmount,
-				inputVaultId: selectedInputVaultId
+			transactionStore.handleDcaDeploy(
+				{
+					outputToken: outputTok,
+					inputToken: inputTok,
+					budgetAmount: selectedAmount,
+					selectedPeriod: selectedPeriod,
+					selectedPeriodUnit: selectedPeriodUnit,
+					// DCA price inversion logic:
+					// Bid (buying): User specifies price as "quote per asset", orderbook needs "asset/quote" → invert
+					// Ask (selling): User specifies price as "quote per asset", orderbook needs "quote/asset" → no invert
+					baseline: priceToIoratioString(orderType, selectedBaseline, true),
+					kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
+					minTradeAmount: minTradeAmount,
+					maxTradeAmount: maxTradeAmount,
+					depositAmount: depositAmount,
+					inputVaultId: selectedInputVaultId
+				},
+				{ order_type: 'dca' }
+			);
+
+			// Per Assumption A7 (02-RESEARCH): reuse `limit_order_deployed` event
+			// family for the deploy step — DO NOT introduce `dca_order_deployed`.
+			// The `order_type: 'dca'` property is the funnel breakdown dimension.
+			trackTradeEvent('limit_order_deployed', {
+				order_type: 'dca',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: selectedInputToken?.symbol,
+				price: selectedInitialRatio
 			});
+		} catch (error) {
+			trackTradeEvent('trade_failed', {
+				order_type: 'dca',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: selectedInputToken?.symbol,
+				error_class: classifyDeployError(error),
+				error_message: error instanceof Error ? error.message : String(error)
+			});
+			throw error;
+		} finally {
+			// Pitfall 2 (T-2-E): clear module state so next DCA deploy gets fresh trade_id.
+			clearTradeId();
 		}
 	};
 

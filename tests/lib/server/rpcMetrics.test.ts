@@ -162,7 +162,7 @@ describe('reportChainExhausted', () => {
 		});
 
 		expect(mockNotifyChainExhausted).toHaveBeenCalledTimes(1);
-		const [arg] = mockNotifyChainExhausted.mock.calls[0];
+		const arg = (mockNotifyChainExhausted.mock.calls[0] as unknown as [Record<string, unknown>])[0];
 		expect(arg).toEqual({
 			fn: 'verifyWalletSignature',
 			attempts: [{ rpc_url: 'alchemy-base-mainnet', status_or_error: 'connection refused' }],
@@ -175,10 +175,10 @@ describe('reportChainExhausted', () => {
 
 		await reportChainExhausted({ fn: 'callRpc:fn', attempts: [] });
 
-		const [payload] = mockLogger.error.mock.calls[0];
+		const payload = (mockLogger.error.mock.calls[0] as unknown as [{ request_id: string }])[0];
 		expect(payload.request_id).toBe('<no-request>');
 
-		const [alertArg] = mockNotifyChainExhausted.mock.calls[0];
+		const alertArg = (mockNotifyChainExhausted.mock.calls[0] as unknown as [{ request_id: string }])[0];
 		expect(alertArg.request_id).toBe('<no-request>');
 	});
 

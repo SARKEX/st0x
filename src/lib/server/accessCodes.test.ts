@@ -117,7 +117,9 @@ describe('SEC-05 generateAccessCode CSPRNG', () => {
 	it('returns format ST0X-XXXX-XXXX with 32-char alphabet', async () => {
 		const { generateAccessCode } = await import('./accessCodes');
 		const code = generateAccessCode();
-		expect(code).toMatch(/^ST0X-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/);
+		expect(code).toMatch(
+			/^ST0X-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/
+		);
 	});
 
 	it('produces unique codes across 1000 calls', async () => {
@@ -155,7 +157,9 @@ describe('SEC-05 generateAccessCode CSPRNG', () => {
 		for (const call of spy.mock.calls) {
 			expect(call[0]).toBe(1);
 		}
-		expect(code).toMatch(/^ST0X-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/);
+		expect(code).toMatch(
+			/^ST0X-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/
+		);
 		spy.mockRestore();
 	});
 });
