@@ -40,6 +40,18 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 		pattern: /^v1\/trades\/token\/[^/]+$/,
 		cache: 'public, s-maxage=5, stale-while-revalidate=120'
 	},
+	// Wrap-ratio rates (current + per-token history). Shared across users; small
+	// payload that the API auto-refreshes from the subgraph, safe to edge-cache.
+	{
+		method: 'GET',
+		pattern: /^v1\/tokens\/exchange-rates$/,
+		cache: 'public, s-maxage=60, stale-while-revalidate=600'
+	},
+	{
+		method: 'GET',
+		pattern: /^v1\/tokens\/exchange-rates\/history$/,
+		cache: 'public, s-maxage=60, stale-while-revalidate=600'
+	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|batch$)[^/]+$/ },
@@ -47,13 +59,8 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	{ method: 'POST', pattern: /^v1\/trades\/batch$/ }
 ];
 
-function matchProxyRoute(
-	method: string,
-	pathSuffix: string
-): { cache?: string } | null {
-	const route = ALLOWED_PROXY_ROUTES.find(
-		(r) => r.method === method && r.pattern.test(pathSuffix)
-	);
+function matchProxyRoute(method: string, pathSuffix: string): { cache?: string } | null {
+	const route = ALLOWED_PROXY_ROUTES.find((r) => r.method === method && r.pattern.test(pathSuffix));
 	return route ? { cache: route.cache } : null;
 }
 

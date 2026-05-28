@@ -39,7 +39,9 @@ describe('walletSession (SEC-03)', () => {
 		const { createSession, readSession } = await import('./walletSession');
 
 		const before = Date.now();
-		const { sessionId, expiresAt } = await createSession('0xABCdef0123456789012345678901234567890123');
+		const { sessionId, expiresAt } = await createSession(
+			'0xABCdef0123456789012345678901234567890123'
+		);
 		const after = Date.now();
 
 		expect(sessionId).toMatch(/^[a-f0-9]{64}$/);

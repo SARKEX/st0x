@@ -4,7 +4,11 @@ import { base } from 'viem/chains';
 
 let anvilProc: ChildProcess | null = null;
 
-async function waitForRpc(url: string, timeoutMs = 30_000): Promise<void> {
+// Default 90s — public archive RPCs (dRPC, Alchemy free-tier) take significantly
+// longer than 30s for a cold fork at a 2-month-old block. Local development
+// against a paid Alchemy/QuickNode endpoint typically completes in <5s, so the
+// extra ceiling only adds latency on the (rare) failure path.
+async function waitForRpc(url: string, timeoutMs = 90_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		try {
@@ -52,10 +56,33 @@ export async function startAnvilFork(forkBlock: number) {
 			String(forkBlock),
 			'--port',
 			'8545',
-			'--silent'
+			// --block-time 2 enables interval mining so blocks tick every 2s
+			// (matches Base's actual block time). REQUIRED for E2E flows that
+			// wait for >1 confirmation. approvalStore.ts and marketTakeStore.ts
+			// both call waitForTransactionReceipt with confirmations: 2; with
+			// anvil's default auto-mine (one block per tx, then idle), the
+			// confirmation block never arrives and the wait hangs until
+			// Playwright's 60s timeout.
+			'--block-time',
+			'2',
+			// Public Base RPCs (publicnode, base.org) throttle aggressively
+			// under anvil's bursty lazy state-fetch pattern; --no-rate-limit
+			// disables anvil's outbound limiter so we don't get spurious
+			// "state pruned" errors masquerading as 429-style throttling.
+			'--no-rate-limit',
+			// Retry on transient parent-RPC failures.
+			'--retries',
+			'5'
 		],
 		{ stdio: 'pipe' }
 	);
+
+	// Surface anvil output so fork-init failures are debuggable in CI logs.
+	// Anvil writes its boot banner to stdout and RPC errors to stderr; both
+	// must reach the workflow log or we're flying blind on dRPC throttling /
+	// archive availability problems.
+	anvilProc.stdout?.on('data', (chunk: Buffer) => process.stdout.write(`[anvil] ${chunk}`));
+	anvilProc.stderr?.on('data', (chunk: Buffer) => process.stderr.write(`[anvil] ${chunk}`));
 
 	anvilProc.on('exit', (code, signal) => {
 		if (code !== 0 && signal !== 'SIGTERM') {

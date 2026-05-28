@@ -103,9 +103,7 @@
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
 
 	// TanStack Query for quotes — polls every 15s, retries on failure, preserves stale data
-	$: orderbookQuery = createTokenOrderbookQuotesQuery(
-		$currentNetwork, selectedTokenAddress
-	);
+	$: orderbookQuery = createTokenOrderbookQuotesQuery($currentNetwork, selectedTokenAddress);
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
 	$: isLoadingQuotes = $orderbookQuery.isPending && !$orderbookQuery.data;
 	$: quoteFetchError = $orderbookQuery.isError;
@@ -1052,8 +1050,13 @@
 				variant="primary"
 				size="lg"
 				className="w-full rounded-xl py-4 text-base font-semibold"
-				disabled={isExecutingTrade || isLoadingQuotes || (!(quoteFetchError && relevantQuotes.length === 0) && (!quote || (!topAmount && !bottomAmount)))}
-				on:click={quoteFetchError && relevantQuotes.length === 0 ? () => $orderbookQuery.refetch() : handleTrade}
+				disabled={isExecutingTrade ||
+					isLoadingQuotes ||
+					(!(quoteFetchError && relevantQuotes.length === 0) &&
+						(!quote || (!topAmount && !bottomAmount)))}
+				on:click={quoteFetchError && relevantQuotes.length === 0
+					? () => $orderbookQuery.refetch()
+					: handleTrade}
 			>
 				{#if isExecutingTrade}
 					<span class="flex items-center justify-center gap-2">

@@ -187,10 +187,7 @@ function analyzeApiTrades(
 	return analyzed;
 }
 
-function aggregateNetwork(
-	network: Network,
-	analyzed: AnalyzedApiTrade[]
-): NetworkTradeStats {
+function aggregateNetwork(network: Network, analyzed: AnalyzedApiTrade[]): NetworkTradeStats {
 	const canonicalTokens = new Set<string>(
 		[...TOKENS, ...CRYPTO_TOKENS]
 			.filter((t) => t.chainId === network.chainId)
@@ -202,9 +199,7 @@ function aggregateNetwork(
 	let tradingVolume = 0;
 
 	const rows = new Map<string, TokenTradingRow & { transactions: Set<string> }>();
-	for (const token of [...TOKENS, ...CRYPTO_TOKENS].filter(
-		(t) => t.chainId === network.chainId
-	)) {
+	for (const token of [...TOKENS, ...CRYPTO_TOKENS].filter((t) => t.chainId === network.chainId)) {
 		const addr = normalizeAddress(token.address);
 		if (!addr) continue;
 		rows.set(addr, {

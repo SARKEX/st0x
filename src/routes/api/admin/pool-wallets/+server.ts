@@ -17,8 +17,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const outcome = await walletListPost(request, cookies, config);
 
 	if (outcome.action) {
-		const eventType =
-			outcome.action === 'add' ? 'POOL_WALLET_ADDED' : 'POOL_WALLET_REMOVED';
+		const eventType = outcome.action === 'add' ? 'POOL_WALLET_ADDED' : 'POOL_WALLET_REMOVED';
 		const details = { walletAddress: outcome.address, label: config.label };
 		try {
 			if (outcome.success) {

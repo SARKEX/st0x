@@ -155,6 +155,56 @@ export interface ApiTradesBatchResponse {
 }
 
 // ============================================================================
+// Exchange Rate Types (wrap-ratio between wt* and t* tokens)
+// ============================================================================
+
+export interface ApiExchangeRate {
+	share: ApiTokenRef;
+	asset: ApiTokenRef;
+	assetsPerShare: string; // decimal string — e.g. "1.0", "5.0"
+	blockNumber: number;
+	blockTimestamp: number;
+	capturedAt: string; // "2026-05-23 23:19:07"
+}
+
+export type ApiExchangeRateEventType = 'snapshot' | 'donation';
+
+export interface ApiExchangeRateEventBase {
+	type: ApiExchangeRateEventType;
+	blockNumber: number;
+	blockTimestamp: number;
+}
+
+export interface ApiExchangeRateSnapshot extends ApiExchangeRateEventBase {
+	type: 'snapshot';
+	assetsPerShare: string;
+	capturedAt: string;
+}
+
+export interface ApiExchangeRateDonation extends ApiExchangeRateEventBase {
+	type: 'donation';
+	txHash: string;
+	donor: string;
+	assetAmount: string;
+	newAssetsPerShare: string | null; // can be null when the API can't read the historical rate
+}
+
+export type ApiExchangeRateEvent = ApiExchangeRateSnapshot | ApiExchangeRateDonation;
+
+export interface ApiExchangeRateHistoryResponse {
+	share: ApiTokenRef;
+	asset: ApiTokenRef;
+	events: ApiExchangeRateEvent[];
+	pagination: {
+		page: number;
+		pageSize: number;
+		totalEvents: number;
+		totalPages: number;
+		hasMore: boolean;
+	};
+}
+
+// ============================================================================
 // API Client
 // ============================================================================
 
@@ -255,6 +305,38 @@ export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTrade
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ orderHashes })
 	});
+}
+
+/**
+ * Fetch the current exchange rate (assetsPerShare) for every wrapped token in
+ * the registry. The API auto-refreshes from the subgraph when its cache is
+ * older than ~24h, so this is safe to call on page load.
+ */
+export async function apiGetExchangeRates(): Promise<ApiExchangeRate[]> {
+	assertBrowser('apiGetExchangeRates');
+	return fetchJson<ApiExchangeRate[]>(apiUrl('/v1/tokens/exchange-rates'));
+}
+
+/**
+ * Fetch the event-by-event history of the wrap ratio for a single wrapped
+ * token. Events are sorted by blockNumber ascending; snapshot before donation
+ * when blocks tie.
+ *
+ * Returns 404 if the token isn't registered as a wrapper.
+ */
+export async function apiGetExchangeRateHistory(
+	wrappedTokenAddress: string,
+	options?: { page?: number; pageSize?: number; fromBlock?: number; toBlock?: number }
+): Promise<ApiExchangeRateHistoryResponse> {
+	assertBrowser('apiGetExchangeRateHistory');
+	const url = apiUrl('/v1/tokens/exchange-rates/history', {
+		token: wrappedTokenAddress,
+		page: options?.page,
+		pageSize: options?.pageSize,
+		fromBlock: options?.fromBlock,
+		toBlock: options?.toBlock
+	});
+	return fetchJson<ApiExchangeRateHistoryResponse>(url);
 }
 
 /**

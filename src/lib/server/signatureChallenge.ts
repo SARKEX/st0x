@@ -122,11 +122,7 @@ Nonce: ${nonce}
 Issued At: ${issuedAtIso}`;
 }
 
-function buildSessionLoginMessage(
-	address: string,
-	nonce: string,
-	issuedAtIso: string
-): string {
+function buildSessionLoginMessage(address: string, nonce: string, issuedAtIso: string): string {
 	return `Sign in to st0x.
 
 Wallet: ${address}
