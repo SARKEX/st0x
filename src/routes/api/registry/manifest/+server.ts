@@ -1,0 +1,42 @@
+import type { RequestHandler } from './$types';
+
+function absolutizeManifestLine(line: string, origin: string): string {
+	const trimmed = line.trim();
+	if (!trimmed || trimmed.startsWith('#')) return line;
+
+	const parts = trimmed.split(/\s+/);
+	// manifest format:
+	// - first line: "<settings_path>"
+	// - subsequent lines: "<strategy_key> <strategy_path>"
+	if (parts.length === 1) {
+		return new URL(parts[0], origin).toString();
+	}
+	if (parts.length >= 2) {
+		return `${parts[0]} ${new URL(parts[1], origin).toString()}`;
+	}
+	return line;
+}
+
+export const GET: RequestHandler = async ({ fetch, url }) => {
+	const upstream = await fetch('/registry/manifest', { cache: 'no-store' });
+	if (!upstream.ok) {
+		return new Response(`Failed to load registry manifest (${upstream.status})`, {
+			status: upstream.status
+		});
+	}
+
+	const manifestText = await upstream.text();
+	const normalized = manifestText
+		.split(/\r?\n/)
+		.map((line) => absolutizeManifestLine(line, url.origin))
+		.join('\n');
+
+	return new Response(normalized, {
+		status: 200,
+		headers: {
+			'Content-Type': 'text/plain; charset=utf-8',
+			'Cache-Control': 'private, no-store, max-age=0, must-revalidate'
+		}
+	});
+};
+

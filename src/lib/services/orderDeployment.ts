@@ -57,7 +57,22 @@ type DotrainRegistryInstance = {
  * Set PUBLIC_REGISTRY_URL only for staging tests against an alternate registry.
  * Refresh procedure: see 03-RUNBOOK.md "Registry Refresh".
  */
-const REGISTRY_URL = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
+const REGISTRY_URL = publicEnv.PUBLIC_REGISTRY_URL || '/api/registry/manifest';
+
+function resolveRegistryUrl(registryUrl: string): string {
+	try {
+		// Already absolute (http/https/etc.)
+		return new URL(registryUrl).toString();
+	} catch {
+		// Relative path (default '/registry/manifest') must be resolved in-browser.
+		if (typeof window === 'undefined') {
+			throw new Error(
+				`Registry URL "${registryUrl}" is relative and cannot be resolved outside the browser`
+			);
+		}
+		return new URL(registryUrl, window.location.origin).toString();
+	}
+}
 
 /** Maps app network slug to the deployment key in rain.strategies registry. */
 function getDeploymentKey(raindexNetworkSlug: string): string {
@@ -80,7 +95,7 @@ async function getRegistry(): Promise<DotrainRegistryInstance> {
 	if (!registryPromise) {
 		registryPromise = (async () => {
 			const DotrainRegistry = await getDotrainRegistry();
-			const result = await DotrainRegistry.new(REGISTRY_URL);
+			const result = await DotrainRegistry.new(resolveRegistryUrl(REGISTRY_URL));
 			if (result.error) {
 				throw new Error(result.error.readableMsg);
 			}
@@ -256,6 +271,9 @@ export type MarketMakingDeploymentArgs = {
 	amountIsFastExit: boolean;
 	notAmountIsFastExit: boolean;
 	initialIo: string;
+	nextTradeMultiplier?: string;
+	costBasisMultiplier?: string;
+	timePerEpoch?: string;
 	maxAmount: bigint;
 	minAmount: bigint;
 	depositAmountToken1: bigint;
@@ -286,10 +304,9 @@ export const getMarketMakingDeploymentArgs = async (
 
 	gui.setFieldValue('min-amount', formatUnits(args.minAmount, args.token1.decimals));
 
-	// Default Args
-	gui.setFieldValue('next-trade-multiplier', '1.01');
-	gui.setFieldValue('cost-basis-multiplier', '1');
-	gui.setFieldValue('time-per-epoch', '3600');
+	gui.setFieldValue('next-trade-multiplier', args.nextTradeMultiplier || '1.01');
+	gui.setFieldValue('cost-basis-multiplier', args.costBasisMultiplier || '1');
+	gui.setFieldValue('time-per-epoch', args.timePerEpoch || '3600');
 
 	gui.setDeposit('token1', formatUnits(args.depositAmountToken1, args.token1.decimals));
 	gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
