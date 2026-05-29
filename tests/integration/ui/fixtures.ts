@@ -456,7 +456,7 @@ export const test = base.extend<UiFixtures>({
 	}
 });
 
-export { expect, fundErc20, fundErc20ViaImpersonation };
+export { expect, fundErc20 };
 
 /**
  * Click a `data-testid="mode-tab"` button programmatically.

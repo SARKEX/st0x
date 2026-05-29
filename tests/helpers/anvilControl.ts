@@ -33,22 +33,6 @@ export function createAnvilTestClient() {
 }
 
 /**
- * Run `fn` inside an anvil snapshot. Reverts on completion (success or throw) so
- * downstream tests see the pre-snapshot state.
- *
- * IMPORTANT (per 01-RUNBOOK §"Snapshot/revert"): take the snapshot BEFORE any
- * setStorageAt funding calls. Reverting rolls back funding writes too.
- */
-export async function withSnapshot<T>(client: AnvilTestClient, fn: () => Promise<T>): Promise<T> {
-	const id = await client.snapshot();
-	try {
-		return await fn();
-	} finally {
-		await client.revert({ id });
-	}
-}
-
-/**
  * Fund an ERC20 balance directly via anvil_setStorageAt. Avoids whale impersonation +
  * Transfer event side effects.
  *

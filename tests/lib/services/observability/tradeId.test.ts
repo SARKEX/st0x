@@ -1,14 +1,13 @@
 /**
  * Behavioural unit tests for OBS-09 Plan 02-01 Task 1 — tradeId lifecycle module.
  *
- * Covers (per 02-01-PLAN.md):
+ * Covers:
  *  - Test 1: mintTradeId() returns a UUIDv4-shaped string
  *  - Test 2: mintTradeId() calls Sentry.setTag('trade_id', id) exactly once
  *  - Test 3: getCurrentTradeId() returns most recent id; null after clearTradeId()
  *  - Test 4: Two consecutive mintTradeId() calls yield distinct ids (Pitfall 2 regression guard)
  *  - Test 5: When Sentry.setTag throws, mintTradeId() still returns id and does NOT throw back
  *  - Test 6: clearTradeId() calls Sentry.setTag('trade_id', undefined)
- *  - Test 7: TRADE_ID_HEADER exported as the literal 'X-Trade-Id'
  *
  * The global vi.mock('@sentry/sveltekit', ...) in vitest-setup.ts provides no-op stubs;
  * we re-import Sentry here and spy on setTag.
@@ -19,8 +18,7 @@ import * as Sentry from '@sentry/sveltekit';
 import {
 	mintTradeId,
 	getCurrentTradeId,
-	clearTradeId,
-	TRADE_ID_HEADER
+	clearTradeId
 } from '$lib/services/observability/tradeId';
 
 const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -84,9 +82,5 @@ describe('tradeId', () => {
 		clearTradeId();
 		expect(setTagSpy).toHaveBeenCalledTimes(1);
 		expect(setTagSpy).toHaveBeenCalledWith('trade_id', undefined);
-	});
-
-	it('Test 7: TRADE_ID_HEADER exported as literal \'X-Trade-Id\'', () => {
-		expect(TRADE_ID_HEADER).toBe('X-Trade-Id');
 	});
 });
