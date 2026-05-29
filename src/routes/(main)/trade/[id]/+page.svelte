@@ -80,7 +80,7 @@
 	} from '$lib/queries/vaults';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
 	import type { DisplayOrder } from '$lib/types/orders';
-	import { transformApiMarketOrdersToDisplay } from '$lib/utils/tradeTransform';
+	import { transformApiTakerTradesToDisplay } from '$lib/utils/tradeTransform';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 	$: tokenId = $page.params.id;
 
@@ -129,9 +129,9 @@
 
 	// Transform taker trades into display orders (filtered to current token)
 	$: userMarketOrders = (() => {
-		const orders = $takerTradesQuery?.data?.marketOrders;
-		if (!orders?.length || !$currentNetwork) return [];
-		return transformApiMarketOrdersToDisplay(orders, $currentNetwork.chainId);
+		const trades = $takerTradesQuery?.data?.trades;
+		if (!trades?.length || !$currentNetwork) return [];
+		return transformApiTakerTradesToDisplay(trades, $currentNetwork.chainId);
 	})();
 
 	// Extract user's order hashes for batch trades (filled data)

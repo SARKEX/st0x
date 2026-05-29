@@ -25,7 +25,7 @@
 	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK, getTokenByAnyAddress } from '$lib/config/tokens';
 	import { goto } from '$app/navigation';
-	import { transformApiMarketOrdersToDisplay } from '$lib/utils/tradeTransform';
+	import { transformApiTakerTradesToDisplay } from '$lib/utils/tradeTransform';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
@@ -940,9 +940,9 @@
 
 	// Transform taker trades into display orders
 	$: userMarketOrders = (() => {
-		const orders = $takerTradesQuery?.data?.marketOrders;
-		if (!orders?.length || !$currentNetwork) return [];
-		return transformApiMarketOrdersToDisplay(orders, $currentNetwork.chainId);
+		const trades = $takerTradesQuery?.data?.trades;
+		if (!trades?.length || !$currentNetwork) return [];
+		return transformApiTakerTradesToDisplay(trades, $currentNetwork.chainId);
 	})();
 
 	// Extract user's order hashes for batch trades query
