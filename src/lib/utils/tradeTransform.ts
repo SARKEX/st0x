@@ -111,13 +111,16 @@ export function transformTradeToDisplayOrder(
  * - If taker received an asset token, they bought it
  */
 export function transformApiMarketOrdersToDisplay(
-	marketOrders: ApiMarketOrder[],
+	marketOrders: ApiMarketOrder[] | undefined,
 	chainId: number
 ): DisplayOrder[] {
 	const displayOrders: DisplayOrder[] = [];
 
-	for (const mo of marketOrders) {
-		for (const entry of mo.trades) {
+	for (const mo of marketOrders ?? []) {
+		if (!mo) continue;
+		const trades = mo.trades ?? [];
+		for (const entry of trades) {
+			if (!entry?.request || !entry?.result) continue;
 			const order = transformApiTradeEntry(entry, mo, chainId);
 			if (order) displayOrders.push(order);
 		}

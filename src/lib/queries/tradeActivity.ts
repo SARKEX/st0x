@@ -105,7 +105,7 @@ export function createTakerTradesQuery(
 
 			while (page <= 10) {
 				const response = await apiGetTakerTrades(walletAddress!, { page, pageSize: PAGE_SIZE });
-				allOrders = allOrders.concat(response.marketOrders);
+				allOrders = allOrders.concat(response.marketOrders ?? []);
 				if (!response.pagination.hasMore) break;
 				page++;
 			}

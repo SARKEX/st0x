@@ -131,7 +131,7 @@
 	$: userMarketOrders = (() => {
 		const orders = $takerTradesQuery?.data?.marketOrders;
 		if (!orders?.length || !$currentNetwork) return [];
-		return transformApiMarketOrdersToDisplay(orders, $currentNetwork.chainId);
+		return transformApiMarketOrdersToDisplay(orders ?? [], $currentNetwork.chainId);
 	})();
 
 	// Extract user's order hashes for batch trades (filled data)

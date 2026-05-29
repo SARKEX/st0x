@@ -78,8 +78,10 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 			pageSize: PAGE_SIZE
 		});
 
-		for (const marketOrder of response.marketOrders) {
-			for (const entry of marketOrder.trades) {
+		for (const marketOrder of response.marketOrders ?? []) {
+			if (!marketOrder) continue;
+			for (const entry of marketOrder.trades ?? []) {
+				if (!entry?.request || !entry?.result) continue;
 				const key = `${marketOrder.txHash}:${entry.orderHash}`;
 				if (seen.has(key)) continue;
 				seen.add(key);
