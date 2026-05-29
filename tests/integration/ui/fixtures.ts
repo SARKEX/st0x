@@ -19,7 +19,6 @@ import {
 	fundErc20ViaImpersonation
 } from '../../helpers/anvilControl';
 import { eip1193StubSource } from '../../helpers/eip1193Stub';
-import { patchOrdersResponseAgainstFork } from './forkOrdersStub';
 import {
 	buildSyntheticOrdersResponse,
 	clearMakerOrders,
@@ -293,12 +292,6 @@ export const test = base.extend<UiFixtures>({
 				body: JSON.stringify({ registered: true })
 			});
 		});
-		// Re-derive orderbook quotes against the anvil fork. The production
-		// ST0x REST API runs against LIVE Base mainnet (its own RPC, opaque
-		// to Playwright); we let it produce the order LIST + orderBytes,
-		// then re-quote each order through a RaindexClient pointed at anvil
-		// so ioRatio and maxOutput reflect fork state. See forkOrdersStub.ts
-		// for the rationale and limitations.
 		// Cache Goldsky GraphQL responses across tests in this worker. The Raindex
 		// SDK in the browser hits the Goldsky subgraph during the hydration step
 		// of marketOrderExecution.ts (one getOrders call per walk-fill orderHash).
@@ -312,10 +305,9 @@ export const test = base.extend<UiFixtures>({
 		await page.route(/https:\/\/api\.goldsky\.com\/.*/, async (route) => {
 			const req = route.request();
 			const body = req.postData() ?? '';
-			// Path B (maker→taker): if any maker orders are registered for this
-			// test, serve synthetic SgOrder responses BEFORE falling through to
-			// the LIVE-cache stub. This is how the SDK's in-WASM Goldsky calls
-			// see anvil-only orders.
+			// If any maker orders are registered for this test, serve synthetic
+			// SgOrder responses BEFORE falling through to the cached-LIVE stub.
+			// This is how the SDK's in-WASM Goldsky calls see anvil-only orders.
 			const synthetic = handleGoldskyRequest(body);
 			if (synthetic !== null) {
 				console.log(`[goldsky-synth] served (makers=${getMakerOrders().length})`);
@@ -379,9 +371,12 @@ export const test = base.extend<UiFixtures>({
 			});
 		});
 		await page.route('**/api/st0x/v1/orders/token/**', async (route) => {
-			// Path B (maker→taker): when maker orders are registered, serve a
-			// fully-synthetic response built from the maker registry. No call to
-			// the LIVE proxy → no LIVE/fork divergence to bridge.
+			// When maker orders are registered, serve a fully-synthetic
+			// response built from the maker registry. Specs that don't
+			// register any maker (e.g. limitDeploy, which only deploys and
+			// never takes) get an empty list — the UI handles a sparse
+			// orderbook gracefully and there's no LIVE/fork divergence to
+			// bridge here.
 			if (getMakerOrders().length > 0) {
 				const url = new URL(route.request().url());
 				const segments = url.pathname.split('/');
@@ -398,25 +393,14 @@ export const test = base.extend<UiFixtures>({
 				});
 				return;
 			}
-			// Fallback (Path A): re-quote LIVE orders against fork. Existing behavior.
-			const upstream = await route.fetch();
-			const ct = upstream.headers()['content-type'] ?? '';
-			if (!ct.includes('json') || upstream.status() !== 200) {
-				await route.fulfill({ response: upstream });
-				return;
-			}
-			try {
-				const liveBody = await upstream.json();
-				const forkBody = await patchOrdersResponseAgainstFork(liveBody);
-				await route.fulfill({
-					status: 200,
-					contentType: 'application/json',
-					body: JSON.stringify(forkBody)
-				});
-			} catch (err) {
-				console.warn('[fork-stub] patch failed, falling back to live response:', err);
-				await route.fulfill({ response: upstream });
-			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					orders: [],
+					pagination: { page: 1, pageSize: 0, totalOrders: 0, totalPages: 0, hasMore: false }
+				})
+			});
 		});
 		// Redirect Base mainnet RPC traffic to anvil. TWO separate clients hit
 		// these hosts:
