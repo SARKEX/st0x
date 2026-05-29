@@ -9,19 +9,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { type ErrorClass } from '$lib/services/observability/tradeEvents';
+import { classifyError } from '$lib/services/observability/classifyError';
 
 const componentPath = resolve(process.cwd(), 'src/lib/components/orders/LimitOrder.svelte');
 const componentSource = readFileSync(componentPath, 'utf-8');
-
-function classifyDeployError(err: unknown): ErrorClass {
-	const msg = String((err as { message?: string })?.message ?? err ?? '').toLowerCase();
-	if (msg.includes('user reject') || msg.includes('user denied') || msg.includes('rejected'))
-		return 'user_rejected';
-	if (msg.includes('insufficient') || msg.includes('balance')) return 'insufficient_balance';
-	if (msg.includes('rpc') || msg.includes('network')) return 'rpc_error';
-	return 'unknown';
-}
 
 describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 	it('Test L1: imports trade lifecycle modules', () => {
@@ -86,16 +77,19 @@ describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 		expect(componentSource).toMatch(/track\(\s*['"]trade_panel_abandoned['"]/);
 	});
 
-	it('Test L7: classifyDeployError pure mapping covers ErrorClass branches', () => {
-		expect(classifyDeployError(new Error('user denied tx'))).toBe('user_rejected');
-		expect(classifyDeployError(new Error('User rejected the request'))).toBe('user_rejected');
-		expect(classifyDeployError(new Error('Insufficient balance'))).toBe('insufficient_balance');
-		expect(classifyDeployError(new Error('rpc connection refused'))).toBe('rpc_error');
-		expect(classifyDeployError(new Error('something went sideways'))).toBe('unknown');
+	it('Test L7: shared classifyError covers the deploy-scope ErrorClass branches', () => {
+		expect(classifyError(new Error('user denied tx'))).toBe('user_rejected');
+		expect(classifyError(new Error('User rejected the request'))).toBe('user_rejected');
+		expect(classifyError(new Error('Insufficient balance'))).toBe('insufficient_balance');
+		expect(classifyError(new Error('rpc connection refused'))).toBe('rpc_error');
+		expect(classifyError(new Error('something went sideways'))).toBe('unknown');
 	});
 
-	it('Test L8: classifyDeployError function exists in component source', () => {
-		expect(componentSource).toMatch(/function\s+classifyDeployError\s*\(/);
+	it('Test L8: component imports the shared classifyError', () => {
+		expect(componentSource).toMatch(
+			/from\s+['"]\$lib\/services\/observability\/classifyError['"]/
+		);
+		expect(componentSource).toMatch(/classifyError\s*\(/);
 	});
 
 	it("Test L9: deployOrder caller passes eventContext: { order_type: 'limit' } per Task 2c contract", () => {

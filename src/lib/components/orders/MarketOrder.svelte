@@ -26,7 +26,8 @@
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
-	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
+	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
+	import { classifyError } from '$lib/services/observability/classifyError';
 	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
 	import { onMount } from 'svelte';
 
@@ -841,22 +842,6 @@
 		return sortQuotesByPrice(filteredQuotes, orderSide);
 	}
 
-	// OBS-07/OBS-09 (Plan 02-03): map raw error → ErrorClass for trade_failed events.
-	// Inline (per CLAUDE.md "avoid over-engineering" — duplicated once in LimitOrder /
-	// DcaOrder; extract to shared module at three call sites).
-	function classifyMarketError(err: unknown): ErrorClass {
-		const msg = String((err as { message?: string })?.message ?? err ?? '').toLowerCase();
-		if (msg.includes('slippage')) return 'slippage_exceeded';
-		if (msg.includes('liquidity') || msg.includes('no_walk_fills') || msg.includes('no_quotes'))
-			return 'no_liquidity';
-		if (msg.includes('stale') || msg.includes('oracle')) return 'stale_oracle';
-		if (msg.includes('insufficient') || msg.includes('balance')) return 'insufficient_balance';
-		if (msg.includes('market') && msg.includes('closed')) return 'market_closed';
-		if (msg.includes('user reject') || msg.includes('user denied') || msg.includes('rejected'))
-			return 'user_rejected';
-		if (msg.includes('rpc') || msg.includes('network')) return 'rpc_error';
-		return 'unknown';
-	}
 
 	const handleMarketOrder = async () => {
 		// Check if user is connected
@@ -970,7 +955,7 @@
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 					asset_symbol: assetToken?.symbol,
-					error_class: classifyMarketError(new Error(result.error)),
+					error_class: classifyError(new Error(result.error), 'market'),
 					error_message: result.error
 				});
 			} else if (result.success) {
@@ -994,7 +979,7 @@
 				order_type: 'market',
 				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 				asset_symbol: assetToken?.symbol,
-				error_class: classifyMarketError(error),
+				error_class: classifyError(error, 'market'),
 				error_message: orderPreparationError
 			});
 		} finally {

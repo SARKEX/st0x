@@ -20,27 +20,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { type ErrorClass } from '$lib/services/observability/tradeEvents';
+import { classifyError } from '$lib/services/observability/classifyError';
 
 const componentPath = resolve(process.cwd(), 'src/lib/components/orders/MarketOrder.svelte');
 const componentSource = readFileSync(componentPath, 'utf-8');
-
-// Mirror of `classifyMarketError` defined inside MarketOrder.svelte. The pure
-// helper is asserted here in test-land so a future drift breaks Test 5 immediately.
-// Source-content check below ensures the function exists in the component file.
-function classifyMarketError(err: unknown): ErrorClass {
-	const msg = String((err as { message?: string })?.message ?? err ?? '').toLowerCase();
-	if (msg.includes('slippage')) return 'slippage_exceeded';
-	if (msg.includes('liquidity') || msg.includes('no_walk_fills') || msg.includes('no_quotes'))
-		return 'no_liquidity';
-	if (msg.includes('stale') || msg.includes('oracle')) return 'stale_oracle';
-	if (msg.includes('insufficient') || msg.includes('balance')) return 'insufficient_balance';
-	if (msg.includes('market') && msg.includes('closed')) return 'market_closed';
-	if (msg.includes('user reject') || msg.includes('user denied') || msg.includes('rejected'))
-		return 'user_rejected';
-	if (msg.includes('rpc') || msg.includes('network')) return 'rpc_error';
-	return 'unknown';
-}
 
 describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => {
 	it('Test 1: trade_button_clicked uses trackTradeEvent (not raw track) inside handleMarketOrder', () => {
@@ -96,27 +79,28 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]quote_received['"]/);
 	});
 
-	it('Test 5: classifyMarketError pure mapping covers all ErrorClass branches', () => {
-		expect(classifyMarketError(new Error('Slippage exceeded'))).toBe('slippage_exceeded');
-		expect(classifyMarketError(new Error('no_walk_fills'))).toBe('no_liquidity');
-		expect(classifyMarketError(new Error('No liquidity available right now'))).toBe(
+	it('Test 5: shared classifyError covers the market-scope ErrorClass branches', () => {
+		expect(classifyError(new Error('Slippage exceeded'), 'market')).toBe('slippage_exceeded');
+		expect(classifyError(new Error('no_walk_fills'), 'market')).toBe('no_liquidity');
+		expect(classifyError(new Error('No liquidity available right now'), 'market')).toBe(
 			'no_liquidity'
 		);
-		expect(classifyMarketError(new Error('no_quotes available'))).toBe('no_liquidity');
-		expect(classifyMarketError(new Error('Stale oracle price'))).toBe('stale_oracle');
-		expect(classifyMarketError(new Error('Insufficient balance'))).toBe('insufficient_balance');
-		expect(classifyMarketError(new Error('Market is closed'))).toBe('market_closed');
-		expect(classifyMarketError(new Error('user denied tx'))).toBe('user_rejected');
-		expect(classifyMarketError(new Error('User rejected the request'))).toBe('user_rejected');
-		expect(classifyMarketError(new Error('rpc connection refused'))).toBe('rpc_error');
-		expect(classifyMarketError(new Error('something went sideways'))).toBe('unknown');
-		expect(classifyMarketError(undefined)).toBe('unknown');
+		expect(classifyError(new Error('no_quotes available'), 'market')).toBe('no_liquidity');
+		expect(classifyError(new Error('Stale oracle price'), 'market')).toBe('stale_oracle');
+		expect(classifyError(new Error('Insufficient balance'), 'market')).toBe('insufficient_balance');
+		expect(classifyError(new Error('Market is closed'), 'market')).toBe('market_closed');
+		expect(classifyError(new Error('user denied tx'), 'market')).toBe('user_rejected');
+		expect(classifyError(new Error('User rejected the request'), 'market')).toBe('user_rejected');
+		expect(classifyError(new Error('rpc connection refused'), 'market')).toBe('rpc_error');
+		expect(classifyError(new Error('something went sideways'), 'market')).toBe('unknown');
+		expect(classifyError(undefined, 'market')).toBe('unknown');
 	});
 
-	it('Test 5b: classifyMarketError function exists in component source', () => {
-		// Regression guard: if the helper is renamed or extracted, this fails so
-		// Test 5 above doesn't drift away from the actual implementation.
-		expect(componentSource).toMatch(/function\s+classifyMarketError\s*\(/);
+	it("Test 5b: component imports the shared classifyError + calls it with the 'market' scope", () => {
+		expect(componentSource).toMatch(
+			/from\s+['"]\$lib\/services\/observability\/classifyError['"]/
+		);
+		expect(componentSource).toMatch(/classifyError\s*\([^,]*,\s*['"]market['"]\s*\)/);
 	});
 
 	it("Test 6: existing track('trade_panel_opened', ...) regression-guarded (KEEP unchanged)", () => {

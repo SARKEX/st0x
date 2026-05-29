@@ -17,18 +17,9 @@
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 	import { onMount } from 'svelte';
 	import { track } from '$lib/services/analytics';
-	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
+	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
+	import { classifyError } from '$lib/services/observability/classifyError';
 	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
-
-	// OBS-07/OBS-09 (Plan 02-03 Task 2b) — local error classifier (mirrors LimitOrder).
-	function classifyDeployError(err: unknown): ErrorClass {
-		const msg = String((err as { message?: string })?.message ?? err ?? '').toLowerCase();
-		if (msg.includes('user reject') || msg.includes('user denied') || msg.includes('rejected'))
-			return 'user_rejected';
-		if (msg.includes('insufficient') || msg.includes('balance')) return 'insufficient_balance';
-		if (msg.includes('rpc') || msg.includes('network')) return 'rpc_error';
-		return 'unknown';
-	}
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -259,7 +250,7 @@
 				order_type: 'dca',
 				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 				asset_symbol: selectedInputToken?.symbol,
-				error_class: classifyDeployError(error),
+				error_class: classifyError(error),
 				error_message: error instanceof Error ? error.message : String(error)
 			});
 			throw error;
