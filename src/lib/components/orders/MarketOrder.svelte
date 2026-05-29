@@ -841,7 +841,6 @@
 		return sortQuotesByPrice(filteredQuotes, orderSide);
 	}
 
-
 	const handleMarketOrder = async () => {
 		// Check if user is connected
 		if (!$isAuthenticated) {
@@ -894,8 +893,7 @@
 
 				// Refresh orderbook quotes if stale
 				const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
-				const isStaleQuotes =
-					!lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
+				const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
 				if (isStaleQuotes) {
 					await $orderbookQuotesQuery?.refetch?.();
 					await fetchMarketPrice();
@@ -974,8 +972,7 @@
 				}
 			} catch (error) {
 				console.error('Market order error:', error);
-				orderPreparationError =
-					error instanceof Error ? error.message : 'Unknown error occurred';
+				orderPreparationError = error instanceof Error ? error.message : 'Unknown error occurred';
 				trackTradeEvent('trade_failed', {
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
