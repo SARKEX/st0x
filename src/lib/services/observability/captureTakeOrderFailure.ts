@@ -24,7 +24,7 @@
  */
 
 import * as Sentry from '@sentry/sveltekit';
-import type { ProcessedQuote } from '$lib/services/marketOrderExecution';
+import type { ProcessedQuote } from '$lib/utils/orderbook';
 import { getCurrentTradeId } from './tradeId';
 
 export type TakeOrderFailureReason =
