@@ -102,12 +102,15 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		expect(componentSource).toMatch(/classifyError\s*\([^,]*,\s*['"]market['"]\s*\)/);
 	});
 
-	it("Test 6: existing track('trade_panel_opened', ...) regression-guarded (KEEP unchanged)", () => {
-		// Per plan acceptance: line 123 mount call MUST remain on `track`.
-		expect(componentSource).toMatch(/track\(\s*['"]trade_panel_opened['"]/);
-		// And panel_abandoned + error_shown still as track() (mount/unmount surface).
-		expect(componentSource).toMatch(/track\(\s*['"]trade_panel_abandoned['"]/);
-		expect(componentSource).toMatch(/track\(\s*['"]trade_error_shown['"]/);
+	it('Test 6: panel-level events route through trackTradeEvent', () => {
+		// Following the PR-174 review: every name in TradeEventName goes through
+		// trackTradeEvent so the trade_id property is consistently attached
+		// (null when no trade is in flight, value once mintTradeId has fired).
+		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_panel_opened['"]/);
+		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_panel_abandoned['"]/);
+		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_error_shown['"]/);
+		// And the raw `track` import must not be needed in the component anymore.
+		expect(componentSource).not.toMatch(/import\s+\{\s*track\s*\}\s+from\s+['"]\$lib\/services\/analytics['"]/);
 	});
 
 	it('Test 7: imports both new lifecycle modules', () => {

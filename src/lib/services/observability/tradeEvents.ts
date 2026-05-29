@@ -8,7 +8,9 @@
  * Per CONTEXT D-01: PostHog is the primary funnel-investigation surface. This module
  * is the single source of truth for what trade events look like — typed `TradeEventName`
  * + `TradeEventProps` + `ErrorClass` unions. Anti-pattern: never inline raw `track()`
- * for trade events; always go through `trackTradeEvent`.
+ * for any name in `TradeEventName` — always go through `trackTradeEvent` so the
+ * event picks up `trade_id` if one is active (panel-level events that fire
+ * before a submit click correctly emit `trade_id: null`).
  *
  * Per Pitfall 7 (event-name collision): KEEP existing snake_case names — do NOT rename.
  *

@@ -25,7 +25,6 @@
 		sortQuotesByPrice
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
-	import { track } from '$lib/services/analytics';
 	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
 	import { classifyError } from '$lib/services/observability/classifyError';
 	import { withTradeId } from '$lib/services/observability/tradeId';
@@ -123,7 +122,7 @@
 
 	onMount(() => {
 		panelOpenTime = Date.now();
-		track('trade_panel_opened', {
+		trackTradeEvent('trade_panel_opened', {
 			order_type: 'market',
 			token_symbol: assetToken?.symbol
 		});
@@ -136,7 +135,7 @@
 		lastTrackedError !== 'insufficient_balance'
 	) {
 		lastTrackedError = 'insufficient_balance';
-		track('trade_error_shown', {
+		trackTradeEvent('trade_error_shown', {
 			error_type: 'insufficient_balance',
 			order_type: 'market',
 			token_symbol: assetToken?.symbol,
@@ -159,7 +158,7 @@
 		lastTrackedError !== 'insufficient_liquidity'
 	) {
 		lastTrackedError = 'insufficient_liquidity';
-		track('trade_error_shown', {
+		trackTradeEvent('trade_error_shown', {
 			error_type: 'insufficient_liquidity',
 			order_type: 'market',
 			token_symbol: assetToken?.symbol,
@@ -175,7 +174,7 @@
 
 	$: if (priceError && selectedAmount > 0n && lastTrackedError !== `price_${priceErrorReason}`) {
 		lastTrackedError = `price_${priceErrorReason}`;
-		track('trade_error_shown', {
+		trackTradeEvent('trade_error_shown', {
 			error_type: `price_${priceErrorReason}`,
 			order_type: 'market',
 			token_symbol: assetToken?.symbol,
@@ -201,10 +200,10 @@
 		// Track abandonment if user had entered values but didn't complete trade
 		// Use trackingState to get current values (avoids stale closure)
 		if (!tradeSubmittedSuccessfully && trackingState.amount !== '0') {
-			track('trade_panel_abandoned', {
+			trackTradeEvent('trade_panel_abandoned', {
 				order_type: 'market',
 				token_symbol: trackingState.tokenSymbol,
-				order_side: trackingState.orderSide,
+				order_side: trackingState.orderSide as 'buy' | 'sell',
 				stage: trackingState.isSubmitting ? 'submitting' : 'ready_to_submit',
 				values_entered: {
 					amount: trackingState.amount,

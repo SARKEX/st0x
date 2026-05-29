@@ -14,21 +14,24 @@ const componentPath = resolve(process.cwd(), 'src/lib/components/orders/DcaOrder
 const componentSource = readFileSync(componentPath, 'utf-8');
 
 describe('DcaOrder.svelte event instrumentation (Plan 02-03 Task 2b)', () => {
-	it('Test D1: imports trade lifecycle modules and analytics track', () => {
+	it('Test D1: imports trade lifecycle modules (raw analytics import removed)', () => {
 		expect(componentSource).toMatch(
 			/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/
 		);
 		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeId['"]/);
-		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/analytics['"]/);
 		expect(componentSource).toMatch(/trackTradeEvent/);
 		expect(componentSource).toMatch(/withTradeId/);
+		// Raw `track` is no longer used — every panel-level event goes via trackTradeEvent.
+		expect(componentSource).not.toMatch(
+			/import\s+\{\s*track\s*\}\s+from\s+['"]\$lib\/services\/analytics['"]/
+		);
 	});
 
-	it("Test D2: mount fires track('trade_panel_opened', { order_type: 'dca', ... }) — gap-fill", () => {
+	it("Test D2: mount fires trackTradeEvent('trade_panel_opened', { order_type: 'dca', ... }) — gap-fill", () => {
 		// DCA had zero analytics before; the mount event is the gap-fill regression guard.
 		expect(componentSource).toMatch(/onMount\s*\(/);
 		expect(componentSource).toMatch(
-			/track\(\s*['"]trade_panel_opened['"][\s\S]*?order_type:\s*['"]dca['"]/
+			/trackTradeEvent\(\s*['"]trade_panel_opened['"][\s\S]*?order_type:\s*['"]dca['"]/
 		);
 	});
 

@@ -16,7 +16,6 @@
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 	import { onMount } from 'svelte';
-	import { track } from '$lib/services/analytics';
 	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
 	import { classifyError } from '$lib/services/observability/classifyError';
 	import { withTradeId } from '$lib/services/observability/tradeId';
@@ -26,10 +25,10 @@
 	// OBS-08 gap-fill: DCA had zero analytics before Plan 02-03. Mirror LimitOrder
 	// mount-event so the funnel breakdown by order_type works for DCA.
 	onMount(() => {
-		track('trade_panel_opened', {
+		trackTradeEvent('trade_panel_opened', {
 			order_type: 'dca',
 			token_symbol: assetToken?.symbol,
-			order_side: orderSide.toLowerCase()
+			order_side: orderSide.toLowerCase() as 'buy' | 'sell'
 		});
 	});
 

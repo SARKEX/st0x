@@ -72,9 +72,11 @@ describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 		);
 	});
 
-	it("Test L6: regression guard — track('trade_panel_opened', ...) on mount unchanged", () => {
-		expect(componentSource).toMatch(/track\(\s*['"]trade_panel_opened['"]/);
-		expect(componentSource).toMatch(/track\(\s*['"]trade_panel_abandoned['"]/);
+	it('Test L6: panel-level events route through trackTradeEvent', () => {
+		// Following the PR-174 review: every name in TradeEventName goes through
+		// trackTradeEvent so the trade_id property is consistently attached.
+		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_panel_opened['"]/);
+		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_panel_abandoned['"]/);
 	});
 
 	it('Test L7: shared classifyError covers the deploy-scope ErrorClass branches', () => {

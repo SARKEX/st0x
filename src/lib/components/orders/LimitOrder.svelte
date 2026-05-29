@@ -16,7 +16,6 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
-	import { track } from '$lib/services/analytics';
 	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
 	import { classifyError } from '$lib/services/observability/classifyError';
 	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
@@ -28,7 +27,7 @@
 
 	onMount(() => {
 		panelOpenTime = Date.now();
-		track('trade_panel_opened', {
+		trackTradeEvent('trade_panel_opened', {
 			order_type: 'limit',
 			token_symbol: assetToken?.symbol
 		});
@@ -37,10 +36,10 @@
 	onDestroy(() => {
 		// Track abandonment if user had entered values but didn't complete trade
 		if (!tradeSubmittedSuccessfully && selectedAmount > 0n) {
-			track('trade_panel_abandoned', {
+			trackTradeEvent('trade_panel_abandoned', {
 				order_type: 'limit',
 				token_symbol: assetToken?.symbol,
-				order_side: orderSide.toLowerCase(),
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 				stage: selectedInitialRatio ? 'price_entered' : 'amount_entered',
 				values_entered: {
 					amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0',
