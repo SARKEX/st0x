@@ -19,7 +19,7 @@
 	import { track } from '$lib/services/analytics';
 	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
 	import { classifyError } from '$lib/services/observability/classifyError';
-	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
+	import { withTradeId } from '$lib/services/observability/tradeId';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -177,7 +177,7 @@
 		tradeAmountInputRef.setAmountValue(percentAmount);
 	};
 
-	const handleDcaDeploy = () => {
+	const handleDcaDeploy = async () => {
 		// Check if user is connected
 		if (!$isAuthenticated) {
 			promptWalletConnection();
@@ -190,74 +190,72 @@
 		}
 		if (!($isAuthenticated && $walletRegistered)) return;
 
-		mintTradeId();
-		try {
-			trackTradeEvent('trade_button_clicked', {
-				order_type: 'dca',
-				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-				asset_symbol: selectedInputToken?.symbol,
-				payment_symbol: selectedOutputToken?.symbol,
-				amount: selectedAmount
-					? formatUnits(
-							selectedAmount,
-							orderSide === 'Buy'
-								? selectedOutputToken?.decimals ?? 6
-								: selectedInputToken?.decimals ?? 18
-						)
-					: '0',
-				period: selectedPeriod,
-				period_unit: selectedPeriodUnit
-			});
+		await withTradeId(async () => {
+			try {
+				trackTradeEvent('trade_button_clicked', {
+					order_type: 'dca',
+					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+					asset_symbol: selectedInputToken?.symbol,
+					payment_symbol: selectedOutputToken?.symbol,
+					amount: selectedAmount
+						? formatUnits(
+								selectedAmount,
+								orderSide === 'Buy'
+									? selectedOutputToken?.decimals ?? 6
+									: selectedInputToken?.decimals ?? 18
+							)
+						: '0',
+					period: selectedPeriod,
+					period_unit: selectedPeriodUnit
+				});
 
-			// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
-			const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
+				// Convert user-facing 'Buy'/'Sell' to order terminology 'Bid'/'Ask'
+				const orderType = orderSide === 'Buy' ? 'Bid' : 'Ask';
 
-			// Bid (buying): Accumulate asset over time using the settlement token
-			// Ask (selling): Accumulate the settlement token over time by selling the asset
-			const inputTok = orderType === 'Bid' ? selectedInputToken : selectedOutputToken;
-			const outputTok = orderType === 'Bid' ? selectedOutputToken : selectedInputToken;
-			transactionStore.handleDcaDeploy(
-				{
-					outputToken: outputTok,
-					inputToken: inputTok,
-					budgetAmount: selectedAmount,
-					selectedPeriod: selectedPeriod,
-					selectedPeriodUnit: selectedPeriodUnit,
-					// DCA price inversion logic:
-					// Bid (buying): User specifies price as "quote per asset", orderbook needs "asset/quote" → invert
-					// Ask (selling): User specifies price as "quote per asset", orderbook needs "quote/asset" → no invert
-					baseline: priceToIoratioString(orderType, selectedBaseline, true),
-					kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
-					minTradeAmount: minTradeAmount,
-					maxTradeAmount: maxTradeAmount,
-					depositAmount: depositAmount,
-					inputVaultId: selectedInputVaultId
-				},
-				{ order_type: 'dca' }
-			);
+				// Bid (buying): Accumulate asset over time using the settlement token
+				// Ask (selling): Accumulate the settlement token over time by selling the asset
+				const inputTok = orderType === 'Bid' ? selectedInputToken : selectedOutputToken;
+				const outputTok = orderType === 'Bid' ? selectedOutputToken : selectedInputToken;
+				transactionStore.handleDcaDeploy(
+					{
+						outputToken: outputTok,
+						inputToken: inputTok,
+						budgetAmount: selectedAmount,
+						selectedPeriod: selectedPeriod,
+						selectedPeriodUnit: selectedPeriodUnit,
+						// DCA price inversion logic:
+						// Bid (buying): User specifies price as "quote per asset", orderbook needs "asset/quote" → invert
+						// Ask (selling): User specifies price as "quote per asset", orderbook needs "quote/asset" → no invert
+						baseline: priceToIoratioString(orderType, selectedBaseline, true),
+						kickoff: priceToIoratioString(orderType, selectedInitialRatio, true),
+						minTradeAmount: minTradeAmount,
+						maxTradeAmount: maxTradeAmount,
+						depositAmount: depositAmount,
+						inputVaultId: selectedInputVaultId
+					},
+					{ order_type: 'dca' }
+				);
 
-			// Per Assumption A7 (02-RESEARCH): reuse `limit_order_deployed` event
-			// family for the deploy step — DO NOT introduce `dca_order_deployed`.
-			// The `order_type: 'dca'` property is the funnel breakdown dimension.
-			trackTradeEvent('limit_order_deployed', {
-				order_type: 'dca',
-				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-				asset_symbol: selectedInputToken?.symbol,
-				price: selectedInitialRatio
-			});
-		} catch (error) {
-			trackTradeEvent('trade_failed', {
-				order_type: 'dca',
-				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-				asset_symbol: selectedInputToken?.symbol,
-				error_class: classifyError(error),
-				error_message: error instanceof Error ? error.message : String(error)
-			});
-			throw error;
-		} finally {
-			// Pitfall 2 (T-2-E): clear module state so next DCA deploy gets fresh trade_id.
-			clearTradeId();
-		}
+				// Per Assumption A7 (02-RESEARCH): reuse `limit_order_deployed` event
+				// family for the deploy step — DO NOT introduce `dca_order_deployed`.
+				// The `order_type: 'dca'` property is the funnel breakdown dimension.
+				trackTradeEvent('limit_order_deployed', {
+					order_type: 'dca',
+					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+					asset_symbol: selectedInputToken?.symbol,
+					price: selectedInitialRatio
+				});
+			} catch (error) {
+				trackTradeEvent('trade_failed', {
+					order_type: 'dca',
+					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+					asset_symbol: selectedInputToken?.symbol,
+					error_class: classifyError(error),
+					error_message: error instanceof Error ? error.message : String(error)
+				});
+				throw error;
+			}
+		});
 	};
 
 	// Calculate average amount per period (use correct decimals for order type)

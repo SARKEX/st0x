@@ -21,8 +21,7 @@ describe('DcaOrder.svelte event instrumentation (Plan 02-03 Task 2b)', () => {
 		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeId['"]/);
 		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/analytics['"]/);
 		expect(componentSource).toMatch(/trackTradeEvent/);
-		expect(componentSource).toMatch(/mintTradeId/);
-		expect(componentSource).toMatch(/clearTradeId/);
+		expect(componentSource).toMatch(/withTradeId/);
 	});
 
 	it("Test D2: mount fires track('trade_panel_opened', { order_type: 'dca', ... }) — gap-fill", () => {
@@ -45,13 +44,11 @@ describe('DcaOrder.svelte event instrumentation (Plan 02-03 Task 2b)', () => {
 		);
 	});
 
-	it('Test D5: deploy handler pairs mintTradeId() with clearTradeId() in finally', () => {
-		expect(componentSource).toMatch(/mintTradeId\(\)/);
-		// At least one finally block contains clearTradeId
-		const finallyIdx = componentSource.indexOf('finally {');
-		expect(finallyIdx).toBeGreaterThan(-1);
-		const after = componentSource.slice(finallyIdx, finallyIdx + 300);
-		expect(after).toMatch(/clearTradeId\(\)/);
+	it('Test D5: deploy handler brackets the submit body with withTradeId()', () => {
+		// withTradeId owns mint/clear lifecycle — call site must not open-code it.
+		expect(componentSource).toMatch(/await\s+withTradeId\(/);
+		expect(componentSource).not.toMatch(/mintTradeId\(\)/);
+		expect(componentSource).not.toMatch(/clearTradeId\(\)/);
 	});
 
 	it('Test D6: emits trade_failed with order_type: "dca" + error_class on error path', () => {

@@ -28,7 +28,7 @@
 	import { track } from '$lib/services/analytics';
 	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
 	import { classifyError } from '$lib/services/observability/classifyError';
-	import { mintTradeId, clearTradeId } from '$lib/services/observability/tradeId';
+	import { withTradeId } from '$lib/services/observability/tradeId';
 	import { onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
@@ -865,102 +865,57 @@
 		isSubmittingMarketOrder = true;
 		orderPreparationError = null;
 
-		// Mint AFTER early-return guards so unauthenticated/idle clicks do not pollute
-		// the funnel; clear in `finally` (Pitfall 2 — T-2-E mitigation).
-		mintTradeId();
-		try {
-			trackTradeEvent('trade_button_clicked', {
-				order_type: 'market',
-				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-				asset_symbol: assetToken?.symbol,
-				payment_symbol: paymentToken?.symbol,
-				amount: selectedAmount
-					? formatUnits(
-							selectedAmount,
-							inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
-						)
-					: '0',
-				slippage_bps: slippageBps,
-				mode: inputMode === 'spend' ? 'spendUpTo' : 'buyUpTo'
-			});
-			// Validate token configuration
-			if (!paymentToken || typeof paymentToken.decimals !== 'number') {
-				orderPreparationError = 'Token configuration error. Please refresh the page.';
-				return;
-			}
-			if (!assetToken || typeof assetToken.decimals !== 'number') {
-				orderPreparationError = 'Token configuration error. Please refresh the page.';
-				return;
-			}
-
-			// Refresh orderbook quotes if stale
-			const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
-			const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
-			if (isStaleQuotes) {
-				await $orderbookQuotesQuery?.refetch?.();
-				await fetchMarketPrice();
-				if (priceError) {
-					return;
-				}
-			}
-
-			// Get filtered quotes with price guard
-			const filteredQuotes = getQuotesWithPriceGuard();
-			if (filteredQuotes.length === 0) {
-				priceError = true;
-				priceErrorReason = 'no_quotes';
-				return;
-			}
-
-			// OBS-07 funnel step: post-walk, pre-execute. Once we have at least one
-			// price-guard-passing quote we count `quote_received` as fired.
-			trackTradeEvent('quote_received', {
-				order_type: 'market',
-				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-				asset_symbol: assetToken?.symbol,
-				payment_symbol: paymentToken?.symbol,
-				amount: formatUnits(
-					selectedAmount,
-					inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
-				),
-				quote_count: filteredQuotes.length,
-				slippage_bps: slippageBps
-			});
-
-			// Execute market order using shared service.
-			// `broadcast` and `confirmed` step events are emitted from
-			// `marketOrderExecution.ts` at SDK callback boundaries (Task 1b).
-			const result = await executeMarketOrder({
-				orderSide,
-				amount: selectedAmount,
-				inputMode,
-				slippageBps,
-				assetToken: {
-					address: assetToken.address,
-					decimals: assetToken.decimals,
-					symbol: assetToken.symbol
-				},
-				paymentToken: {
-					address: paymentToken.address,
-					decimals: paymentToken.decimals,
-					symbol: paymentToken.symbol
-				},
-				quotes: filteredQuotes,
-				network: $currentNetwork
-			});
-
-			if (!result.success && result.error) {
-				orderPreparationError = result.error;
-				trackTradeEvent('trade_failed', {
+		// Mint after early-return guards so unauthenticated/idle clicks do not
+		// pollute the funnel; withTradeId clears in finally (T-2-E mitigation).
+		await withTradeId(async () => {
+			try {
+				trackTradeEvent('trade_button_clicked', {
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 					asset_symbol: assetToken?.symbol,
-					error_class: classifyError(new Error(result.error), 'market'),
-					error_message: result.error
+					payment_symbol: paymentToken?.symbol,
+					amount: selectedAmount
+						? formatUnits(
+								selectedAmount,
+								inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+							)
+						: '0',
+					slippage_bps: slippageBps,
+					mode: inputMode === 'spend' ? 'spendUpTo' : 'buyUpTo'
 				});
-			} else if (result.success) {
-				tradeSubmittedSuccessfully = true;
-				trackTradeEvent('trade_initiated', {
+				// Validate token configuration
+				if (!paymentToken || typeof paymentToken.decimals !== 'number') {
+					orderPreparationError = 'Token configuration error. Please refresh the page.';
+					return;
+				}
+				if (!assetToken || typeof assetToken.decimals !== 'number') {
+					orderPreparationError = 'Token configuration error. Please refresh the page.';
+					return;
+				}
+
+				// Refresh orderbook quotes if stale
+				const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
+				const isStaleQuotes =
+					!lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
+				if (isStaleQuotes) {
+					await $orderbookQuotesQuery?.refetch?.();
+					await fetchMarketPrice();
+					if (priceError) {
+						return;
+					}
+				}
+
+				// Get filtered quotes with price guard
+				const filteredQuotes = getQuotesWithPriceGuard();
+				if (filteredQuotes.length === 0) {
+					priceError = true;
+					priceErrorReason = 'no_quotes';
+					return;
+				}
+
+				// OBS-07 funnel step: post-walk, pre-execute. Once we have at least one
+				// price-guard-passing quote we count `quote_received` as fired.
+				trackTradeEvent('quote_received', {
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 					asset_symbol: assetToken?.symbol,
@@ -969,25 +924,70 @@
 						selectedAmount,
 						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
 					),
-					avg_price: marketPrice
+					quote_count: filteredQuotes.length,
+					slippage_bps: slippageBps
 				});
+
+				// Execute market order using shared service.
+				// `broadcast` and `confirmed` step events are emitted from
+				// `marketOrderExecution.ts` at SDK callback boundaries (Task 1b).
+				const result = await executeMarketOrder({
+					orderSide,
+					amount: selectedAmount,
+					inputMode,
+					slippageBps,
+					assetToken: {
+						address: assetToken.address,
+						decimals: assetToken.decimals,
+						symbol: assetToken.symbol
+					},
+					paymentToken: {
+						address: paymentToken.address,
+						decimals: paymentToken.decimals,
+						symbol: paymentToken.symbol
+					},
+					quotes: filteredQuotes,
+					network: $currentNetwork
+				});
+
+				if (!result.success && result.error) {
+					orderPreparationError = result.error;
+					trackTradeEvent('trade_failed', {
+						order_type: 'market',
+						order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+						asset_symbol: assetToken?.symbol,
+						error_class: classifyError(new Error(result.error), 'market'),
+						error_message: result.error
+					});
+				} else if (result.success) {
+					tradeSubmittedSuccessfully = true;
+					trackTradeEvent('trade_initiated', {
+						order_type: 'market',
+						order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+						asset_symbol: assetToken?.symbol,
+						payment_symbol: paymentToken?.symbol,
+						amount: formatUnits(
+							selectedAmount,
+							inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+						),
+						avg_price: marketPrice
+					});
+				}
+			} catch (error) {
+				console.error('Market order error:', error);
+				orderPreparationError =
+					error instanceof Error ? error.message : 'Unknown error occurred';
+				trackTradeEvent('trade_failed', {
+					order_type: 'market',
+					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+					asset_symbol: assetToken?.symbol,
+					error_class: classifyError(error, 'market'),
+					error_message: orderPreparationError
+				});
+			} finally {
+				isSubmittingMarketOrder = false;
 			}
-		} catch (error) {
-			console.error('Market order error:', error);
-			orderPreparationError = error instanceof Error ? error.message : 'Unknown error occurred';
-			trackTradeEvent('trade_failed', {
-				order_type: 'market',
-				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-				asset_symbol: assetToken?.symbol,
-				error_class: classifyError(error, 'market'),
-				error_message: orderPreparationError
-			});
-		} finally {
-			isSubmittingMarketOrder = false;
-			// CRITICAL: Pitfall 2 (T-2-E) — clear module state so the next submit click
-			// gets a fresh trade_id. Always runs, including on early-return success paths.
-			clearTradeId();
-		}
+		});
 	};
 </script>
 

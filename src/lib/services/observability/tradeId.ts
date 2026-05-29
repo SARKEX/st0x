@@ -46,3 +46,21 @@ export function clearTradeId(): void {
 		console.error('[tradeId] Sentry.setTag clear failed:', err);
 	}
 }
+
+/**
+ * Mint a trade_id, run `fn`, and clear it in `finally` — the canonical
+ * Pitfall 2 (T-2-E) discipline as a single primitive so call sites don't
+ * each have to remember it.
+ *
+ * Limit deploys with a pre-deploy warning modal need to span a UI event
+ * boundary (button → modal-confirm) and so keep the mint/clear lifecycle
+ * inline.
+ */
+export async function withTradeId<T>(fn: () => Promise<T> | T): Promise<T> {
+	mintTradeId();
+	try {
+		return await fn();
+	} finally {
+		clearTradeId();
+	}
+}

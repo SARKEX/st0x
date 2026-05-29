@@ -40,36 +40,35 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		expect(handlerBlock).not.toMatch(/track\(\s*['"]trade_button_clicked['"]/);
 	});
 
-	it('Test 2: handleMarketOrder pairs mintTradeId() with clearTradeId() in finally', () => {
+	it('Test 2: handleMarketOrder brackets the submit body with withTradeId()', () => {
 		const handlerStart = componentSource.indexOf('const handleMarketOrder');
 		expect(handlerStart).toBeGreaterThan(-1);
 		const handlerEnd = componentSource.indexOf('};', handlerStart) + 2;
 		const handlerBlock = componentSource.slice(handlerStart, handlerEnd);
 
-		// mintTradeId called once
-		expect(handlerBlock).toMatch(/mintTradeId\(\)/);
-		// clearTradeId called inside the finally block
-		expect(handlerBlock).toMatch(/finally\s*\{[\s\S]*?clearTradeId\(\)[\s\S]*?\}/);
-		// mintTradeId must come BEFORE try (not inside finally / catch — Pitfall 2)
-		const mintIdx = handlerBlock.indexOf('mintTradeId');
-		const tryIdx = handlerBlock.indexOf('try {');
-		expect(mintIdx).toBeGreaterThan(-1);
-		expect(tryIdx).toBeGreaterThan(mintIdx);
+		// withTradeId encapsulates the mint-before / clear-in-finally Pitfall 2
+		// discipline so the call site only has to invoke the wrapper.
+		expect(handlerBlock).toMatch(/await\s+withTradeId\(/);
+		// The mint/clear pair must NOT be open-coded in the handler — that's the
+		// whole point of the wrapper.
+		expect(handlerBlock).not.toMatch(/mintTradeId\(\)/);
+		expect(handlerBlock).not.toMatch(/clearTradeId\(\)/);
 	});
 
-	it('Test 3: mintTradeId is gated behind early-return guards (does not pollute funnel for unauthenticated clicks)', () => {
+	it('Test 3: withTradeId is gated behind early-return guards (does not pollute funnel for unauthenticated clicks)', () => {
 		const handlerStart = componentSource.indexOf('const handleMarketOrder');
 		const handlerEnd = componentSource.indexOf('};', handlerStart) + 2;
 		const handlerBlock = componentSource.slice(handlerStart, handlerEnd);
-		// All early-return guards must come BEFORE the mintTradeId call so the
+		// All early-return guards must come BEFORE the withTradeId call so the
 		// ID is only minted for trades that actually start submitting.
-		const mintIdx = handlerBlock.indexOf('mintTradeId');
+		const withIdx = handlerBlock.indexOf('withTradeId');
 		const isAuthIdx = handlerBlock.indexOf('!$isAuthenticated');
 		const walletRegIdx = handlerBlock.indexOf('!$walletRegistered');
+		expect(withIdx).toBeGreaterThan(-1);
 		expect(isAuthIdx).toBeGreaterThan(-1);
-		expect(isAuthIdx).toBeLessThan(mintIdx);
+		expect(isAuthIdx).toBeLessThan(withIdx);
 		expect(walletRegIdx).toBeGreaterThan(-1);
-		expect(walletRegIdx).toBeLessThan(mintIdx);
+		expect(walletRegIdx).toBeLessThan(withIdx);
 	});
 
 	it('Test 4: trade_failed and trade_initiated use trackTradeEvent', () => {
@@ -117,7 +116,6 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		);
 		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeId['"]/);
 		expect(componentSource).toMatch(/trackTradeEvent/);
-		expect(componentSource).toMatch(/mintTradeId/);
-		expect(componentSource).toMatch(/clearTradeId/);
+		expect(componentSource).toMatch(/withTradeId/);
 	});
 });
