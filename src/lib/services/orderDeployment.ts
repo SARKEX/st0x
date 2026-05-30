@@ -20,8 +20,33 @@ import { formatUnits } from 'viem';
 import type { DeploymentTransactionArgs } from '@rainlanguage/orderbook';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
 import { walletAddress } from '$lib/stores/authStore';
+import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
+
+/**
+ * OBS-07 (Plan 02-03 Task 2c) — mandatory funnel-event context for deploy paths.
+ *
+ * Per checker fix #6: `order_type` MUST be supplied by the caller. There is NO
+ * default and NO silent fallback to `'limit'` (which was the DCA-funnel-corruption
+ * bug pre-Plan 02-03). The TypeScript compiler enforces this contract — every
+ * caller (LimitOrder, DcaOrder via deployTransactionStore) MUST pass it explicitly.
+ *
+ * `asset_symbol` / `payment_symbol` are USER-perspective symbols supplied by the
+ * caller — DO NOT re-derive them from maker-perspective `args.inputToken` /
+ * `args.outputToken` inside the deploy services, because those invert across
+ * Buy vs Sell. CLAUDE.md §"Order Semantics" covers the inversion:
+ *   Buy (maker bids):  orderInput=asset,   orderOutput=payment
+ *   Sell (maker asks): orderInput=payment, orderOutput=asset
+ * Without the explicit symbols, `sign_trade` events disagree with the
+ * MarketOrder / LimitOrder component-level events for the same trade.
+ */
+export interface DeployEventContext {
+	order_type: 'limit' | 'dca';
+	asset_symbol: string;
+	payment_symbol: string;
+}
 
 /** Lazily resolve DotrainRegistry from the WASM-based orderbook package. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getDotrainRegistry(): Promise<{ new: (url: string) => Promise<any> }> {
 	const orderbookModule = await import('@rainlanguage/orderbook');
 	const Registry =
@@ -34,10 +59,14 @@ async function getDotrainRegistry(): Promise<{ new: (url: string) => Promise<any
 	if (!Registry) {
 		throw new Error('DotrainRegistry not available from @rainlanguage/orderbook');
 	}
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return Registry as { new: (url: string) => Promise<any> };
 }
 type DotrainRegistryInstance = {
-	getGui: (orderKey: string, deploymentKey: string) => Promise<{
+	getGui: (
+		orderKey: string,
+		deploymentKey: string
+	) => Promise<{
 		error?: { readableMsg: string };
 		value: {
 			setSelectToken: (key: string, address: string) => Promise<unknown>;
@@ -53,11 +82,37 @@ type DotrainRegistryInstance = {
 };
 
 /**
- * Registry URL for rain.strategies. Vendored under static/registry/ and served same-origin.
+ * Registry URL for rain.strategies. Vendored under static/registry/ and served
+ * via the dynamic endpoint at src/routes/registry/manifest/+server.ts (which
+ * emits absolute URLs derived from the request origin — DotrainRegistry.new
+ * in @rainlanguage/orderbook does NOT resolve relative URLs against the
+ * manifest URL itself, so the manifest body MUST contain absolute URLs).
+ *
  * Set PUBLIC_REGISTRY_URL only for staging tests against an alternate registry.
  * Refresh procedure: see 03-RUNBOOK.md "Registry Refresh".
  */
-const REGISTRY_URL = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
+const REGISTRY_URL_RAW = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
+
+/**
+ * The SDK also rejects relative URLs passed to `DotrainRegistry.new(url)` —
+ * the WASM module parses the URL string itself and throws "Invalid URL
+ * format: relative URL without a base." So if REGISTRY_URL_RAW is relative
+ * (e.g. '/registry/manifest'), prepend the browser's origin. This is a
+ * browser-only path; SSR / server-side callers should always pass an
+ * absolute URL via PUBLIC_REGISTRY_URL.
+ */
+function resolveRegistryUrl(): string {
+	if (REGISTRY_URL_RAW.startsWith('http://') || REGISTRY_URL_RAW.startsWith('https://')) {
+		return REGISTRY_URL_RAW;
+	}
+	if (typeof window === 'undefined') {
+		throw new Error(
+			`DotrainRegistry requires an absolute URL. Got "${REGISTRY_URL_RAW}" with no window.origin available — ` +
+				`set PUBLIC_REGISTRY_URL to an absolute URL for server-side use.`
+		);
+	}
+	return new URL(REGISTRY_URL_RAW, window.location.origin).toString();
+}
 
 /** Maps app network slug to the deployment key in rain.strategies registry. */
 function getDeploymentKey(raindexNetworkSlug: string): string {
@@ -80,7 +135,7 @@ async function getRegistry(): Promise<DotrainRegistryInstance> {
 	if (!registryPromise) {
 		registryPromise = (async () => {
 			const DotrainRegistry = await getDotrainRegistry();
-			const result = await DotrainRegistry.new(REGISTRY_URL);
+			const result = await DotrainRegistry.new(resolveRegistryUrl());
 			if (result.error) {
 				throw new Error(result.error.readableMsg);
 			}
@@ -149,7 +204,8 @@ export type DcaDeploymentArgs = {
 
 export const getDcaDeploymentArgs = async (
 	network: Network,
-	args: DcaDeploymentArgs
+	args: DcaDeploymentArgs,
+	eventContext: DeployEventContext
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('auction-dca', network.raindexNetworkSlug);
 
@@ -198,6 +254,15 @@ export const getDcaDeploymentArgs = async (
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
 
+	// OBS-07: deploy calldata is built and the user is about to be prompted to
+	// sign. `sign_trade` is the funnel step at this boundary. order_type comes
+	// from the caller's eventContext — no silent fallback (checker fix #6).
+	trackTradeEvent('sign_trade', {
+		order_type: eventContext.order_type,
+		asset_symbol: eventContext.asset_symbol,
+		payment_symbol: eventContext.payment_symbol
+	});
+
 	return {
 		composedRainlang,
 		deploymentArgs
@@ -214,7 +279,8 @@ export type LimitOrderDeploymentArgs = {
 
 export const getLimitOrderDeploymentArgs = async (
 	network: Network,
-	args: LimitOrderDeploymentArgs
+	args: LimitOrderDeploymentArgs,
+	eventContext: DeployEventContext
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	const gui = await getGuiFromRegistry('fixed-limit', network.raindexNetworkSlug);
 
@@ -243,6 +309,13 @@ export const getLimitOrderDeploymentArgs = async (
 	const deploymentArgsResult = await gui.getDeploymentTransactionArgs($walletAddress);
 	if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 	const deploymentArgs = deploymentArgsResult.value as DeploymentTransactionArgs;
+
+	// OBS-07: see getDcaDeploymentArgs for emission rationale.
+	trackTradeEvent('sign_trade', {
+		order_type: eventContext.order_type,
+		asset_symbol: eventContext.asset_symbol,
+		payment_symbol: eventContext.payment_symbol
+	});
 
 	return {
 		composedRainlang,

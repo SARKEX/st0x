@@ -69,8 +69,7 @@ export function evaluateMarketOrderFill(input: MarketOrderFillInput): MarketOrde
 		requestedTakerPaysAmount
 	} = input;
 
-	const usePaysAnchor =
-		requestedTakerPaysAmount !== undefined && requestedTakerPaysAmount > 0n;
+	const usePaysAnchor = requestedTakerPaysAmount !== undefined && requestedTakerPaysAmount > 0n;
 	const requested = usePaysAnchor
 		? (requestedTakerPaysAmount as bigint)
 		: requestedTakerWantsAmount;

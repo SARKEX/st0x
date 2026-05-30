@@ -75,10 +75,7 @@ export interface PythPriceResult {
  * 5xx / 429 responses; throws immediately on 4xx (other than 429) because
  * those are permanent (bad feed id, bad timestamp, etc.).
  */
-async function fetchWithRetry(
-	url: string,
-	maxAttempts = 3
-): Promise<Response> {
+async function fetchWithRetry(url: string, maxAttempts = 3): Promise<Response> {
 	let lastError: Error | null = null;
 	let lastStatus: number | undefined;
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -171,7 +168,10 @@ export async function fetchPythPricesAtTimestamp(
 	>();
 
 	// Collect tokens that need a non-Pyth price (no feed ID but has fallbackPrice)
-	const fallbackTokenAddresses: { address: string; token: NonNullable<ReturnType<typeof getTokenByAnyAddress>> }[] = [];
+	const fallbackTokenAddresses: {
+		address: string;
+		token: NonNullable<ReturnType<typeof getTokenByAnyAddress>>;
+	}[] = [];
 
 	for (const tokenAddress of tokenAddresses) {
 		const token = getTokenByAnyAddress(tokenAddress);
@@ -198,10 +198,9 @@ export async function fetchPythPricesAtTimestamp(
 		const monitorUrl = env.LIQUIDITY_MONITOR_URL;
 		if (monitorUrl) {
 			try {
-				const res = await fetch(
-					`${monitorUrl.replace(/\/$/, '')}/api/prices/spym`,
-					{ signal: AbortSignal.timeout(5000) }
-				);
+				const res = await fetch(`${monitorUrl.replace(/\/$/, '')}/api/prices/spym`, {
+					signal: AbortSignal.timeout(5000)
+				});
 				if (res.ok) {
 					const data = await res.json();
 					monitorPrice = data.price ?? null;

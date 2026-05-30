@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Test & Observe
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-05-06T14:03:09.514Z"
-last_activity: "2026-05-06 — Roadmap created for v1.1 (14/14 REQ-IDs mapped: TEST-05..12 → Phase 1, OBS-06..11 → Phase 2)"
+status: executing
+stopped_at: Phase 2 context gathered
+last_updated: "2026-05-07T09:57:24.086Z"
+last_activity: 2026-05-07
 progress:
   total_phases: 2
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 2
+  total_plans: 13
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -20,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** A user clicking Buy or Sell gets correct, predictable execution at the price and size they were shown — every time.
-**Current focus:** v1.1 Test & Observe — UI-driven Anvil-fork E2E tests + observability deepening (Sentry Session Replay, transaction event taxonomy, funnel, correlation IDs).
+**Current focus:** Phase 02 — observability-for-transacting-users
 
 ## Current Position
 
 Milestone: v1.1 Test & Observe (2 phases planned, numbering reset to 1, 2)
-Phase: 1 — UI-Driven E2E + Order Test Coverage (next up; not yet planned)
-Plan: —
-Status: Roadmap drafted; awaiting Phase 1 planning via /gsd-plan-phase 1
-Last activity: 2026-05-06 — Roadmap created for v1.1 (14/14 REQ-IDs mapped: TEST-05..12 → Phase 1, OBS-06..11 → Phase 2)
+Phase: 02 (observability-for-transacting-users) — EXECUTING
+Plan: 4 of 4
+Status: Ready to execute
+Last activity: 2026-05-07
 
 ## Performance Metrics
 
@@ -76,6 +77,17 @@ Last activity: 2026-05-06 — Roadmap created for v1.1 (14/14 REQ-IDs mapped: TE
 | Phase 04 P08 | 30 | 3 tasks | 17 files |
 | Phase 04 P09 | 6 | 1 tasks | 1 files |
 | Phase 04 P10 | 1800 | 9 tasks | 4 files |
+| Phase 01 P01 | 11 | 3 tasks | 13 files |
+| Phase 01 P02 | 6 | - tasks | - files |
+| Phase 01 P03 | 18 | 2 tasks | 5 files |
+| Phase 01 P09 | 10 | 1 tasks | 2 files |
+| Phase 01 P05 | 5 | 1 tasks | 1 files |
+| Phase 01 P06 | 6 | 1 tasks | 1 files |
+| Phase 01 P07 | 8 | 1 task tasks | 1 file files |
+| Phase 01 P08 | 7 | 1 tasks | 2 files |
+| Phase 02 P01 | 7min | 3 tasks | 7 files |
+| Phase 02 P02 | 5min | 2 tasks | 7 files |
+| Phase 02 P03 | 14 min | 5 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -205,6 +217,28 @@ Recent decisions affecting current work:
 - [Phase ?]: Two-config Vitest split: tests/integration/** only runs via npm run test:integration; default npm test surface unchanged
 - [Phase ?]: Foundry CI install via foundryup with actions/cache@v4 keyed on ~/.foundry (foundry-<os>-v1)
 - [Phase ?]: 04-08: Synthesized 7 OBS-03 transcripts (Vercel CLI unavailable; plan permits synthesis fallback). FORK_BLOCK pinned 33_400_000. Default test surface unchanged 50/655/1; svelte-check baseline 3 preserved.
+- [Phase ?]: 01-01: FORK_BLOCK=33_400_000 inherited from v1.0 TEST-03; refresh recipe in 01-RUNBOOK
+- [Phase ?]: 01-01: Custom 80-LOC EIP-1193 stub via addInitScript instead of @web3-mock library — anvil unlocked accounts let stub be a thin RPC proxy with no in-browser secp256k1
+- [Phase ?]: 01-01: ERC20 funding via anvil_setStorageAt with per-token slot table (USDC slot 9 / OZ ERC20 slot 0) — deterministic, no Transfer-event side effects
+- [Phase ?]: 01-01: E2E=1 env-gated CSP relaxation in hooks.server.ts (one if-clause) over a same-origin RPC proxy alternative
+- [Phase ?]: 01-01: sr-only test-only mode-tab buttons alongside existing <Select> — defers full UX retrofit to Plan 01-03 per CONTEXT D-10
+- [Phase ?]: 01-01: side-toggle testids on +page.svelte panel buttons (where Buy/Sell live), not MarketOrder.svelte (which receives orderSide as a prop)
+- [Phase ?]: Plan 01-02 audit: marketHours.test.ts must-fix gap surfaced; routed to 01-08
+- [Phase ?]: errorClass taxonomy precedence: insufficient_balance > no_liquidity > slippage > stale_oracle > market_closed (highest-priority class wins when multiple errors active)
+- [Phase ?]: error-banner rendered sr-only to preserve existing visible UX while exposing E2E selector with role=alert
+- [Phase ?]: Plan 01-09: Use foundry-rs/foundry-toolchain@v1 (tag-pinned) instead of curl-bash install — closes 999.8
+- [Phase ?]: Plan 01-09: Smoke pre-flight runs ONLY smoke.spec.ts before full E2E suite — D-14 fast-fail surfaces misconfig in <2 min
+- [Phase ?]: 01-05: TEST-07 Sell market-order E2E mirrors 01-04 Buy shape with BOTH-sides delta assertions (tNVDA debited AND USDC credited) — strictly stronger TRADE-01 inversion pin than Buy single-axis check. Wave-3 market-order coverage complete.
+- [Phase ?]: Phase 01-07: TEST-09 limit-deploy + counterparty-fill UI E2E spec shipped (Sell maker OUTPUT-vault drain assertion + simulated takeOrders3 from anvil[1]); WalletClient pattern adopted because TestClient lacks writeContract
+- [Phase ?]: Plan 01-08: Closed TEST-08e must-fix gap by authoring tests/lib/utils/marketHours.test.ts (11 cases). Audit re-walked — all UI E2E placeholder cells replaced with shipped paths from 01-04..01-07.
+- [Phase ?]: Plan 02-01: Strict UUIDv4 regex for X-Trade-Id validation in pino RequestContext (T-2-A); duplicated PII scrub regexes in tradeEvents.ts for PostHog boundary parallel to scrub.ts (T-2-B)
+- [Phase ?]: Plan 02-02: Extract CSP_DIRECTIVES into src/lib/server/csp.ts so it is unit-testable without invoking hooks.server.ts top-level side effects.
+- [Phase ?]: Plan 02-02: Conditional spread for optional trade_id Sentry tag keeps tags object key-free when no trade is active (verified via Object.keys).
+- [Phase ?]: Plan 02-03: source-content + pure-helper test strategy adopted per existing convention
+- [Phase ?]: Plan 02-03: SDK broadcast/confirmed callback boundary collapse — emit both events back-to-back at single SDK boundary in marketOrderExecution and deployTransactionStore
+- [Phase ?]: Plan 02-03: orderDeployment.ts emits sign_trade only; broadcast/confirmed live in deployTransactionStore.handleStrategyDeployment where actual SDK calls execute
+- [Phase ?]: Plan 02-03: page_viewed page name renamed 'trade_page' to 'trade' per checker fix #7 for OBS-08 funnel filter compatibility
+- [Phase ?]: Plan 02-03: mandatory eventContext.order_type on orderDeployment functions enforces TypeScript compile-time contract — closes DCA silent-fallback bug per checker fix #6
 
 ### Pending Todos
 
@@ -235,8 +269,8 @@ Items acknowledged and carried forward from v1.0 milestone close (2026-05-05):
 
 ## Session Continuity
 
-Last session: 2026-05-06T14:03:09.509Z
-Stopped at: Phase 1 context gathered
+Last session: 2026-05-07T09:57:24.082Z
+Stopped at: Phase 2 context gathered
 
 Previous session: 2026-04-30T11:46:27Z
 Stopped at: Phase 3 Plan 03-08b (SEC-03 atomic-flip consumer migration + manual smoke APPROVED) complete — 2-commit sequence: 417cd19 (Task 1 by prior agent ae54ea7487cf04689: feat — 5 server-side wallet-address consumers migrated to readSession atomically; +layout.svelte NON-AUTHORITATIVE comment downgrade; access/+page.server.ts deleteSession + 'session' cookie clear + 'wallet-address' hint clear; getWalletFromRequest at hooks.server.ts becomes async; logger.ts wallet enrichment via readSession; /api/access/check + /api/snapshots/preview + /api/snapshots/preview-stream rate-limit tier wallet via session cookie + KV; phase-exit grep gate 0 hits) + this docs commit (Task 2 manual smoke APPROVED via Vercel preview structural coverage 11/11 PASS). Manual smoke verdict: APPROVED via automated playwright-equivalent structural coverage on Vercel preview deploy https://st0x-30q6oqdau-st-0x.vercel.app (deploy dpl_DULYLYdLmbvJF3vdWsmzoMksLrvZ at sha 417cd19) — 11/11 checks PASS pinning SEC-03 + SEC-04 + SEC-06 + REL-02 + cookie-attribute correctness + security headers. D-04b runtime UX assertion (per-request signature absence) deferred to post-deploy HUMAN-UAT — structurally guaranteed since verifyWalletSignature is unreachable from per-request path. Vercel-side env vars set during smoke ritual: SESSION_SECRET / BASE_RPC_URL / PUBLIC_BASE_RPC_URL (encrypted, preview+production); HCAPTCHA_SECRET deliberately NOT yet set — Plan 03-04 fails closed without it; MUST land in 03-RUNBOOK.md / Plan 03-11. 0 code-level deviations; 1 plan-text reframing (Task 2 recipe substituted automated structural coverage for the 10-step real-wallet recipe — same pattern as 01-08 / 02-08 HUMAN-UAT deferral). Cross-cutting Phase 2 gates carry-forward green: TRADE-01 lockdown ✓, TRADE-02 cycle severance = 0 ✓, failWith count = 16 ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, staleTime: Infinity ✓, svelte-check baseline = 3 errors preserved ✓. Phase-exit gates green: SEC-02 (no fallback secret strings), SEC-03 (atomic-flip cookie-name grep = 0 hits), SEC-04 (session-bound CSRF active), REL-02 (viem fallback transport preserved). SEC-03 marked COMPLETE in REQUIREMENTS.md (closes audit finding §"client-set wallet-address cookie accepted as auth"). Wave 6 COMPLETE (2/2 plans atomic-flip-paired per CONTEXT D-04). Phase 3 progress: 9/11 plans, 9/10 phase REQ-IDs (SEC-01..07 + REL-01/02 all closed). Hand-off to Plan 03-11 03-RUNBOOK.md: 4 operational items captured (Vercel env-var checklist incl. pending HCAPTCHA_SECRET; Alchemy atomic-swap-then-rotate recipe per D-02; SEC-03+SEC-04 production-deploy smoke recipe re-running 11 structural checks; smoke-test KV cleanup recipe). Next session: Plan 03-10 (REL-03 — vendor static/registry/ from upstream commit 9dd64902 + orderDeployment.ts swap to same-origin /registry).
@@ -253,5 +287,5 @@ Earlier session: Phase 3 Plan 03-02 (SEC-02 auth.ts + csrf.ts module-load fail-c
 Earlier session: Phase 3 Plan 03-01 (SEC-01 Alchemy env-var swap) complete — 2 atomic commits (70520c8 client-side networks.ts + raindex.ts; e9cae57 server-side accessCodes.ts + referrals.ts + .env.example). 1 Rule 2 deviation auto-fixed (referrals.ts had 4th basePublicClient site missed in plan files list — closed under SEC-01 contract per phase-exit grep gate). Phase-exit gate `! grep -r "y3BXawVv5uuP" src/` returns 0 hits.
 
 Earlier session: Phase 2 CLOSED — Plan 02-08 (PERF-01 + Phase 2 RUNBOOK + phase exit) complete. Four atomic commits: 80c6233 (Task 1: rollup-plugin-visualizer@7.0.1 registered behind ANALYZE=1 + jspdf/jspdf-autotable removed; ~250KB minified bundle reduction), a04b0a7 (Task 2: LimitOrder/DcaOrder/TokenMarketCharts/TradingViewChart converted to Svelte 4 {#await import()} lazy-load with CLS-safe skeletons; MarketOrder kept eager as default panel/first-paint LCP element; build evidence: 4 code-split chunks visible — LimitOrder 8.74KB gzip / DcaOrder 8.62KB / TokenMarketCharts 6.57KB / TradingViewChart 1.42KB), ee34014 (RUNBOOK scaffold), and final docs commit (RUNBOOK fill with Vercel API check finding + Phase 2 HUMAN-UAT framing + 02-08-SUMMARY.md + STATE/ROADMAP/REQUIREMENTS updates). Task 0 pre-deploy human-verify resolved by orchestrator-side Vercel API check (NOT user roundtrip, exactly like Phase 1 / 01-08). PERF-01 marked complete in REQUIREMENTS.md as STRUCTURALLY MET BY CODE WORK; numeric p75 LCP < 2.5s validation deferred to post-deploy HUMAN-UAT (operator runs /gsd-verify-work after deploy + 24h Speed Insights window). Phase 2 closed: 8/8 plans, 5/5 REQ-IDs (TRADE-01..04 + PERF-01). All cross-cutting gates preserved: TRADE-01 lockdown ✓, TRADE-02 cycle severance ✓, failWith count ≥12 ✓, EMERGENCY_RATIO_MULTIPLIER = 0 ✓, svelte-check baseline = 3 errors (Phase 2 target ✓), staleTime: Infinity preserved (T-02-08-03). Phase 3 (Production-Grade Hardening — SEC-01..07 + REL-01..03) unblocked.
-Resume file: .planning/phases/01-ui-driven-e2e-order-test-coverage/01-CONTEXT.md
+Resume file: None
 Next step: continue Phase 3 wave execution at Wave 3 (Plan 03-05 SEC-06 — snapshotsPreview tiered rate-limit + admin gate)

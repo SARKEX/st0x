@@ -53,13 +53,8 @@ const ALLOWED_PROXY_ROUTES: Array<{
 	{ method: 'POST', pattern: /^v1\/trades\/query$/ }
 ];
 
-function matchProxyRoute(
-	method: string,
-	pathSuffix: string
-): { noStore?: boolean } | null {
-	const route = ALLOWED_PROXY_ROUTES.find(
-		(r) => r.method === method && r.pattern.test(pathSuffix)
-	);
+function matchProxyRoute(method: string, pathSuffix: string): { noStore?: boolean } | null {
+	const route = ALLOWED_PROXY_ROUTES.find((r) => r.method === method && r.pattern.test(pathSuffix));
 	return route ? { noStore: route.noStore } : null;
 }
 

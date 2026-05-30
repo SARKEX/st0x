@@ -1295,7 +1295,10 @@
 			// Resolve canonical symbol (groups unwrapped/legacy trades under wrapped symbol)
 			const canonicalSymbol = addressToCanonicalSymbol.get(assetAddress) ?? assetToken.symbol;
 
-			if (!isPaymentToken({ address: assetAddress }, usdc) && validTokenAddresses.has(assetAddress)) {
+			if (
+				!isPaymentToken({ address: assetAddress }, usdc) &&
+				validTokenAddresses.has(assetAddress)
+			) {
 				if (!tokenMap.has(canonicalSymbol)) {
 					// Look up the parent token config for the canonical address
 					const parentToken = getTokenByAnyAddress(assetAddress);
@@ -1388,7 +1391,10 @@
 			dateSet.add(dateKey);
 
 			// Daily breakdown by token (deduped by txHash, grouped by canonical symbol)
-			if (!isPaymentToken({ address: assetAddress }, usdc) && validTokenAddresses.has(assetAddress)) {
+			if (
+				!isPaymentToken({ address: assetAddress }, usdc) &&
+				validTokenAddresses.has(assetAddress)
+			) {
 				tokenSymbolSet.add(canonicalSymbol);
 				addDailyStats(dailyTokenMap, seenTokenTx, dateKey, canonicalSymbol, txHash, usdcAmount);
 			}

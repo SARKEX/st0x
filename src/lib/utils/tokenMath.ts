@@ -1,6 +1,6 @@
 import { formatUnits } from 'viem';
 import { Float } from '@rainlanguage/float';
-import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
+import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from '$lib/types/orderPerspective';
 
 export type AmountLike = bigint | string | number | null | undefined;
 

@@ -112,9 +112,7 @@ describe('scraper pagination boundary', () => {
 		// Drive only the PRIMARY subgraph's pagination — the legacy subgraph's shares
 		// loop terminates immediately with an empty list, isolating the assertion to
 		// the boundary behavior on the primary.
-		const firstBatch = Array.from({ length: BATCH_SIZE }, (_, i) =>
-			makeSharesTransfer(String(i))
-		);
+		const firstBatch = Array.from({ length: BATCH_SIZE }, (_, i) => makeSharesTransfer(String(i)));
 		const shortBatch = [makeSharesTransfer('short-1')]; // length 1 < BATCH_SIZE → terminates
 
 		const fetchMock = global.fetch as Mock;
@@ -170,9 +168,7 @@ describe('scraper pagination boundary', () => {
 		// refactor changed it to `>= BATCH_SIZE`, the empty second fetch would still
 		// loop. Asserting exactly 2 PRIMARY shares fetches pins the boundary. The legacy
 		// subgraph's loop terminates immediately on its empty first batch.
-		const firstBatch = Array.from({ length: BATCH_SIZE }, (_, i) =>
-			makeSharesTransfer(String(i))
-		);
+		const firstBatch = Array.from({ length: BATCH_SIZE }, (_, i) => makeSharesTransfer(String(i)));
 
 		const fetchMock = global.fetch as Mock;
 		fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -342,10 +338,7 @@ describe('scraper transient subgraph failure', () => {
 		expect(result.length).toBe(1);
 		expect(result[0].from).toBe('0xfrom');
 		// Outer per-subgraph catch fired (scraper.ts:277-279).
-		expect(warnSpy).toHaveBeenCalledWith(
-			expect.stringContaining('failed'),
-			expect.anything()
-		);
+		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('failed'), expect.anything());
 
 		warnSpy.mockRestore();
 	});
