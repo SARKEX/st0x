@@ -265,10 +265,7 @@ export function createTokenOrderbookQuotesQuery(
 		initialData: () => {
 			if (!network || !tokenAddress) return undefined;
 			const globalState = queryClient.getQueryState(['orderbookQuotes', network.id]);
-			if (
-				!globalState?.dataUpdatedAt ||
-				Date.now() - globalState.dataUpdatedAt > 15_000
-			) {
+			if (!globalState?.dataUpdatedAt || Date.now() - globalState.dataUpdatedAt > 15_000) {
 				return undefined;
 			}
 			return getQuotesForToken(network.id, tokenAddress);
@@ -276,10 +273,7 @@ export function createTokenOrderbookQuotesQuery(
 		initialDataUpdatedAt: () => {
 			if (!network) return undefined;
 			const globalState = queryClient.getQueryState(['orderbookQuotes', network.id]);
-			if (
-				!globalState?.dataUpdatedAt ||
-				Date.now() - globalState.dataUpdatedAt > 15_000
-			) {
+			if (!globalState?.dataUpdatedAt || Date.now() - globalState.dataUpdatedAt > 15_000) {
 				return undefined;
 			}
 			return globalState.dataUpdatedAt;
