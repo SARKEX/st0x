@@ -38,7 +38,6 @@ import { ensureAllowance } from './approvalStore';
 import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
-import { invalidateOrderQueries } from '$lib/queries/orderbook';
 import { walletAddress, authMethod } from '$lib/stores/authStore';
 import { currentNetwork } from '$lib/stores';
 import { getTrades } from '$lib/api/subgraph';
@@ -440,7 +439,6 @@ export const pollAndFinalizeTakeOrders = async (
 	// could render with stale on-chain balance reads (the user just got tokens
 	// the cache hasn't seen yet).
 	invalidateDashboardBalances();
-	invalidateOrderQueries(network.id);
 
 	// Partial-fill detection anchors on whichever side the user typed their amount.
 	// For spend modes (Sell-by-asset, Buy-by-spend) the anchor is the pays side; for
