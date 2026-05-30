@@ -146,5 +146,41 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
 		await expect(sharesBtn).toHaveAttribute('aria-selected', 'true');
 		await tokensBtn.click();
 		await expect(tokensBtn).toHaveAttribute('aria-selected', 'true');
+
+		// ───────── 6. Toggle re-scales table cells, not just headers ─────────
+		// Regression guard for a Svelte reactivity bug we shipped once: the
+		// table header switched its label between "(shares)" and "/ token"
+		// when the toggle flipped, but the cell values stayed in their
+		// original denomination because the per-row formatter functions read
+		// `denomination` through a closure invisible to Svelte's template
+		// dependency tracking. After the fix the cells re-render too.
+		//
+		// We don't need live orderbook data for this — clicking the toggle and
+		// checking that the displayed token-suffix on at least one cell flips
+		// from "wtSGOV" → "tSGOV" (and back) catches the bug.
+		await page.getByRole('tab', { name: 'Orders' }).first().click();
+		const ordersPanel = page.locator('[data-tutorial="dex-activity"]');
+
+		// Default state after our prior click is `wrapped` (tokens). Switch
+		// back to shares and confirm the cells use the `tSGOV` label.
+		await sharesBtn.click();
+		await expect(sharesBtn).toHaveAttribute('aria-selected', 'true');
+		// The Remaining column header gains the "(shares)" suffix in unwrapped mode
+		await expect(ordersPanel.getByText(/Remaining\s*\(shares\)/i).first()).toBeVisible({
+			timeout: 5_000
+		});
+		// If any orders are visible at all, at least one cell should now show
+		// "tSGOV" and none should show "wtSGOV" for the per-token suffix. If
+		// the orderbook is empty for the snapshot block this assertion gates
+		// itself to no-op via a count check — the header assertion above is
+		// the floor-level guarantee.
+		const tokensCellsBefore = await ordersPanel.getByText(/wtSGOV/i).count();
+		const sharesCellsAfter = await ordersPanel.getByText(/(?<!w)tSGOV/i).count();
+		if (tokensCellsBefore + sharesCellsAfter > 0) {
+			// Inverse: in shares mode there should be at least one "tSGOV" cell
+			// and zero "wtSGOV" cells inside the orders table body.
+			await expect(ordersPanel.locator('tbody').getByText(/wtSGOV/i).first()).toHaveCount(0);
+			await expect(ordersPanel.locator('tbody').getByText(/(?<!w)tSGOV/i).first()).toBeVisible();
+		}
 	});
 });

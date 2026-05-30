@@ -41,6 +41,7 @@
 	import DenomToggle from '$lib/components/wrap/DenomToggle.svelte';
 	import RatioHistoryTab from '$lib/components/wrap/RatioHistoryTab.svelte';
 	import { createExchangeRatesQuery, resolveRatio } from '$lib/queries/exchangeRates';
+	import { priceScale as denomPriceScale } from '$lib/utils/wrapDenom';
 	import { extractBaseSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
@@ -179,8 +180,9 @@
 	// Price scaling for charts: OHLC + depth arrive in USD per wt* (the
 	// orderbook's native unit). Toggling to 'unwrapped' rescales by dividing
 	// by the ratio so the chart axis labels become USD per share. Identity
-	// transform when ratio is 1 (most tokens today).
-	$: priceScale = tableDenom === 'unwrapped' && currentRatio > 0 ? 1 / currentRatio : 1;
+	// transform when ratio is 1 (most tokens today). See `$lib/utils/wrapDenom`
+	// for the shared denom helpers used here and in OrdersTable.
+	$: priceScale = denomPriceScale(tableDenom, currentRatio);
 	$: displayOhlcData =
 		priceScale === 1
 			? ohlcData

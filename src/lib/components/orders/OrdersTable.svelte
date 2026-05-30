@@ -11,6 +11,11 @@
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { GetOrdersFilters } from '@rainlanguage/orderbook';
 	import type { DisplayOrder } from '$lib/types/orders';
+	import {
+		displayAmount as denomDisplayAmount,
+		displayPrice as denomDisplayPrice,
+		displaySymbol as denomDisplaySymbol
+	} from '$lib/utils/wrapDenom';
 
 	// Props
 	export let orders: DisplayOrder[] = [];
@@ -39,20 +44,21 @@
 	 *  prefix (wtCOIN → tCOIN). */
 	export let unwrappedSymbolOverride: string | undefined = undefined;
 
-	function displaySymbol(tokenSymbol: string): string {
-		if (denomination === 'wrapped') return tokenSymbol;
-		if (unwrappedSymbolOverride) return unwrappedSymbolOverride;
-		return tokenSymbol.replace(/^wt/, 't');
-	}
-	function displayAmount(amount: number | null | undefined): number | null {
-		if (amount == null || !Number.isFinite(amount)) return null;
-		return denomination === 'wrapped' ? amount : amount * (wrapRatio || 1);
-	}
-	function displayPrice(price: number | null | undefined): number | null {
-		if (price == null || !Number.isFinite(price)) return null;
-		// API gives USD per wt; per-share = per-wt / ratio.
-		return denomination === 'wrapped' ? price : price / (wrapRatio || 1);
-	}
+	// Declared as reactive `$:` so the function identity changes whenever
+	// `denomination` or `wrapRatio` changes. Svelte 4 tracks template-expression
+	// dependencies by the variables it can see in the expression — `denomination`
+	// is hidden inside the function body and therefore invisible to the static
+	// analyzer, so a plain `function displayAmount(x)` declaration would render
+	// stale values when the toggle flips (the table header would update because
+	// it reads `denomination` directly, but the cell values would not). Rebinding
+	// the function on each toggle forces every `displayAmount(...)` /
+	// `displayPrice(...)` / `displaySymbol(...)` call site to re-run.
+	$: displaySymbol = (tokenSymbol: string): string =>
+		denomDisplaySymbol(tokenSymbol, denomination, unwrappedSymbolOverride);
+	$: displayAmount = (amount: number | null | undefined): number | null =>
+		denomDisplayAmount(amount, denomination, wrapRatio);
+	$: displayPrice = (price: number | null | undefined): number | null =>
+		denomDisplayPrice(price, denomination, wrapRatio);
 
 	// Filter state
 	let selectedOrdersFilter: 'my' | 'all' = 'my';
