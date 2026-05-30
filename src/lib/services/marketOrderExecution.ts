@@ -48,7 +48,7 @@ import {
 	type TakeOrderTranscript,
 	type TakeOrderFailureReason
 } from '$lib/services/observability/captureTakeOrderFailure';
-import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
+import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
 import {
 	getMakerInputIOIndex,
 	getMakerOutputIOIndex,
@@ -128,6 +128,38 @@ export interface MarketOrderInput {
 export interface MarketOrderResult {
 	success: boolean;
 	error?: string;
+	/**
+	 * Discriminated error category for the UI — set whenever `success` is false
+	 * so the component can render the right `data-error-class` (and PostHog event
+	 * picks up the right `error_class`) without substring-matching the
+	 * user-facing `error` string. Maps internal `TakeOrderFailureReason` codes
+	 * to the user-facing `ErrorClass` taxonomy used by tradeEvents + the D-09
+	 * error-banner. Absent on success.
+	 */
+	errorClass?: ErrorClass;
+}
+
+/**
+ * Pure mapping from internal failure reason to the user-facing `ErrorClass`
+ * taxonomy. Centralised here so the component never has to re-parse the
+ * user-facing error string (the CodeRabbit-flagged brittleness).
+ */
+function errorClassForReason(reason: TakeOrderFailureReason): ErrorClass {
+	switch (reason) {
+		case 'no_quotes_available':
+		case 'no_walk_fills':
+		case 'preflight_order_vanished':
+			return 'no_liquidity';
+		case 'auto_retry_exhausted':
+			return 'auto_retry_exhausted';
+		case 'preflight_chain_unreachable':
+			return 'preflight_chain_unreachable';
+		case 'unhydrated_fills':
+		case 'aggregated_failed':
+		case 'caught_exception':
+		default:
+			return 'unknown';
+	}
 }
 
 function getQuoteMakerAddress(quote: ProcessedQuote): string | null {
@@ -203,9 +235,9 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		reason: TakeOrderFailureReason,
 		errOrMessage: unknown,
 		userFacingError: string
-	) => {
+	): MarketOrderResult => {
 		captureTakeOrderFailure(errOrMessage, transcript, reason);
-		return { success: false, error: userFacingError };
+		return { success: false, error: userFacingError, errorClass: errorClassForReason(reason) };
 	};
 
 	try {

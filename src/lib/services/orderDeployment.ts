@@ -29,9 +29,20 @@ import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
  * default and NO silent fallback to `'limit'` (which was the DCA-funnel-corruption
  * bug pre-Plan 02-03). The TypeScript compiler enforces this contract — every
  * caller (LimitOrder, DcaOrder via deployTransactionStore) MUST pass it explicitly.
+ *
+ * `asset_symbol` / `payment_symbol` are USER-perspective symbols supplied by the
+ * caller — DO NOT re-derive them from maker-perspective `args.inputToken` /
+ * `args.outputToken` inside the deploy services, because those invert across
+ * Buy vs Sell. CLAUDE.md §"Order Semantics" covers the inversion:
+ *   Buy (maker bids):  orderInput=asset,   orderOutput=payment
+ *   Sell (maker asks): orderInput=payment, orderOutput=asset
+ * Without the explicit symbols, `sign_trade` events disagree with the
+ * MarketOrder / LimitOrder component-level events for the same trade.
  */
 export interface DeployEventContext {
 	order_type: 'limit' | 'dca';
+	asset_symbol: string;
+	payment_symbol: string;
 }
 
 /** Lazily resolve DotrainRegistry from the WASM-based orderbook package. */
@@ -248,8 +259,8 @@ export const getDcaDeploymentArgs = async (
 	// from the caller's eventContext — no silent fallback (checker fix #6).
 	trackTradeEvent('sign_trade', {
 		order_type: eventContext.order_type,
-		asset_symbol: args.inputToken.symbol,
-		payment_symbol: args.outputToken.symbol
+		asset_symbol: eventContext.asset_symbol,
+		payment_symbol: eventContext.payment_symbol
 	});
 
 	return {
@@ -302,8 +313,8 @@ export const getLimitOrderDeploymentArgs = async (
 	// OBS-07: see getDcaDeploymentArgs for emission rationale.
 	trackTradeEvent('sign_trade', {
 		order_type: eventContext.order_type,
-		asset_symbol: args.inputToken.symbol,
-		payment_symbol: args.outputToken.symbol
+		asset_symbol: eventContext.asset_symbol,
+		payment_symbol: eventContext.payment_symbol
 	});
 
 	return {

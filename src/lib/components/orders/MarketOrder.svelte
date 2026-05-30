@@ -25,7 +25,7 @@
 		sortQuotesByPrice
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
-	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
+	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
 	import { classifyError } from '$lib/services/observability/classifyError';
 	import { withTradeId } from '$lib/services/observability/tradeId';
 	import { onMount } from 'svelte';
@@ -310,22 +310,21 @@
 	// Order is precedence-significant: highest-priority class wins when multiple are
 	// active (e.g. insufficient_balance trumps no_liquidity to surface the actionable
 	// error first). Returns null when no error is active.
+	// Discriminated class returned by executeMarketOrder when the take itself
+	// fails — preferred over local substring derivation so the data-error-class
+	// + trade_failed event_class never disagree with the service's own
+	// classification. Reset on each new submit; null when no service-side error
+	// is in flight (the reactive block below then falls back to the local
+	// signals: insufficientBalanceError, noLiquidityError, priceError, …).
+	let serviceErrorClass: ErrorClass | null = null;
 	$: errorClass = (() => {
 		if (insufficientBalanceError) return 'insufficient_balance';
 		if (noLiquidityError) return 'no_liquidity';
-		const prepErr = (orderPreparationError ?? '').toLowerCase();
-		if (prepErr.includes('slippage') || prepErr.includes('ratio')) return 'slippage';
-		if (
-			prepErr.includes('stale') ||
-			prepErr.includes('oracle') ||
-			prepErr.includes('chain_unreachable')
-		)
-			return 'stale_oracle';
-		if (prepErr.includes('market') && prepErr.includes('closed')) return 'market_closed';
+		if (serviceErrorClass) return serviceErrorClass;
 		if (isOutsideMarketHours() && orderPreparationError) return 'market_closed';
 		if (priceError && (priceErrorReason === 'no_quotes' || priceErrorReason === 'no_fill'))
 			return 'no_liquidity';
-		if (orderPreparationError) return 'slippage'; // fallback for generic prep errors
+		if (orderPreparationError) return 'unknown'; // fallback when neither service nor local class fits
 		return null;
 	})();
 
@@ -862,6 +861,7 @@
 		}
 		isSubmittingMarketOrder = true;
 		orderPreparationError = null;
+		serviceErrorClass = null;
 
 		// Mint after early-return guards so unauthenticated/idle clicks do not
 		// pollute the funnel; withTradeId clears in finally (T-2-E mitigation).
@@ -949,11 +949,17 @@
 
 				if (!result.success && result.error) {
 					orderPreparationError = result.error;
+					// Prefer the service's discriminated errorClass; fall back to
+					// substring-classifying the user-facing string only if absent
+					// (shouldn't happen post-Phase-2 but kept as a defence).
+					const eventErrorClass =
+						result.errorClass ?? classifyError(new Error(result.error), 'market');
+					serviceErrorClass = eventErrorClass;
 					trackTradeEvent('trade_failed', {
 						order_type: 'market',
 						order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 						asset_symbol: assetToken?.symbol,
-						error_class: classifyError(new Error(result.error), 'market'),
+						error_class: eventErrorClass,
 						error_message: result.error
 					});
 				} else if (result.success) {
@@ -1299,10 +1305,13 @@
 				{/if}
 			</button>
 			<!-- D-09 error-banner: classified error surface for TEST-08 E2E assertions.
-		     Visible UX is rendered above (per-error inline blocks); this element exposes
-		     a stable selector + machine-readable `data-error-class` for Playwright. The
-		     element is sr-only so it doesn't duplicate visible text. The five error-class
-		     values cover all TEST-08 modes (slippage / no_liquidity / stale_oracle /
+		     Visible UX is rendered above (per-error inline blocks); this element
+		     exposes a stable Playwright selector + machine-readable
+		     `data-error-class`. Hidden from assistive tech via `aria-hidden`
+		     because the textContent is internal taxonomy (`no_liquidity`,
+		     `stale_oracle`, …) — the visible blocks above already carry the
+		     human-readable announcement. The five error-class values cover all
+		     TEST-08 modes (slippage / no_liquidity / stale_oracle /
 		     insufficient_balance / market_closed). -->
 			{#if errorClass}
 				<div
@@ -1311,8 +1320,7 @@
 					data-mode="market"
 					data-side={orderSide.toLowerCase()}
 					class="sr-only"
-					role="alert"
-					aria-live="polite"
+					aria-hidden="true"
 				>
 					{errorClass}
 				</div>

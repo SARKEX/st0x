@@ -41,6 +41,12 @@ export function getCurrentTradeId(): string | null {
 export function clearTradeId(): void {
 	current = null;
 	try {
+		// Sentry has no first-class removeTag / clearTag API — the documented
+		// workaround for unscoping a single tag is to set it to undefined. The
+		// cast through `unknown` exists because the official type signature is
+		// `setTag(key: string, value: string)`, but the implementation accepts
+		// undefined and the runtime semantics are "drop this tag from the
+		// current scope".
 		Sentry.setTag('trade_id', undefined as unknown as string);
 	} catch (err) {
 		console.error('[tradeId] Sentry.setTag clear failed:', err);

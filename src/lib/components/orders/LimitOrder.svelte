@@ -306,7 +306,11 @@
 					price: selectedInitialRatio,
 					amount: formatUnits(selectedAmount, assetToken.decimals)
 				});
-				transactionStore.handleLimitDeploy(deployData, { order_type: 'limit' });
+				transactionStore.handleLimitDeploy(deployData, {
+					order_type: 'limit',
+					asset_symbol: assetToken?.symbol ?? '',
+					payment_symbol: settlementToken?.symbol ?? ''
+				});
 			}
 		} catch (error) {
 			trackTradeEvent('trade_failed', {
@@ -372,7 +376,11 @@
 				price: selectedInitialRatio,
 				amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0'
 			});
-			transactionStore.handleLimitDeploy(pendingDeployData, { order_type: 'limit' });
+			transactionStore.handleLimitDeploy(pendingDeployData, {
+				order_type: 'limit',
+				asset_symbol: assetToken?.symbol ?? '',
+				payment_symbol: settlementToken?.symbol ?? ''
+			});
 		} finally {
 			// Pitfall 2 (T-2-E): trade_id was minted in handleDeploy and deferred
 			// across the modal — clear here on the warning-acknowledged path.
@@ -582,24 +590,30 @@
 			</button>
 
 			<!-- D-09 error-banner: classified error surface mirroring the MarketOrder
-		     taxonomy (slippage / no_liquidity / stale_oracle / insufficient_balance /
-		     market_closed). For LimitOrder the only deterministic pre-deploy classify
-		     case is `insufficient_balance` (below-min-trade is captured as a separate
-		     visible message above; not part of the TEST-08 taxonomy). -->
+		     taxonomy. `below_min_trade` is the LimitOrder-specific class for
+		     "order value below $1" (distinct from `insufficient_balance` which
+		     means wallet insufficiency). Hidden from assistive tech — the
+		     visible copy above is the real user-facing announcement; this
+		     element exists only as a stable Playwright selector hook. -->
 			{#if belowMinTradeError}
 				<div
 					data-testid="error-banner"
-					data-error-class="insufficient_balance"
+					data-error-class="below_min_trade"
 					data-mode="limit"
 					data-side={orderSide.toLowerCase()}
 					class="sr-only"
-					role="alert"
-					aria-live="polite"
+					aria-hidden="true"
 				>
-					insufficient_balance
+					below_min_trade
 				</div>
 			{/if}
 			{#if tradeSubmittedSuccessfully}
+				<!-- a11y note: `tradeSubmittedSuccessfully` flips on submit-click
+				     (before the Rainlang confirmation modal opens), not on tx
+				     broadcast — so the announcement here is "submit accepted",
+				     not "order deployed". Threading a broadcast-callback through
+				     transactionStore.handleLimitDeploy → showRainlangConfirmation
+				     is the follow-up needed to upgrade this to a real confirmation. -->
 				<div
 					data-testid="success-toast"
 					data-mode="limit"
@@ -608,7 +622,7 @@
 					role="status"
 					aria-live="polite"
 				>
-					Order deployed
+					Order submitted for confirmation
 				</div>
 			{/if}
 

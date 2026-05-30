@@ -5,7 +5,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
@@ -29,7 +29,7 @@ jobs:
   test-integration:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
@@ -95,7 +95,7 @@ jobs:
         run: |
           echo "BASE_RPC_URL secret is not configured — skipping E2E suite."
           echo "To enable: add a BASE_RPC_URL repo secret (Settings → Secrets and variables → Actions)."
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         if: env.HAVE_RPC_URL == 'true'
         with:
           submodules: recursive
@@ -180,7 +180,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0

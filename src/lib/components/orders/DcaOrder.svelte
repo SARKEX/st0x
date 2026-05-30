@@ -232,7 +232,19 @@
 						depositAmount: depositAmount,
 						inputVaultId: selectedInputVaultId
 					},
-					{ order_type: 'dca' }
+					{
+						order_type: 'dca',
+						// User-perspective symbols (CLAUDE.md §"Order Semantics"):
+						// Buy: asset = the token the user accumulates (selectedInputToken),
+						//      payment = the token they spend (selectedOutputToken).
+						// Sell: inverted — asset = selectedOutputToken,
+						//      payment = selectedInputToken (we sell asset for payment over time).
+						asset_symbol:
+							(orderSide === 'Buy' ? selectedInputToken?.symbol : selectedOutputToken?.symbol) ??
+							'',
+						payment_symbol:
+							(orderSide === 'Buy' ? selectedOutputToken?.symbol : selectedInputToken?.symbol) ?? ''
+					}
 				);
 
 				// Per Assumption A7 (02-RESEARCH): reuse `limit_order_deployed` event
