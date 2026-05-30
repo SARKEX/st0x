@@ -17,6 +17,12 @@
 		? String(ratio)
 		: ratio.toLocaleString('en-US', { maximumFractionDigits: 4 });
 
+	const EXAMPLE_SHARES = 2;
+	$: exampleWrapped =
+		Number.isFinite(ratio) && ratio > 0
+			? (EXAMPLE_SHARES / ratio).toLocaleString('en-US', { maximumFractionDigits: 4 })
+			: '0';
+
 	function onKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape' && show) onClose();
 	}
@@ -107,7 +113,7 @@
 				<p class="mt-1 text-sm text-gray-400">
 					Every chart, oracle price, and quote on this page is shown in
 					<span class="text-gray-200">shares of {equityName}</span> — the same units you'd see on a
-					brokerage. That's what most traders think in.
+					brokerage.
 				</p>
 
 				<div class="my-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -132,10 +138,10 @@
 				<h3 class="mt-5 text-sm font-semibold text-white">What you'll actually receive.</h3>
 				<p class="mt-1 text-sm text-gray-400">
 					When you order
-					<span class="text-gray-200">{Number.isFinite(ratio) ? ratio * 2 : 0} shares</span>,
-					your wallet will show <span class="text-gray-200">2 {wrappedSymbol}</span> — not
-					{Number.isFinite(ratio) ? ratio * 2 : 0} tokens. The token count is smaller because each one is
-					worth {ratioLabel}× more.
+					<span class="text-gray-200">{EXAMPLE_SHARES} shares</span>,
+					your wallet will show <span class="text-gray-200">{exampleWrapped} {wrappedSymbol}</span>
+					— not {EXAMPLE_SHARES} tokens. The token count is smaller because each one is worth
+					{ratioLabel}× more.
 				</p>
 				<div
 					class="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-sm"
@@ -143,7 +149,7 @@
 					<div class="flex items-baseline gap-1.5">
 						<span class="text-gray-400">You order</span>
 						<span class="font-mono font-medium tabular-nums text-gray-100"
-							>{Number.isFinite(ratio) ? ratio * 2 : 0} {assetSymbol}</span
+							>{EXAMPLE_SHARES} {assetSymbol}</span
 						>
 					</div>
 					<svg
@@ -161,10 +167,19 @@
 					<div class="flex items-baseline gap-1.5">
 						<span class="text-gray-400">Wallet shows</span>
 						<span class="font-mono font-medium tabular-nums text-yellow-200"
-							>2 {wrappedSymbol}</span
+							>{exampleWrapped} {wrappedSymbol}</span
 						>
 					</div>
 				</div>
+
+				<h3 class="mt-6 text-sm font-semibold text-white">Why wrap at all?</h3>
+				<p class="mt-1 text-sm text-gray-400">
+					Wrapped tokens are built for DeFi. When you LP, lend, or post {wrappedSymbol} as collateral,
+					the protocol sees a token whose value rises smoothly with the wrap ratio — corporate
+					actions like share splits and dividend distributions adjust the ratio under the hood,
+					so they never look like a sudden price jump that could mis-price your position or
+					trigger liquidations.
+				</p>
 
 				<h3 class="mt-6 text-sm font-semibold text-white">
 					Need {assetSymbol} instead? Unwrap them.

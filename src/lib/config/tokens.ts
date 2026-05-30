@@ -299,7 +299,7 @@ export const TOKENS: CategorizedToken[] = [
 		logoUrl: '/images/ishares.png',
 		priceFeedId: '0x8d6a29bb5ed522931d711bb12c4bbf92af986936e52af582032913b5ffcbf4d5',
 		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:SGOV',
+		tradingViewSymbol: 'NYSE:SGOV',
 		tradingViewMarket: 'america',
 		limitOrders: []
 	}
