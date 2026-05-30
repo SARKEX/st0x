@@ -27,24 +27,18 @@ function getAuthHeader(): string {
 	return 'Basic ' + btoa(`${key}:${secret}`);
 }
 
-/** No browser or Vercel edge cache — prod CDN was serving stale books vs upstream API. */
-const TOKEN_LIST_NO_STORE = 'private, no-store, max-age=0, must-revalidate';
-
-const ALLOWED_PROXY_ROUTES: Array<{
-	method: string;
-	pattern: RegExp;
-	noStore?: boolean;
-}> = [
+const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
 	{ method: 'GET', pattern: /^health$/ },
+	// Shared endpoints — same response for all users, cache at Vercel edge
 	{
 		method: 'GET',
 		pattern: /^v1\/orders\/token\/[^/]+$/,
-		noStore: true
+		cache: 'public, s-maxage=5, stale-while-revalidate=120'
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
-		noStore: true
+		cache: 'public, s-maxage=5, stale-while-revalidate=120'
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
@@ -53,9 +47,14 @@ const ALLOWED_PROXY_ROUTES: Array<{
 	{ method: 'POST', pattern: /^v1\/trades\/query$/ }
 ];
 
-function matchProxyRoute(method: string, pathSuffix: string): { noStore?: boolean } | null {
-	const route = ALLOWED_PROXY_ROUTES.find((r) => r.method === method && r.pattern.test(pathSuffix));
-	return route ? { noStore: route.noStore } : null;
+function matchProxyRoute(
+	method: string,
+	pathSuffix: string
+): { cache?: string } | null {
+	const route = ALLOWED_PROXY_ROUTES.find(
+		(r) => r.method === method && r.pattern.test(pathSuffix)
+	);
+	return route ? { cache: route.cache } : null;
 }
 
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
@@ -88,9 +87,7 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	const init: RequestInit = {
 		method: request.method,
 		headers: headers as HeadersInit,
-		signal: request.signal,
-		// Bypass any runtime fetch cache when proxying live orderbook data.
-		...(matched.noStore ? { cache: 'no-store' as RequestCache } : {})
+		signal: request.signal
 	};
 
 	if (!['GET', 'HEAD'].includes(request.method)) {
@@ -112,10 +109,8 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
-	if (response.ok && matched.noStore) {
-		responseHeaders.set('Cache-Control', TOKEN_LIST_NO_STORE);
-		responseHeaders.set('CDN-Cache-Control', TOKEN_LIST_NO_STORE);
-		responseHeaders.set('Vercel-CDN-Cache-Control', TOKEN_LIST_NO_STORE);
+	if (matched.cache && response.ok) {
+		responseHeaders.set('Cache-Control', matched.cache);
 	}
 
 	return new Response(response.body, {
