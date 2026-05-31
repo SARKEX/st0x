@@ -161,26 +161,41 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
 		await page.getByRole('tab', { name: 'Orders' }).first().click();
 		const ordersPanel = page.locator('[data-tutorial="dex-activity"]');
 
-		// Default state after our prior click is `wrapped` (tokens). Switch
-		// back to shares and confirm the cells use the `tSGOV` label.
+		// The orders table only renders its <thead>/<tbody> chrome when there
+		// is at least one row to display. With no wallet connected the default
+		// "My Orders" filter shows zero rows, so switch to "All Orders" to
+		// surface live SGOV quotes from the API. If the API has no quotes for
+		// SGOV at the fork block (rare but possible — the orderbook can churn)
+		// we gracefully skip the cell-level assertion; the toggle aria flip
+		// covered in section 5 is the floor-level guarantee for the toggle's
+		// reactive plumbing.
+		await ordersPanel.locator('select').first().selectOption('All Orders');
+
+		// Switch back to shares and confirm the cells re-render with the
+		// `tSGOV` label (the bug pre-fix was that they kept saying `wtSGOV`).
 		await sharesBtn.click();
 		await expect(sharesBtn).toHaveAttribute('aria-selected', 'true');
-		// The Remaining column header gains the "(shares)" suffix in unwrapped mode
-		await expect(ordersPanel.getByText(/Remaining\s*\(shares\)/i).first()).toBeVisible({
-			timeout: 5_000
-		});
-		// If any orders are visible at all, at least one cell should now show
-		// "tSGOV" and none should show "wtSGOV" for the per-token suffix. If
-		// the orderbook is empty for the snapshot block this assertion gates
-		// itself to no-op via a count check — the header assertion above is
-		// the floor-level guarantee.
-		const tokensCellsBefore = await ordersPanel.getByText(/wtSGOV/i).count();
-		const sharesCellsAfter = await ordersPanel.getByText(/(?<!w)tSGOV/i).count();
-		if (tokensCellsBefore + sharesCellsAfter > 0) {
-			// Inverse: in shares mode there should be at least one "tSGOV" cell
-			// and zero "wtSGOV" cells inside the orders table body.
-			await expect(ordersPanel.locator('tbody').getByText(/wtSGOV/i).first()).toHaveCount(0);
-			await expect(ordersPanel.locator('tbody').getByText(/(?<!w)tSGOV/i).first()).toBeVisible();
+
+		const hasRows = (await ordersPanel.locator('tbody tr').count()) > 0;
+		if (hasRows) {
+			// Header re-labels: "Remaining (shares)" and "Price / share"
+			await expect(ordersPanel.getByText(/Remaining\s*\(shares\)/i).first()).toBeVisible({
+				timeout: 5_000
+			});
+			// Cells re-render: no `wtSGOV` suffix should appear in tbody, but
+			// at least one `tSGOV` suffix should. This is the assertion the
+			// pre-fix code failed: header changed but cells stayed in wt.
+			await expect(ordersPanel.locator('tbody').getByText(/wtSGOV/i)).toHaveCount(0);
+			await expect(
+				ordersPanel.locator('tbody').getByText(/(?<!w)tSGOV/i).first()
+			).toBeVisible();
+
+			// And toggling back to wrapped flips them all back.
+			await tokensBtn.click();
+			await expect(tokensBtn).toHaveAttribute('aria-selected', 'true');
+			await expect(
+				ordersPanel.locator('tbody').getByText(/wtSGOV/i).first()
+			).toBeVisible({ timeout: 5_000 });
 		}
 	});
 });
