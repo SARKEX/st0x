@@ -22,7 +22,13 @@
 
 	$: query = createExchangeRateHistoryQuery(wrappedTokenAddress, { pageSize: 100 });
 
-	$: events = $query.data?.events ?? [];
+	// Snapshots are bookkeeping points the indexer writes whenever it samples
+	// the vault — they don't change the ratio, just record it, so they're noise
+	// in the user-facing timeline. We keep only the events that actually moved
+	// the ratio (donations / issuer rebases) plus a synthetic "deployed at 1:1"
+	// anchor so the list always shows where the wrapper started.
+	$: rawEvents = $query.data?.events ?? [];
+	$: events = rawEvents.filter((e) => e.type === 'donation');
 	// Reverse for the list display (most-recent first) without mutating the
 	// ascending order the chart needs.
 	$: eventsDesc = [...events].reverse();
@@ -33,10 +39,6 @@
 	}
 
 	function ratioOfEvent(ev: (typeof events)[number]): number | null {
-		if (ev.type === 'snapshot') {
-			const v = Number(ev.assetsPerShare);
-			return Number.isFinite(v) ? v : null;
-		}
 		const v = ev.newAssetsPerShare == null ? NaN : Number(ev.newAssetsPerShare);
 		return Number.isFinite(v) ? v : null;
 	}
@@ -67,9 +69,9 @@
 		<div>
 			<h3 class="font-semibold text-white">Wrap Ratio History</h3>
 			<p class="mt-0.5 text-xs text-gray-400 sm:text-sm">
-				Every change to <span class="font-mono tabular-nums">1 {wrappedSymbol} : N {assetSymbol}</span>
-				is triggered by an on-chain event. The ratio rebases when the underlying equity has a corporate
-				action (split, special distribution, etc.) so the wrapped token stays economically whole.
+				Starts at <span class="font-mono">1 : 1</span>. Each rebase below
+				adds more {assetSymbol} per {wrappedSymbol} — usually a dividend or split from the
+				underlying.
 				{#if onLearnMore}
 					<button
 						type="button"
@@ -100,25 +102,27 @@
 			{/if}
 		</div>
 	{:else if events.length === 0}
-		<div class="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-4 text-sm text-gray-400">
-			No ratio events recorded yet. The wrap ratio for this token has been stable since deployment.
+		<RatioStepChart events={[]} {wrappedSymbol} {assetSymbol} />
+		<div
+			class="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-4 text-sm text-gray-400"
+		>
+			No rebases yet — the wrap ratio has been 1 : 1 since deployment.
 		</div>
 	{:else}
 		<RatioStepChart {events} {wrappedSymbol} {assetSymbol} />
 
 		<h4 class="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Events</h4>
 		<ol class="relative space-y-0">
-			{#each eventsDesc as ev, idx (ev.blockNumber + '-' + ev.type)}
+			{#each eventsDesc as ev, idx (ev.blockNumber)}
 				{@const isLatest = idx === 0}
 				{@const newRate = ratioOfEvent(ev)}
-				{@const prev = eventsDesc[idx + 1] ? ratioOfEvent(eventsDesc[idx + 1]) : null}
+				{@const prev =
+					eventsDesc[idx + 1] != null ? ratioOfEvent(eventsDesc[idx + 1]) : 1}
 				<li class="relative pl-6 pr-1">
-					{#if idx < eventsDesc.length - 1}
-						<span
-							class="absolute left-[7px] top-5 bottom-[-4px] w-px bg-white/10"
-							aria-hidden="true"
-						/>
-					{/if}
+					<span
+						class="absolute left-[7px] top-5 bottom-[-4px] w-px bg-white/10"
+						aria-hidden="true"
+					/>
 					<span
 						class={'absolute left-0 top-2 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border ' +
 							(isLatest
@@ -133,9 +137,7 @@
 					<div class="border-b border-white/5 py-3">
 						<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 							<div class="flex items-baseline gap-2">
-								<span class="text-sm font-medium capitalize text-gray-100">
-									{ev.type === 'donation' ? 'Donation / rebase' : 'Snapshot'}
-								</span>
+								<span class="text-sm font-medium text-gray-100">Rebase</span>
 								{#if isLatest}
 									<span
 										class="inline-flex items-center rounded-full border border-yellow-400/35 bg-yellow-400/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-yellow-200"
@@ -153,21 +155,18 @@
 
 						<div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
 							<span class="font-mono tabular-nums text-gray-300">
-								{#if prev != null && newRate != null}
-									1 : {fmtRatio(prev)} → <b class="text-gray-100">1 : {fmtRatio(newRate)}</b>
-								{:else}
-									1 : <b class="text-gray-100">{fmtRatio(newRate)}</b>
-								{/if}
+								1 : <b class="text-gray-100">{fmtRatio(newRate)}</b>
 							</span>
 							{#if prev != null && newRate != null && prev !== newRate}
-								{@const direction = newRate > prev ? 'up' : 'down'}
+								{@const pct = ((newRate - prev) / prev) * 100}
+								{@const direction = pct >= 0 ? 'up' : 'down'}
 								<span
 									class={'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-mono tabular-nums ' +
 										(direction === 'up'
 											? 'border-green-400/30 bg-green-400/10 text-green-300'
 											: 'border-red-400/30 bg-red-400/10 text-red-300')}
 								>
-									{direction === 'up' ? '↑' : '↓'} ×{(newRate / prev).toFixed(2)}
+									{direction === 'up' ? '+' : ''}{pct.toFixed(2)}%
 								</span>
 							{/if}
 							{#if ev.type === 'donation'}
@@ -188,34 +187,28 @@
 						</div>
 						{#if ev.type === 'donation'}
 							<p class="mt-1.5 text-xs leading-relaxed text-gray-400">
-								Issuer rebase — <span class="font-mono tabular-nums text-gray-300"
-									>+{ev.assetAmount}</span
-								>
-								{assetSymbol} added to the vault by
-								<span class="font-mono text-gray-300">{truncTx(ev.donor)}</span>.
-								Each {wrappedSymbol} now unwraps to more {assetSymbol} shares.
-							</p>
-						{:else}
-							<p class="mt-1.5 text-xs leading-relaxed text-gray-400">
-								Recorded snapshot of the current wrap ratio at block {ev.blockNumber}.
+								+<span class="font-mono tabular-nums text-gray-300">{ev.assetAmount}</span>
+								{assetSymbol} added to the vault.
 							</p>
 						{/if}
 					</div>
 				</li>
 			{/each}
-		</ol>
 
-		<div
-			class="mt-4 rounded-lg border border-blue-500/22 bg-blue-500/[0.08] p-3 text-xs leading-relaxed text-blue-100/90"
-		>
-			<p class="font-medium text-blue-200">What does a ratio change mean for me?</p>
-			<p class="mt-1 text-blue-100/80">
-				Your <span class="font-mono tabular-nums">{wrappedSymbol}</span> balance doesn't move — but each
-				wrapped token now redeems for a different number of {assetSymbol} shares. Unwrapping in the
-				Dashboard always uses the <i>current</i> ratio. Past trades you executed at older ratios are
-				unaffected; the History table can show those trades in either unit using the Shares/Tokens
-				toggle.
-			</p>
-		</div>
+			<!-- Synthetic parity anchor — the wrapper starts 1:1 by construction; we
+			     show it as the oldest item so the timeline doesn't begin in the air. -->
+			<li class="relative pl-6 pr-1">
+				<span
+					class="absolute left-0 top-2 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white/15 bg-white/5"
+					aria-hidden="true"
+				>
+					<span class="h-1.5 w-1.5 rounded-full bg-gray-500" />
+				</span>
+				<div class="border-b border-white/5 py-3">
+					<span class="text-sm font-medium text-gray-100">Deployed</span>
+					<div class="mt-1 font-mono text-xs tabular-nums text-gray-300">1 : <b>1</b></div>
+				</div>
+			</li>
+		</ol>
 	{/if}
 </div>

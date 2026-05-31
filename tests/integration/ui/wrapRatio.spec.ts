@@ -133,10 +133,15 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
 			await ratioTab.click();
 			await expect(page.getByText('Wrap Ratio History')).toBeVisible({ timeout: 1_500 });
 		}).toPass({ timeout: 15_000, intervals: [500, 1_000, 2_000] });
-		// The fixture has one dividend distribution + bracketing snapshots — the
-		// "Donation / rebase" label and "current" pill should both appear.
-		await expect(page.getByText(/Donation \/ rebase/i).first()).toBeVisible();
+		// The fixture has one donation event between two bookkeeping snapshots.
+		// We filter snapshots out of the user-facing list, so only the "Rebase"
+		// item plus the synthetic "Deployed" anchor should render. The "current"
+		// pill should mark the rebase (most-recent real event).
+		await expect(page.getByText(/^Rebase$/).first()).toBeVisible();
+		await expect(page.getByText(/^Deployed$/).first()).toBeVisible();
 		await expect(page.getByText('current').first()).toBeVisible();
+		// And we shouldn't render any "Snapshot" rows anymore — they were noise.
+		await expect(page.getByText(/^Snapshot$/i)).toHaveCount(0);
 
 		// ───────── 5. DenomToggle in the On-chain Market header ─────────
 		const sharesBtn = page.getByRole('tab', { name: 'Shares (tSGOV)' });
