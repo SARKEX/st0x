@@ -1226,20 +1226,35 @@
 							</span>
 						</div>
 					{:else}
-						<!-- Amount mode: show buying/selling amount -->
-						<div class="flex justify-between">
+						<!-- Amount mode: show buying/selling amount. The Order Summary is
+						     the on-chain ground truth, so we always render the wt
+						     quantity here regardless of the panel denom toggle. When
+						     unwrapped is active we add the t-equivalent as a quieter
+						     second line so the user sees both. -->
+						<div class="flex items-start justify-between gap-3">
 							<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-							<span class="font-medium">
-								{selectedAmount
-									? (
-											parseFloat(formatUnits(selectedAmount, assetToken.decimals)) * displayScale
-										).toFixed(3)
-									: '0'}
-								{displayedAssetSymbol}
-							</span>
+							<div class="text-right">
+								<span class="font-medium">
+									{selectedAmount
+										? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+										: '0'}
+									{assetToken.symbol}
+								</span>
+								{#if displayDenom === 'unwrapped' && displayScale !== 1}
+									<div class="text-[11px] text-gray-500">
+										equivalent to {selectedAmount
+											? (
+													parseFloat(formatUnits(selectedAmount, assetToken.decimals)) *
+													displayScale
+												).toFixed(3)
+											: '0'}
+										{displayedAssetSymbol}
+									</div>
+								{/if}
+							</div>
 						</div>
 					{/if}
-					<div class="flex justify-between">
+					<div class="flex items-start justify-between gap-3">
 						<span class="text-gray-400">
 							{#if !selectedAmount || selectedAmount === 0n}
 								{orderSide === 'Buy' ? 'Best ask' : 'Best bid'}
@@ -1247,19 +1262,32 @@
 								Avg. price
 							{/if}
 						</span>
-						<span class="font-medium">
-							{#if !selectedAmount || selectedAmount === 0n}
-								{displayedBestOrderbookPrice !== null
-									? `~${displayedBestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
-									: 'N/A'}
-							{:else if isLoadingPrice}
-								Loading...
-							{:else if priceError}
-								N/A
-							{:else}
-								~{displayedMarketPrice.toFixed(2)} {paymentTokenSymbol}
+						<div class="text-right">
+							<span class="font-medium">
+								{#if !selectedAmount || selectedAmount === 0n}
+									{bestOrderbookPrice !== null
+										? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+										: 'N/A'}
+								{:else if isLoadingPrice}
+									Loading...
+								{:else if priceError}
+									N/A
+								{:else}
+									~{marketPrice.toFixed(2)} {paymentTokenSymbol}
+								{/if}
+							</span>
+							{#if displayDenom === 'unwrapped' && displayScale !== 1 && !isLoadingPrice && !priceError}
+								{@const perTPrice =
+									!selectedAmount || selectedAmount === 0n
+										? displayedBestOrderbookPrice
+										: displayedMarketPrice}
+								{#if perTPrice !== null}
+									<div class="text-[11px] text-gray-500">
+										equivalent to ~{perTPrice.toFixed(2)} {paymentTokenSymbol} per {displayedAssetSymbol}
+									</div>
+								{/if}
 							{/if}
-						</span>
+						</div>
 					</div>
 					<div class="mt-2 border-t border-white/10 pt-2">
 						<div class="flex justify-between">

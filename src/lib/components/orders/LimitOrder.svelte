@@ -486,16 +486,27 @@
 			<div class={containerStyles.cardBordered}>
 				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 				<div class="space-y-2 text-sm">
-					<div class="flex justify-between">
+					<div class="flex items-start justify-between gap-3">
 						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-						<span class="font-medium">
-							{selectedAmount
-								? (
-										parseFloat(formatUnits(selectedAmount, assetToken.decimals)) * displayScale
-									).toFixed(3)
-								: '0'}
-							{displayedAssetSymbol}
-						</span>
+						<div class="text-right">
+							<span class="font-medium">
+								{selectedAmount
+									? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+									: '0'}
+								{assetToken.symbol}
+							</span>
+							{#if displayDenom === 'unwrapped' && displayScale !== 1}
+								<div class="text-[11px] text-gray-500">
+									equivalent to {selectedAmount
+										? (
+												parseFloat(formatUnits(selectedAmount, assetToken.decimals)) *
+												displayScale
+											).toFixed(3)
+										: '0'}
+									{displayedAssetSymbol}
+								</div>
+							{/if}
+						</div>
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">At price</span>
