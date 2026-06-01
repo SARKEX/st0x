@@ -103,9 +103,9 @@
 						>{ratioLabel}&nbsp;{assetSymbol}</span>
 					</div>
 					<p class="mt-3 text-xs text-gray-400 sm:text-sm">
-						Each <span class="text-gray-200">{wrappedSymbol}</span> in your wallet is backed by
+						Each <span class="text-gray-200">{wrappedSymbol}</span> in your wallet is redeemable for
 						<span class="text-gray-200">{ratioLabel}</span>
-						{assetSymbol} — which each represent one share of {equityName}.
+						{assetSymbol} — each of which has right of redemption for one share of {equityName}.
 					</p>
 				</div>
 
@@ -174,11 +174,17 @@
 
 				<h3 class="mt-6 text-sm font-semibold text-white">Why wrap at all?</h3>
 				<p class="mt-1 text-sm text-gray-400">
-					Wrapped tokens are built for DeFi. When you LP, lend, or post {wrappedSymbol} as collateral,
-					the protocol sees a token whose value rises smoothly with the wrap ratio — corporate
-					actions like share splits and dividend distributions adjust the ratio under the hood,
-					so they never look like a sudden price jump that could mis-price your position or
-					trigger liquidations.
+					Wrapping lets dividends and corporate actions travel with the token — even when it's
+					sitting in a DeFi protocol. Each event nudges the wrap ratio up, so {wrappedSymbol}
+					behaves as a compounding asset: the dividends are effectively reinvested into the
+					asset itself.
+				</p>
+				<p class="mt-2 text-sm text-gray-400">
+					The alternative — rebasing each holder's balance in place — doesn't work for DeFi.
+					DEXs, lending markets, and vaults keep their own internal accounting of how many
+					tokens you deposited. If the on-chain balance silently doubled after a corporate
+					action, the protocol would still think you deposited the original amount, and
+					withdrawals, liquidations, and pricing would all break.
 				</p>
 
 				<h3 class="mt-6 text-sm font-semibold text-white">
