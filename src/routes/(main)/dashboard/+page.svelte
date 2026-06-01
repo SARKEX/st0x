@@ -35,7 +35,7 @@
 		getMakerOutputTokenAddress
 	} from '$lib/types/orderPerspective';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { createOrderbookQuotesQuery, GLOBAL_ORDERBOOK_POLL_MS } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
 	import { createTakerTradesQuery, createBatchTradesQuery } from '$lib/queries/tradeActivity';
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
@@ -927,7 +927,7 @@
 	})();
 
 	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 15_000);
+	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, GLOBAL_ORDERBOOK_POLL_MS);
 
 	// Taker trades for market orders - poll every 10 minutes
 	$: takerTradesQuery = createTakerTradesQuery($currentNetwork, $walletAddress, 600_000);

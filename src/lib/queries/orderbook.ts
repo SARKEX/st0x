@@ -114,6 +114,12 @@ export function getQuotesForToken(
 /** Minimum age (ms) of cached data before we re-fetch. Prevents redundant fetches. */
 const TOKEN_QUOTE_FRESHNESS_MS = 20_000;
 
+/** Dashboard global orderbook poll interval (keep in sync with staleTime). */
+export const GLOBAL_ORDERBOOK_POLL_MS = 30_000;
+
+/** Trade page per-token orderbook poll interval. */
+export const TOKEN_ORDERBOOK_POLL_MS = 15_000;
+
 /**
  * Fetch fresh quotes for a specific token and merge into global cache.
  * Only fetches the wrapped (primary) address on regular polls to reduce load.
@@ -257,7 +263,7 @@ export function createTokenOrderbookQuotesQuery(
 		staleTime: 30_000, // Stale after 30s (server caches at 15s)
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-		refetchOnMount: 'always', // Always refresh when component mounts
+		refetchOnMount: true, // Refetch on mount only when stale (respects staleTime)
 		refetchInterval: pollInterval, // Poll every 15s by default on trade pages
 		refetchOnWindowFocus: true, // Only refetch on focus if stale
 		refetchIntervalInBackground: false,
@@ -288,12 +294,23 @@ export function createTokenOrderbookQuotesQuery(
  */
 export function invalidateOrderQueries(networkId?: number, tokenAddress?: string) {
 	if (tokenAddress && networkId) {
-		// Token-specific: fetch fresh data for this token and merge
-		refreshTokenQuotes(networkId, tokenAddress).catch((err) =>
-			console.error('[OrderbookQueries] Token refresh failed:', err)
-		);
+		// Token-scoped: one orders/token flow (active queries refetch via queryFn)
+		queryClient.invalidateQueries({
+			queryKey: ['tokenOrderbookQuotes', networkId, tokenAddress]
+		});
+		// If no observer is mounted, still refresh cache for dashboard merge
+		if (
+			queryClient.getQueryCache().findAll({
+				queryKey: ['tokenOrderbookQuotes', networkId, tokenAddress],
+				type: 'active'
+			}).length === 0
+		) {
+			refreshTokenQuotes(networkId, tokenAddress).catch((err) =>
+				console.error('[OrderbookQueries] Token refresh failed:', err)
+			);
+		}
 	} else {
-		// Full invalidation: refetch entire global cache
+		// Full invalidation: refetch entire global cache (concurrency-limited in orders.ts)
 		queryClient.invalidateQueries({ queryKey: ['orderbookQuotes'] });
 	}
 	// Always invalidate closed orders query

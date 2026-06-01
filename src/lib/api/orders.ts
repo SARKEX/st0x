@@ -25,6 +25,10 @@ import {
 	walkOrderbook
 } from '$lib/utils/orderbook';
 import { apiGetOrdersByToken, type ApiOrderSummary } from '$lib/api/st0xApi';
+import { mapWithConcurrency } from '$lib/utils/mapWithConcurrency';
+
+/** Max parallel `orders/token` requests when loading the global book (avoids API bursts). */
+export const TOKEN_ORDER_FETCH_CONCURRENCY = 4;
 
 export type { ProcessedQuote, TokenPriceSummary };
 export { OrderV4_ABI, normalizeOrderData, walkOrderbook };
@@ -200,38 +204,44 @@ export async function fetchAndQuotePaymentTokenOrders(
 	const processedQuotes: ProcessedQuote[] = [];
 	const seen = new Set<string>();
 
-	const results = await Promise.allSettled(
-		stockTokens.map(async (token) => {
-			let page = 1;
-			let hasMore = true;
-			while (hasMore && page <= MAX_ORDER_PAGES) {
-				const response = await apiGetOrdersByToken(token.address, { page, pageSize: 50 });
-				for (const order of response.orders) {
-					if (seen.has(order.orderHash)) continue;
-					seen.add(order.orderHash);
-					const quote = convertApiOrderToProcessedQuote(
-						order,
-						paymentToken.address,
-						allTokens,
-						networkId
-					);
-					if (quote) processedQuotes.push(quote);
-				}
-				hasMore = response.pagination.hasMore;
-				page++;
-			}
-			if (hasMore) {
-				console.warn(
-					`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`
+	const results = await mapWithConcurrency(stockTokens, TOKEN_ORDER_FETCH_CONCURRENCY, async (token) => {
+		const tokenQuotes: ProcessedQuote[] = [];
+		const tokenSeen = new Set<string>();
+		let page = 1;
+		let hasMore = true;
+		while (hasMore && page <= MAX_ORDER_PAGES) {
+			const response = await apiGetOrdersByToken(token.address, { page, pageSize: 50 });
+			for (const order of response.orders) {
+				if (tokenSeen.has(order.orderHash)) continue;
+				tokenSeen.add(order.orderHash);
+				const quote = convertApiOrderToProcessedQuote(
+					order,
+					paymentToken.address,
+					allTokens,
+					networkId
 				);
+				if (quote) tokenQuotes.push(quote);
 			}
-		})
-	);
+			hasMore = response.pagination.hasMore;
+			page++;
+		}
+		if (hasMore) {
+			console.warn(
+				`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`
+			);
+		}
+		return tokenQuotes;
+	});
 
-	// Log any failed token fetches
 	for (const result of results) {
 		if (result.status === 'rejected') {
 			console.warn('[orders] Token fetch failed:', result.reason);
+			continue;
+		}
+		for (const quote of result.value) {
+			if (quote.orderHash && seen.has(quote.orderHash)) continue;
+			if (quote.orderHash) seen.add(quote.orderHash);
+			processedQuotes.push(quote);
 		}
 	}
 
