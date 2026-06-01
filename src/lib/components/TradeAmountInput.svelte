@@ -113,7 +113,13 @@
 		return tValue.toFixed(decimals);
 	}
 
+	// Reference `displayScale` here so Svelte's reactive tracker re-runs this
+	// block when the parent flips the share-denominated toggle after the user
+	// has already typed. Without this the bound `amount` BigInt stays in
+	// whichever denom was active at type-time and the user thinks the
+	// conversion isn't working.
 	$: if (inputAmount && canParseDecimals(amountDecimals)) {
+		displayScale; // explicit dep — see comment above
 		try {
 			amount = parseDisplayInput(inputAmount, amountDecimals);
 		} catch {

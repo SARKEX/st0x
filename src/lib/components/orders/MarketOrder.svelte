@@ -274,6 +274,8 @@
 	$: displayedMarketPrice = displayScale > 0 ? marketPrice / displayScale : marketPrice;
 	$: displayedBestOrderbookPrice =
 		bestOrderbookPrice == null ? null : displayScale > 0 ? bestOrderbookPrice / displayScale : bestOrderbookPrice;
+	$: showShareEquivalent = displayDenom === 'unwrapped' && displayScale !== 1;
+	$: wtDecimalsForSummary = showShareEquivalent ? 5 : 3;
 
 	// Errors
 	let selectedAmountError: boolean = false;
@@ -1229,25 +1231,27 @@
 						<!-- Amount mode: show buying/selling amount. The Order Summary is
 						     the on-chain ground truth, so we always render the wt
 						     quantity here regardless of the panel denom toggle. When
-						     unwrapped is active we add the t-equivalent as a quieter
-						     second line so the user sees both. -->
+						     unwrapped is active we bump precision to 5 decimals so the
+						     wrap-ratio gap is actually visible (otherwise e.g. 0.00997
+						     wt vs 0.01 t both round to "0.010" and the user thinks the
+						     conversion didn't happen). -->
 						<div class="flex items-start justify-between gap-3">
 							<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 							<div class="text-right">
 								<span class="font-medium">
-									{selectedAmount
-										? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
-										: '0'}
+									{(selectedAmount
+										? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
+										: 0
+									).toFixed(wtDecimalsForSummary)}
 									{assetToken.symbol}
 								</span>
-								{#if displayDenom === 'unwrapped' && displayScale !== 1}
+								{#if showShareEquivalent}
 									<div class="text-[11px] text-gray-500">
-										equivalent to {selectedAmount
-											? (
-													parseFloat(formatUnits(selectedAmount, assetToken.decimals)) *
-													displayScale
-												).toFixed(3)
-											: '0'}
+										equivalent to {(
+											(selectedAmount
+												? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
+												: 0) * displayScale
+										).toFixed(5)}
 										{displayedAssetSymbol}
 									</div>
 								{/if}

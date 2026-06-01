@@ -74,6 +74,8 @@
 			: (assetToken?.symbol ?? '');
 	$: displayScale =
 		displayDenom === 'unwrapped' && Number.isFinite(wrapRatio) && wrapRatio > 0 ? wrapRatio : 1;
+	$: showShareEquivalent = displayDenom === 'unwrapped' && displayScale !== 1;
+	$: wtDecimalsForSummary = showShareEquivalent ? 5 : 3;
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -490,19 +492,19 @@
 						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 						<div class="text-right">
 							<span class="font-medium">
-								{selectedAmount
-									? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
-									: '0'}
+								{(selectedAmount
+									? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
+									: 0
+								).toFixed(wtDecimalsForSummary)}
 								{assetToken.symbol}
 							</span>
-							{#if displayDenom === 'unwrapped' && displayScale !== 1}
+							{#if showShareEquivalent}
 								<div class="text-[11px] text-gray-500">
-									equivalent to {selectedAmount
-										? (
-												parseFloat(formatUnits(selectedAmount, assetToken.decimals)) *
-												displayScale
-											).toFixed(3)
-										: '0'}
+									equivalent to {(
+										(selectedAmount
+											? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
+											: 0) * displayScale
+									).toFixed(5)}
 									{displayedAssetSymbol}
 								</div>
 							{/if}
