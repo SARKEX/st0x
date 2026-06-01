@@ -18,7 +18,8 @@ const WINDOW_SECONDS = 30 * 24 * 60 * 60; // 30 days
 export function createTokenTradeActivityQuery(
 	network: Network | null,
 	tokenAddress: string | null,
-	pollInterval: number = 300_000
+	pollInterval: number = 300_000,
+	enabled: boolean = true
 ) {
 	// Resolve to wrapped (primary) address — the SFT subgraph returns the unwrapped
 	// vault address, but trades are indexed by the wrapped ERC20 token address.
@@ -28,7 +29,7 @@ export function createTokenTradeActivityQuery(
 
 	return createQuery<TokenTradeActivityPayload>({
 		queryKey: ['tokenTradeActivity', network?.id, tokenAddress],
-		enabled: Boolean(network && primaryAddress),
+		enabled: Boolean(enabled && network && primaryAddress),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
@@ -60,14 +61,15 @@ export function createTokenTradeActivityQuery(
 export function createBatchTradesQuery(
 	network: Network | null,
 	orderHashes: string[],
-	pollInterval: number = 600_000
+	pollInterval: number = 600_000,
+	enabled: boolean = true
 ) {
 	// Stable query key: sort hashes so order doesn't matter
 	const sortedKey = orderHashes.slice().sort().join(',');
 
 	return createQuery<Map<string, ApiTradeByAddress[]>>({
 		queryKey: ['batchTrades', network?.id, sortedKey],
-		enabled: Boolean(network && orderHashes.length > 0),
+		enabled: Boolean(enabled && network && orderHashes.length > 0),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
@@ -88,11 +90,12 @@ export type TakerTradesPayload = {
 export function createTakerTradesQuery(
 	network: Network | null,
 	walletAddress: string | null,
-	pollInterval: number = 600_000
+	pollInterval: number = 600_000,
+	enabled: boolean = true
 ) {
 	return createQuery<TakerTradesPayload>({
 		queryKey: ['takerTrades', network?.id, walletAddress],
-		enabled: Boolean(network && walletAddress),
+		enabled: Boolean(enabled && network && walletAddress),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		retry: 2,

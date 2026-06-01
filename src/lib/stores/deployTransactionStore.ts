@@ -294,7 +294,9 @@ export const handleStrategyDeployment = async (
 	// Immediate attempt before scheduling interval
 	const immediateLink = await tryFetchOrderLink();
 	if (immediateLink) {
-		invalidateOrderQueries();
+		if (assetTokenInfo?.address) {
+			invalidateOrderQueries(network.id, assetTokenInfo.address);
+		}
 		invalidateDashboardBalances();
 		return transactionSuccess(hash, undefined, buildMetadata(immediateLink));
 	}
@@ -314,7 +316,9 @@ export const handleStrategyDeployment = async (
 			// Stop polling after max attempts.
 			if (attempts >= maxAttempts) {
 				clearInterval(interval);
-				invalidateOrderQueries();
+				if (assetTokenInfo?.address) {
+					invalidateOrderQueries(network.id, assetTokenInfo.address);
+				}
 				invalidateDashboardBalances();
 				transactionSuccess(hash, 'Order deployed successfully!', buildMetadata());
 				return;
@@ -323,7 +327,9 @@ export const handleStrategyDeployment = async (
 			const link = await tryFetchOrderLink();
 			if (link) {
 				clearInterval(interval);
-				invalidateOrderQueries();
+				if (assetTokenInfo?.address) {
+					invalidateOrderQueries(network.id, assetTokenInfo.address);
+				}
 				invalidateDashboardBalances();
 				transactionSuccess(hash, undefined, buildMetadata(link));
 			}

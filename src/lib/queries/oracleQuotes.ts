@@ -32,10 +32,10 @@ async function fetchSpymPrice(): Promise<{
 	}
 }
 
-export function createOracleQuotesQuery(network: Network | null) {
+export function createOracleQuotesQuery(network: Network | null, enabled: boolean = true) {
 	return createQuery<Record<string, OracleQuote>>({
 		queryKey: ['oracleQuotes', network?.id],
-		enabled: Boolean(network),
+		enabled: Boolean(enabled && network),
 		refetchInterval: 15_000,
 		queryFn: async () => {
 			if (!network) return {};

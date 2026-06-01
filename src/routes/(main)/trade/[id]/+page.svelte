@@ -49,8 +49,8 @@
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import {
 		createTokenOrderbookQuotesQuery,
-		prefetchGlobalOrders,
 		refreshLegacyTokenQuotes,
+		TOKEN_ORDERBOOK_POLL_MS,
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
 	import type { QueryObserverResult } from '@tanstack/query-core';
@@ -84,48 +84,65 @@
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 	$: tokenId = $page.params.id;
 
+	const SECONDARY_QUERIES_DELAY_MS = 1_500;
+
 	// Hide track in wallet buttons for embedded wallets
 	$: isEmbeddedWallet = $authMethod === 'dynamic' && $dynamicSession?.walletType === 'embedded';
+
+	// Config lookup is synchronous — do not block the page on subgraph SFT metadata
+	$: currentPythToken = (() => {
+		if (!tokenId || !$currentNetwork?.chainId) return undefined;
+		const match = getTokenByAnyAddress(tokenId);
+		return match?.chainId === $currentNetwork.chainId ? match : undefined;
+	})();
 
 	// Get queryClient for cache lookup
 	const queryClient = useQueryClient();
 
-	// Use single token query - checks global cache first, falls back to single fetch
+	// Subgraph SFT enriches supply/mints tabs; trading UI uses currentPythToken from config
 	$: singleTokenQuery = createSingleSftQuery(tokenId, $currentNetwork, queryClient);
 	$: currentToken = $singleTokenQuery.data;
-	const tokensLookup = createTokenLookup(TOKENS);
-	let orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
-		$currentNetwork,
-		currentToken?.address ?? null
-	);
-	let tokenTradeQuery = createTokenTradeActivityQuery(
-		$currentNetwork,
-		currentToken?.address ?? null
-	);
-	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
-	$: {
-		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
-			$currentNetwork,
-			currentToken?.address ?? null
-		);
-		tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
-		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
-	}
+	$: tradeTokenAddress = currentPythToken?.address ?? currentToken?.address ?? null;
 
-	// One-shot: fetch legacy address quotes once per token
+	const tokensLookup = createTokenLookup(TOKENS);
+
+	let loadSecondaryQueries = false;
+
+	$: orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
+		$currentNetwork,
+		tradeTokenAddress,
+		TOKEN_ORDERBOOK_POLL_MS
+	);
+
+	$: tokenTradeQuery = createTokenTradeActivityQuery(
+		$currentNetwork,
+		tradeTokenAddress,
+		300_000,
+		loadSecondaryQueries
+	);
+
+	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork, loadSecondaryQueries);
+
+	// One-shot: legacy orderbook address after primary book + secondary defer
 	let legacyQuotesFetchedFor: string | null = null;
 	$: if (
 		browser &&
+		loadSecondaryQueries &&
 		$currentNetwork &&
-		currentToken?.address &&
-		legacyQuotesFetchedFor !== currentToken.address
+		tradeTokenAddress &&
+		legacyQuotesFetchedFor !== tradeTokenAddress
 	) {
-		legacyQuotesFetchedFor = currentToken.address;
-		refreshLegacyTokenQuotes($currentNetwork.id, currentToken.address).catch(() => {});
+		legacyQuotesFetchedFor = tradeTokenAddress;
+		refreshLegacyTokenQuotes($currentNetwork.id, tradeTokenAddress).catch(() => {});
 	}
 
-	// Taker trades for market orders (user's executed trades)
-	$: takerTradesQuery = createTakerTradesQuery($currentNetwork, $walletAddress, 600_000);
+	// Taker trades for market orders (user's executed trades) — deferred to reduce load burst
+	$: takerTradesQuery = createTakerTradesQuery(
+		$currentNetwork,
+		$walletAddress,
+		600_000,
+		loadSecondaryQueries
+	);
 
 	// Transform taker trades into display orders (filtered to current token)
 	$: userMarketOrders = (() => {
@@ -149,17 +166,22 @@
 	})();
 
 	// Fetch batch trades for user's orders on this token
-	$: batchTradesQuery = createBatchTradesQuery($currentNetwork, userOrderHashesForToken, 600_000);
+	$: batchTradesQuery = createBatchTradesQuery(
+		$currentNetwork,
+		userOrderHashesForToken,
+		600_000,
+		loadSecondaryQueries
+	);
 
 	// Transform quotes and market orders into DisplayOrder format for OrdersTable
 	// Note: Filtering by owner/type and closed orders are handled by OrdersTable component
 	$: tokenOrders = (() => {
 		const displayOrders: DisplayOrder[] = [];
-		const tokenAddress = currentToken?.address?.toLowerCase() ?? '';
+		const tokenAddress = tradeTokenAddress?.toLowerCase() ?? '';
 		const tradesMap = $batchTradesQuery?.data;
 
 		// Add limit orders from quotes (for current token only; match wrapped or legacy address)
-		if (currentToken?.address && $orderbookQuotesQuery.data?.quotes) {
+		if (tradeTokenAddress && $orderbookQuotesQuery.data?.quotes) {
 			const quotes = $orderbookQuotesQuery.data.quotes;
 
 			// Filter by token (input or output matches current token's wrapped or legacy address)
@@ -227,41 +249,29 @@
 	// User vaults query - no polling, invalidated after order deployment
 	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
-	// Background prefetch of global caches when page loads
+	// Background prefetch user vaults when wallet is connected
 	$: if (browser && $currentNetwork && $walletAddress) {
-		// Prefetch global orders and vaults in background (non-blocking)
-		prefetchGlobalOrders($currentNetwork.id).catch(() => {});
 		prefetchUserVaults($currentNetwork.id, $walletAddress).catch(() => {});
 	}
 
 	// Wallet balance query for this token
 	$: walletBalanceQuery = createQuery({
-		queryKey: ['walletBalance', $currentNetwork?.id, currentToken?.address, $walletAddress],
+		queryKey: ['walletBalance', $currentNetwork?.id, tradeTokenAddress, $walletAddress],
 		queryFn: async () => {
-			if (!currentToken?.address || !$walletAddress || !$wagmiConfig) {
+			if (!tradeTokenAddress || !$walletAddress || !$wagmiConfig) {
 				return 0n;
 			}
 			const balance = await readContract($wagmiConfig, {
 				abi: erc20Abi,
-				address: currentToken.address as `0x${string}`,
+				address: tradeTokenAddress as `0x${string}`,
 				functionName: 'balanceOf',
 				args: [$walletAddress as `0x${string}`]
 			});
 			return balance as bigint;
 		},
-		enabled: Boolean(currentToken?.address && $walletAddress && $wagmiConfig)
+		enabled: Boolean(tradeTokenAddress && $walletAddress && $wagmiConfig)
 	});
-	// Use tokenId from URL params to find the token config (supports wrapped, legacy, or unwrapped address)
-	// Note: currentToken.address from subgraph may differ from the wrapped token address
-	$: currentPythToken = (() => {
-		if (!tokenId || !$currentNetwork?.chainId) return undefined;
-		// DRIFT-01: getTokenByAnyAddress already matches wrapped/unwrapped/legacy
-		// address variants (and the wrapped-address path is a strict subset of
-		// what it covers), so the previous two-step lookup collapses to one call.
-		const match = getTokenByAnyAddress(tokenId);
-		return match?.chainId === $currentNetwork.chainId ? match : undefined;
-	})();
-	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
+	$: baseSymbol = extractBaseSymbol(currentPythToken?.symbol ?? currentToken?.symbol);
 	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
 	const ASSET_TABS = [
 		{ id: 'company', label: 'Company Info' },
@@ -588,10 +598,14 @@
 	}
 
 	onMount(() => {
-		// Initialize scroll tracking
 		cleanupScrollTracking = initScrollTracking('trade_page');
 
+		const secondaryTimer = setTimeout(() => {
+			loadSecondaryQueries = true;
+		}, SECONDARY_QUERIES_DELAY_MS);
+
 		return () => {
+			clearTimeout(secondaryTimer);
 			if (cleanupScrollTracking) {
 				cleanupScrollTracking();
 			}
@@ -614,6 +628,15 @@
 	function openChartModal(event?: Event) {
 		event?.stopPropagation?.();
 		showChartModal = true;
+	}
+	function handleAddTokenToWallet() {
+		if (!tradeTokenAddress || !currentPythToken) return;
+		addTokenToWallet({
+			address: tradeTokenAddress,
+			symbol: tokenDisplaySymbol || currentPythToken.symbol,
+			decimals: currentPythToken.decimals ?? 18,
+			image: currentPythToken.logoUrl
+		});
 	}
 	const closeTradePanel = () => {
 		panelOpenedFromTerminal = false;
@@ -666,7 +689,7 @@
 		sellPrice = null;
 	};
 	$: {
-		if (!browser || !currentToken || !$currentNetwork) {
+		if (!browser || !tradeTokenAddress || !$currentNetwork) {
 			resetOnChainPrices();
 		} else {
 			const settlementToken = $currentNetwork.defaultPaymentToken;
@@ -711,10 +734,10 @@
 		}
 	}
 	$: tradeHistoryPoints = (() => {
-		if (!browser || !currentToken || !$currentNetwork) return [];
+		if (!browser || !tradeTokenAddress || !$currentNetwork) return [];
 		const settlementToken = $currentNetwork.defaultPaymentToken;
 		if (!settlementToken) return [];
-		const assetAddress = (currentPythToken?.address ?? currentToken.address)?.toLowerCase();
+		const assetAddress = (currentPythToken?.address ?? currentToken?.address)?.toLowerCase();
 		const quoteAddress = settlementToken.address?.toLowerCase();
 		if (!assetAddress || !quoteAddress) return [];
 		const _assetDecimals = Number(currentPythToken?.decimals ?? 18);
@@ -800,7 +823,7 @@
 		tradeVolumeBuckets = tradesToVolumeBuckets(visibleTradeHistoryPoints, candleBucketSeconds);
 	}
 	$: orderbookDepth = (() => {
-		if (!currentToken || !$currentNetwork) return { bids: [], asks: [] };
+		if (!tradeTokenAddress || !$currentNetwork) return { bids: [], asks: [] };
 		const quotes = $orderbookQuotesQuery?.data?.quotes ?? [];
 		if (!quotes.length) {
 			return { bids: [], asks: [] };
@@ -882,8 +905,9 @@
 				? formatResourceError(tradeResource?.error, 'Failed to load trade history.')
 				: null;
 	}
-	$: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
-	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
+	$: tokenDisplayName =
+		currentToken?.name ?? currentPythToken?.name ?? currentPythToken?.symbol ?? 'Token';
+	$: tokenDisplaySymbol = currentToken?.symbol ?? currentPythToken?.symbol ?? '';
 	$: pageTitle = `Trade ${tokenDisplayName}`;
 	$: modalTitle = tokenDisplaySymbol
 		? `Advanced Chart — ${tokenDisplayName} (${tokenDisplaySymbol})`
@@ -897,26 +921,28 @@
 	<title>{pageTitle}</title>
 </svelte:head>
 <svelte:window on:keydown={handleGlobalKeydown} />
-{#if $singleTokenQuery.isPending}
-	<div class="flex h-screen items-center justify-center">
-		<LoadingSpinner variant="fullscreen" size="xl" text="Loading token data..." />
-	</div>
-{:else if $singleTokenQuery.isError}
-	<div class="flex h-screen items-center justify-center">
-		<div class="text-center">
-			<p class="text-lg text-red-400">Failed to load token data</p>
-			<p class="mt-2 text-sm text-gray-400">
-				{$singleTokenQuery.error?.message || 'Unknown error'}
-			</p>
+{#if !currentPythToken}
+	{#if $singleTokenQuery.isPending}
+		<div class="flex h-screen items-center justify-center">
+			<LoadingSpinner variant="fullscreen" size="xl" text="Loading token data..." />
 		</div>
-	</div>
-{:else if !currentToken}
-	<div class="flex h-screen items-center justify-center">
-		<div class="text-center">
-			<p class="text-lg text-gray-400">Token not found</p>
-			<p class="mt-2 text-sm text-gray-500">ID: {tokenId}</p>
+	{:else if $singleTokenQuery.isError}
+		<div class="flex h-screen items-center justify-center">
+			<div class="text-center">
+				<p class="text-lg text-red-400">Failed to load token data</p>
+				<p class="mt-2 text-sm text-gray-400">
+					{$singleTokenQuery.error?.message || 'Unknown error'}
+				</p>
+			</div>
 		</div>
-	</div>
+	{:else}
+		<div class="flex h-screen items-center justify-center">
+			<div class="text-center">
+				<p class="text-lg text-gray-400">Token not found</p>
+				<p class="mt-2 text-sm text-gray-500">ID: {tokenId}</p>
+			</div>
+		</div>
+	{/if}
 {:else}
 	<div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
 		<!-- Header Section with Chart -->
@@ -1062,7 +1088,7 @@
 								<TradingViewWidget
 									widgetType="symbol-overview"
 									symbol={tradingViewSymbol}
-									displayName={currentToken.name || currentToken.symbol}
+									displayName={tokenDisplayName}
 									dateRange="1D"
 									showVolume={false}
 									autosize={false}
@@ -1074,7 +1100,7 @@
 								<TradingViewWidget
 									widgetType="symbol-overview"
 									symbol={tradingViewSymbol}
-									displayName={currentToken.name || currentToken.symbol}
+									displayName={tokenDisplayName}
 									dateRange="1D"
 									showVolume={false}
 									autosize={false}
@@ -1121,13 +1147,7 @@
 						{#if $isAuthenticated && !isEmbeddedWallet}
 							<button
 								type="button"
-								on:click={() =>
-									addTokenToWallet({
-										address: currentToken.address,
-										symbol: currentToken.symbol,
-										decimals: 18,
-										image: currentPythToken?.logoUrl
-									})}
+								on:click={handleAddTokenToWallet}
 								class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
 							>
 								<!-- Wallet icon (mobile only) -->
@@ -1217,7 +1237,7 @@
 								isLoading={$orderbookQuotesQuery.isLoading}
 								isError={$orderbookQuotesQuery.isError}
 								errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
-								tokenAddress={currentToken?.address ?? null}
+								tokenAddress={tradeTokenAddress}
 								showTokenColumn={false}
 							/>
 						</div>
@@ -1240,13 +1260,13 @@
 								</div>
 							{:else}
 								{@const allVaultData = $userVaultsQuery.data?.pages?.flatMap((p) => p.vaults) ?? []}
-								{@const vaults = currentToken
+								{@const vaults = tradeTokenAddress
 									? allVaultData
 											.map((vd) => vd.raindexVault)
 											.filter((v) => {
 												const vaultTokenAddr = (v.token?.address ?? v.token?.id)?.toLowerCase();
 												const isCorrectToken =
-													vaultTokenAddr === currentToken.address.toLowerCase();
+													vaultTokenAddr === tradeTokenAddress.toLowerCase();
 												const hasBalance = vaultBalanceToBigInt(v) > 0n;
 												return isCorrectToken && hasBalance;
 											})
@@ -1477,7 +1497,7 @@
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Symbol</span>
-									<span>{currentPythToken?.symbol ?? currentToken.symbol}</span>
+									<span>{tokenDisplaySymbol}</span>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Decimals</span>
@@ -1492,6 +1512,9 @@
 							</div>
 						</div>
 					{:else if activeTokenTab === 'supply'}
+						{#if !currentToken}
+							<LoadingSpinner variant="inline" size="md" text="Loading on-chain supply data…" />
+						{:else}
 						<div>
 							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
 							<div class="space-y-3 text-sm">
@@ -1509,7 +1532,11 @@
 								</div>
 							</div>
 						</div>
+						{/if}
 					{:else if activeTokenTab === 'mints'}
+						{#if !currentToken}
+							<LoadingSpinner variant="inline" size="md" text="Loading mint history…" />
+						{:else}
 						<div>
 							<div class="mb-2 flex items-center justify-between">
 								<h3 class="font-semibold">Latest Mints</h3>
@@ -1553,7 +1580,11 @@
 								<div class="text-sm text-gray-400">No recent mints.</div>
 							{/if}
 						</div>
+						{/if}
 					{:else}
+						{#if !currentToken}
+							<LoadingSpinner variant="inline" size="md" text="Loading burn history…" />
+						{:else}
 						<div>
 							<div class="mb-2 flex items-center justify-between">
 								<h3 class="font-semibold">Latest Burns</h3>
@@ -1597,6 +1628,7 @@
 								<div class="text-sm text-gray-400">No recent burns.</div>
 							{/if}
 						</div>
+						{/if}
 					{/if}
 				</div>
 				<!-- Underlying Equity (Right) -->
