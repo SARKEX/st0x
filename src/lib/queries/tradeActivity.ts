@@ -7,6 +7,7 @@ import {
 	apiGetTradesBatch,
 	type ApiTradeByAddress
 } from '$lib/api/st0xApi';
+import { bucketTimestamp, TRADE_WINDOW_BUCKET_SECONDS } from '$lib/utils/timeWindow';
 
 export type TokenTradeActivityPayload = {
 	trades: ApiTradeByAddress[];
@@ -32,7 +33,10 @@ export function createTokenTradeActivityQuery(
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
-			const now = Math.floor(Date.now() / 1000);
+			// Bucket the window edge so consecutive polls produce identical
+			// startTime/endTime params — letting the upstream REST API serve them
+			// from one cache key instead of a fresh fan-out every second.
+			const now = bucketTimestamp(Math.floor(Date.now() / 1000), TRADE_WINDOW_BUCKET_SECONDS);
 			const from = now - WINDOW_SECONDS;
 			const PAGE_SIZE = 200;
 			let allTrades: ApiTradeByAddress[] = [];

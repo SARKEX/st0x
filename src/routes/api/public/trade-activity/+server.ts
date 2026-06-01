@@ -12,6 +12,7 @@ import { withConditionalCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
 import type { Network } from '$lib/config/network';
 import { normalizeAddress } from '$lib/utils/tokenMath';
+import { bucketTimestamp, TRADE_WINDOW_BUCKET_SECONDS } from '$lib/utils/timeWindow';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
 import type { ApiTradeByAddress, ApiTradesByAddressResponse } from '$lib/api/st0xApi';
 
@@ -257,7 +258,9 @@ function aggregateNetwork(network: Network, analyzed: AnalyzedApiTrade[]): Netwo
 }
 
 async function computeTradeActivity(): Promise<PublicTradeActivityResponse> {
-	const now = Math.floor(Date.now() / 1000);
+	// Bucket the window edge so the per-token upstream fan-out reuses one cache
+	// key across recomputes instead of cache-busting on every second.
+	const now = bucketTimestamp(Math.floor(Date.now() / 1000), TRADE_WINDOW_BUCKET_SECONDS);
 	const from = now - WINDOW_SECONDS;
 
 	const perNetwork = await Promise.all(
