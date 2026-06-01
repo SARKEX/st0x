@@ -172,19 +172,13 @@
 					</div>
 				</div>
 
-				<h3 class="mt-6 text-sm font-semibold text-white">Why wrap at all?</h3>
+				<h3 class="mt-6 text-sm font-semibold text-white">Built for DeFi</h3>
 				<p class="mt-1 text-sm text-gray-400">
-					Wrapping lets dividends and corporate actions travel with the token — even when it's
-					sitting in a DeFi protocol. Each event nudges the wrap ratio up, so {wrappedSymbol}
-					behaves as a compounding asset: the dividends are effectively reinvested into the
-					asset itself.
-				</p>
-				<p class="mt-2 text-sm text-gray-400">
-					The alternative — rebasing each holder's balance in place — doesn't work for DeFi.
-					DEXs, lending markets, and vaults keep their own internal accounting of how many
-					tokens you deposited. If the on-chain balance silently doubled after a corporate
-					action, the protocol would still think you deposited the original amount, and
-					withdrawals, liquidations, and pricing would all break.
+					Wrapping makes the token DeFi-ready. DeFi protocols track deposited balances
+					internally — they can't see when a dividend or stock split changes your underlying
+					holdings. By rolling those events into the wrap ratio, your {wrappedSymbol} quietly
+					compounds (each token becomes worth a bit more {assetSymbol} over time) without
+					throwing the protocol's accounting out of sync.
 				</p>
 
 				<h3 class="mt-6 text-sm font-semibold text-white">
