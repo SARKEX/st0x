@@ -1124,7 +1124,27 @@
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if buyPrice !== null}
-										${formatNumeric(buyPrice)}
+										{#if hasRatio && currentRatio > 0}
+											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+												/^wt/,
+												't'
+											)}
+											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+											<div class="leading-tight">
+												<div>
+													${formatNumeric(buyPrice / currentRatio)}
+													<span class="text-[10px] font-normal text-gray-500"
+														>/ {assetSym}</span
+													>
+												</div>
+												<div class="mt-0.5 text-[11px] font-normal text-gray-400 sm:text-xs">
+													${formatNumeric(buyPrice)}
+													<span class="text-[10px] text-gray-500">/ {wrappedSym}</span>
+												</div>
+											</div>
+										{:else}
+											${formatNumeric(buyPrice)}
+										{/if}
 									{:else}
 										—
 									{/if}
@@ -1138,13 +1158,63 @@
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if sellPrice !== null}
-										${formatNumeric(sellPrice)}
+										{#if hasRatio && currentRatio > 0}
+											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+												/^wt/,
+												't'
+											)}
+											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+											<div class="leading-tight">
+												<div>
+													${formatNumeric(sellPrice / currentRatio)}
+													<span class="text-[10px] font-normal text-gray-500"
+														>/ {assetSym}</span
+													>
+												</div>
+												<div class="mt-0.5 text-[11px] font-normal text-gray-400 sm:text-xs">
+													${formatNumeric(sellPrice)}
+													<span class="text-[10px] text-gray-500">/ {wrappedSym}</span>
+												</div>
+											</div>
+										{:else}
+											${formatNumeric(sellPrice)}
+										{/if}
 									{:else}
 										—
 									{/if}
 								</dd>
 							</div>
 						</dl>
+						{#if hasRatio && currentRatio > 0}
+							<!-- Wrap-ratio callout — mirrors the chip pattern. The "What's this?"
+								 button reuses the WrapExplainerStore so the same modal opens
+								 from every entry point. -->
+							{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+								/^wt/,
+								't'
+							)}
+							{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+							<div
+								class="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/5 pt-2 text-[11px] text-gray-400 sm:text-xs"
+							>
+								<span class="font-mono tabular-nums">
+									1 {wrappedSym} = {Number.isInteger(currentRatio)
+										? currentRatio
+										: currentRatio.toLocaleString('en-US', {
+												maximumFractionDigits: 4
+											})}
+									{assetSym}
+								</span>
+								<button
+									type="button"
+									on:click={openWrapExplainer}
+									data-testid="wrap-explainer-trigger"
+									class="inline-flex items-center gap-1 text-blue-300 transition hover:text-blue-200 hover:underline"
+								>
+									What's this?
+								</button>
+							</div>
+						{/if}
 						{#if oracleError}
 							<p class="mt-2 text-xs text-red-400 sm:mt-4">{oracleError}</p>
 						{/if}
