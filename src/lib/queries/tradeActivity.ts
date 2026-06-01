@@ -44,7 +44,10 @@ export function createTokenTradeActivityQuery(
 
 			while (page <= 50) {
 				const response = await apiGetTradesByToken(primaryAddress!, page, PAGE_SIZE, from, now);
-				allTrades = allTrades.concat(response.trades);
+				// `?? []` because the upstream REST API occasionally omits `trades`
+				// on a paginated response; `[].concat(undefined)` returns
+				// `[undefined]`, which then poisons every downstream consumer.
+				allTrades = allTrades.concat(response.trades ?? []);
 				if (!response.pagination.hasMore) break;
 				page++;
 			}
@@ -107,7 +110,7 @@ export function createTakerTradesQuery(
 
 			while (page <= 10) {
 				const response = await apiGetTakerTrades(walletAddress!, { page, pageSize: PAGE_SIZE });
-				allTrades = allTrades.concat(response.trades);
+				allTrades = allTrades.concat(response.trades ?? []);
 				if (!response.pagination.hasMore) break;
 				page++;
 			}
