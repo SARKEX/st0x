@@ -4,6 +4,7 @@ import {
 	type QueryClient,
 	type InfiniteData
 } from '@tanstack/svelte-query';
+import { browser } from '$app/environment';
 import type { Network } from '$lib/config/network';
 import { getSfts, getSftById } from '$lib/api/subgraph';
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
@@ -18,7 +19,7 @@ import type { RaindexVault, SgVault } from '@rainlanguage/orderbook';
 export function createSftsQuery(network: Network | null) {
 	return createQuery<OffchainAssetReceiptVault[]>({
 		queryKey: ['sfts', network?.id],
-		enabled: Boolean(network?.subgraph_url),
+		enabled: Boolean(browser && network?.subgraph_url),
 		staleTime: Infinity,
 		refetchInterval: false,
 		queryFn: () => getSfts(network as Network)
