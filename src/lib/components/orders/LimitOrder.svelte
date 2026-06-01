@@ -65,6 +65,15 @@
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	export let buyPrice: number | null = null; // Best bid price (what you get when selling)
 	export let sellPrice: number | null = null; // Best ask price (what you pay when buying)
+	/** Share-denominated display toggle — see MarketOrder for the contract. */
+	export let displayDenom: 'wrapped' | 'unwrapped' = 'wrapped';
+	export let wrapRatio: number = 1;
+	$: displayedAssetSymbol =
+		displayDenom === 'unwrapped' && assetToken
+			? assetToken.symbol.replace(/^wt/, 't')
+			: (assetToken?.symbol ?? '');
+	$: displayScale =
+		displayDenom === 'unwrapped' && Number.isFinite(wrapRatio) && wrapRatio > 0 ? wrapRatio : 1;
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -437,6 +446,8 @@
 						bind:isError={selectedAmountError}
 						showUnit={false}
 						showMaxButton={false}
+						{displayScale}
+						unitOverride={displayedAssetSymbol}
 					/>
 					<!-- Percentage buttons -->
 					<div class="mt-2 flex gap-2">
@@ -455,7 +466,7 @@
 					<div class="mb-2 block text-sm font-medium text-gray-300">
 						Limit Price
 						<span class="ml-1 text-xs text-gray-500"
-							>({settlementLabel} per {assetToken.symbol})</span
+							>({settlementLabel} per {displayedAssetSymbol})</span
 						>
 					</div>
 					<Input
@@ -479,9 +490,11 @@
 						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 						<span class="font-medium">
 							{selectedAmount
-								? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
+								? (
+										parseFloat(formatUnits(selectedAmount, assetToken.decimals)) * displayScale
+									).toFixed(3)
 								: '0'}
-							{assetToken.symbol}
+							{displayedAssetSymbol}
 						</span>
 					</div>
 					<div class="flex justify-between">

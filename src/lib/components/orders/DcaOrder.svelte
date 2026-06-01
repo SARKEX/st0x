@@ -38,6 +38,15 @@
 			: 'bg-red-500 hover:bg-red-600 text-white';
 
 	export let assetToken: PythToken | undefined; // The token we're accumulating
+	/** Share-denominated display toggle — see MarketOrder for the contract. */
+	export let displayDenom: 'wrapped' | 'unwrapped' = 'wrapped';
+	export let wrapRatio: number = 1;
+	$: displayedAssetSymbol =
+		displayDenom === 'unwrapped' && assetToken
+			? assetToken.symbol.replace(/^wt/, 't')
+			: (assetToken?.symbol ?? '');
+	$: displayScale =
+		displayDenom === 'unwrapped' && Number.isFinite(wrapRatio) && wrapRatio > 0 ? wrapRatio : 1;
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -315,7 +324,7 @@
 				<div class="mb-2 block text-sm font-medium text-gray-300">
 					{orderSide === 'Buy' ? 'Purchase Budget' : 'Amount to Sell'}
 					<span class="ml-1 text-xs text-gray-500"
-						>({orderSide === 'Buy' ? settlementLabel : selectedInputToken.symbol})</span
+						>({orderSide === 'Buy' ? settlementLabel : displayedAssetSymbol})</span
 					>
 				</div>
 				<TradeAmountInput
@@ -329,6 +338,8 @@
 					validate={validateSelectedAmount}
 					bind:isError={selectedAmountError}
 					showMaxButton={false}
+					displayScale={orderSide === 'Buy' ? 1 : displayScale}
+					unitOverride={orderSide === 'Buy' ? settlementLabel : displayedAssetSymbol}
 				/>
 				<!-- Percentage buttons -->
 				<div class="mt-2 flex gap-2">

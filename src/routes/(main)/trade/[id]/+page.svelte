@@ -23,6 +23,7 @@
 		openWrapExplainer,
 		closeWrapExplainer
 	} from '$lib/stores/wrapExplainerStore';
+	import { panelDenom } from '$lib/stores/panelDenomStore';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
 	import type { SgTrade } from '@rainlanguage/orderbook';
@@ -980,9 +981,19 @@
 	$: modalTitle = tokenDisplaySymbol
 		? `Advanced Chart — ${tokenDisplayName} (${tokenDisplaySymbol})`
 		: `Advanced Chart — ${tokenDisplayName}`;
-	$: panelTokenLabel = tokenDisplaySymbol || currentToken?.symbol || tokenDisplayName;
+	// Display symbols for the trade panel. The wrapped symbol is the orderbook
+	// primitive (wtX); the unwrapped symbol is the underlying share (tX). The
+	// `panelDenom` store toggles which one we show in the panel's verb line,
+	// input field, balance row, summary, etc. — see `panelDenomStore.ts`.
+	$: panelWrappedSymbol =
+		currentPythToken?.symbol ?? currentToken?.symbol ?? tokenDisplaySymbol ?? tokenDisplayName;
+	$: panelAssetSymbol = panelWrappedSymbol.replace(/^wt/, 't');
+	$: panelTokenLabel = $panelDenom === 'unwrapped' ? panelAssetSymbol : panelWrappedSymbol;
 	$: panelSummaryVerb = panelOrderSide === 'Buy' ? 'Buying' : 'Selling';
 	$: panelSummaryPreposition = panelOrderSide === 'Buy' ? 'with' : 'for';
+	$: panelRatioCalloutDisplay = Number.isInteger(currentRatio)
+		? String(currentRatio)
+		: currentRatio.toLocaleString('en-US', { maximumFractionDigits: 4 });
 </script>
 
 <svelte:head>
@@ -1970,27 +1981,6 @@
 							{/if}
 							<div>
 								<h2 class="text-base font-semibold sm:text-lg">{tokenDisplayName}</h2>
-								{#if tokenDisplaySymbol}
-									<p class="text-xs text-gray-400 sm:text-sm">
-										<span class="font-mono tabular-nums">{tokenDisplaySymbol}</span>
-										{#if hasRatio}
-											<span class="text-gray-600">·</span>
-											<button
-												type="button"
-												class="font-mono tabular-nums text-gray-300 hover:text-yellow-200 hover:underline"
-												title="What's the wrap ratio?"
-												on:click={openWrapExplainer}
-											>
-												1 {tokenDisplaySymbol} = {Number.isInteger(currentRatio)
-													? currentRatio
-													: currentRatio.toLocaleString('en-US', {
-															maximumFractionDigits: 4
-														})}
-												{tokenDisplaySymbol.replace(/^wt/, 't')}
-											</button>
-										{/if}
-									</p>
-								{/if}
 							</div>
 						</div>
 						<button
@@ -2057,11 +2047,42 @@
 										/>
 									</span>
 								</div>
+								{#if hasRatio}
+									<button
+										type="button"
+										on:click={openWrapExplainer}
+										data-testid="wrap-explainer-trigger"
+										class="block text-left font-mono text-[11px] tabular-nums text-gray-500 transition hover:text-yellow-200 hover:underline sm:text-xs"
+									>
+										1 {panelWrappedSymbol} = {panelRatioCalloutDisplay} {panelAssetSymbol}
+									</button>
+								{/if}
 								<div class="flex items-center gap-1 text-xs text-gray-400 sm:gap-2 sm:text-sm">
 									<span>On</span>
 									<img src="/images/BASE.svg" alt="Base" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
 									<span>{$currentNetwork.displayName}</span>
 								</div>
+								{#if hasRatio}
+									<label
+										class="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-white/5 bg-white/[0.03] p-2 text-xs text-gray-300 sm:text-sm"
+									>
+										<input
+											type="checkbox"
+											data-testid="panel-denom-toggle"
+											checked={$panelDenom === 'unwrapped'}
+											on:change={(e) =>
+												panelDenom.set(e.currentTarget.checked ? 'unwrapped' : 'wrapped')}
+											class="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-transparent text-yellow-400 focus:ring-yellow-400/40"
+										/>
+										<span class="flex-1 leading-snug">
+											Show wrapped token quantities in {panelAssetSymbol} equivalents
+											<span class="mt-0.5 block text-[10px] text-gray-500 sm:text-[11px]">
+												You're still trading wrapped tokens — only the displayed quantities and
+												prices change.
+											</span>
+										</span>
+									</label>
+								{/if}
 							</div>
 							<!--
 								E2E test hooks for mode selection. The Select below is the user-facing
@@ -2144,6 +2165,8 @@
 												: (buyPrice ?? oraclePriceData?.price)?.toFixed(4)}
 											{buyPrice}
 											{sellPrice}
+											displayDenom={$panelDenom}
+											wrapRatio={currentRatio}
 										/>
 									{:catch _err}
 										<div class="min-h-[420px] p-4 text-sm text-red-400">
@@ -2157,6 +2180,8 @@
 										{orderbookQuotesQuery}
 										{buyPrice}
 										{sellPrice}
+										displayDenom={$panelDenom}
+										wrapRatio={currentRatio}
 									/>
 								{:else if panelStrategy === 'dca'}
 									{#await import('$lib/components/orders/DcaOrder.svelte')}
@@ -2168,6 +2193,8 @@
 											this={Mod.default}
 											orderSide={panelOrderSide}
 											assetToken={currentPythToken}
+											displayDenom={$panelDenom}
+											wrapRatio={currentRatio}
 										/>
 									{:catch _err}
 										<div class="min-h-[420px] p-4 text-sm text-red-400">
