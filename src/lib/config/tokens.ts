@@ -161,7 +161,7 @@ export const TOKENS: CategorizedToken[] = [
 		// Using a hardcoded fallback until a replacement feed is wired up.
 		fallbackPrice: 82.5,
 		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:SPLG',
+		tradingViewSymbol: 'AMEX:SPYM',
 		tradingViewMarket: 'america',
 		limitOrders: []
 	},
