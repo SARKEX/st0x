@@ -1,4 +1,5 @@
 import { createQuery } from '@tanstack/svelte-query';
+import { browser } from '$app/environment';
 import type { Network } from '$lib/config/network';
 import { TOKENS } from '$lib/config/network';
 import { getPythQuotes } from '$lib/api/pyth';
@@ -39,7 +40,7 @@ async function fetchSpymQuote(network: Network): Promise<TradingViewQuote | null
 export function createPriceFeedsQuery(network: Network | null) {
 	return createQuery<TradingViewQuote[]>({
 		queryKey: ['priceFeeds', network?.id],
-		enabled: Boolean(network),
+		enabled: Boolean(browser && network),
 		refetchInterval: 15_000,
 		queryFn: async () => {
 			const net = network as Network;

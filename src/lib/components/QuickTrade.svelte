@@ -7,7 +7,7 @@
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
-	import { createTokenOrderbookQuotesQuery, prefetchGlobalOrders } from '$lib/queries/orderbook';
+	import { createTokenOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
@@ -108,17 +108,13 @@
 	$: isLoadingQuotes = $orderbookQuery.isPending && !$orderbookQuery.data;
 	$: quoteFetchError = $orderbookQuery.isError;
 
-	// On mount: analytics + background prefetch of all tokens
+	// On mount: analytics only. The selected-token query above fetches the visible quote data.
 	onMount(() => {
 		panelOpenTime = Date.now();
 		track('quick_trade_panel_viewed', {
 			has_wallet: Boolean($walletAddress),
 			token_selected: selectedToken?.symbol
 		});
-
-		if ($currentNetwork) {
-			prefetchGlobalOrders($currentNetwork.id).catch(console.warn);
-		}
 	});
 
 	// Track abandonment on unmount
