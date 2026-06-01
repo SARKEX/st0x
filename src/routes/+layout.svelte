@@ -3,27 +3,43 @@
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/clients/queryClient';
 	import { env as publicEnv } from '$env/dynamic/public';
-	import { defaultConfig } from 'svelte-wagmi';
-	import { base } from '@wagmi/core/chains';
-	import { injected, walletConnect } from '@wagmi/connectors';
 	import { onMount } from 'svelte';
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
 	import { injectSpeedInsights } from '@vercel/speed-insights/sveltekit';
 
-	// Dynamic integration
-	import DynamicSvelteWrapper from '$lib/dynamic/DynamicSvelteWrapper.svelte';
-	import AuthModal from '$lib/components/AuthModal.svelte';
-	import SendFundsModal from '$lib/components/SendFundsModal.svelte';
-	import DepositModal from '$lib/components/DepositModal.svelte';
-	import CookieConsent from '$lib/components/CookieConsent.svelte';
-
-	// Auth store for wallet address tracking
-	import { walletAddress } from '$lib/stores/authStore';
-
 	// PostHog analytics
 	import { initAnalytics } from '$lib/services/analytics';
 
+	type DynamicSvelteWrapperComponent =
+		typeof import('$lib/dynamic/DynamicSvelteWrapper.svelte').default;
+	type AuthModalComponent = typeof import('$lib/components/AuthModal.svelte').default;
+	type SendFundsModalComponent = typeof import('$lib/components/SendFundsModal.svelte').default;
+	type DepositModalComponent = typeof import('$lib/components/DepositModal.svelte').default;
+	type CookieConsentComponent = typeof import('$lib/components/CookieConsent.svelte').default;
+
+	let DynamicSvelteWrapper: DynamicSvelteWrapperComponent | null = null;
+	let AuthModal: AuthModalComponent | null = null;
+	let SendFundsModal: SendFundsModalComponent | null = null;
+	let DepositModal: DepositModalComponent | null = null;
+	let CookieConsent: CookieConsentComponent | null = null;
 	let analyticsInjected = false;
+
+	async function loadRootComponents() {
+		const [dynamicSvelteWrapper, authModal, sendFundsModal, depositModal, cookieConsent] =
+			await Promise.all([
+				import('$lib/dynamic/DynamicSvelteWrapper.svelte'),
+				import('$lib/components/AuthModal.svelte'),
+				import('$lib/components/SendFundsModal.svelte'),
+				import('$lib/components/DepositModal.svelte'),
+				import('$lib/components/CookieConsent.svelte')
+			]);
+
+		DynamicSvelteWrapper = dynamicSvelteWrapper.default;
+		AuthModal = authModal.default;
+		SendFundsModal = sendFundsModal.default;
+		DepositModal = depositModal.default;
+		CookieConsent = cookieConsent.default;
+	}
 
 	function enableAnalytics() {
 		if (!analyticsInjected) {
@@ -41,6 +57,11 @@
 	}
 
 	const initWallet = async () => {
+		const [{ defaultConfig }, { base }, { injected, walletConnect }] = await Promise.all([
+			import('svelte-wagmi'),
+			import('@wagmi/core/chains'),
+			import('@wagmi/connectors')
+		]);
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
 		const connectorsList = [injected()];
 		if (projectId && projectId.trim().length > 0) {
@@ -85,15 +106,20 @@
 	}
 
 	onMount(() => {
-		initWallet();
+		let unsubscribe: (() => void) | undefined;
+
+		void initWallet();
+		void loadRootComponents();
 
 		// Subscribe to wallet address changes and sync to cookie
-		const unsubscribe = walletAddress.subscribe((address) => {
-			setWalletCookie(address);
+		void import('$lib/stores/authStore').then(({ walletAddress }) => {
+			unsubscribe = walletAddress.subscribe((address) => {
+				setWalletCookie(address);
+			});
 		});
 
 		return () => {
-			unsubscribe();
+			unsubscribe?.();
 			document.body.style.overflow = '';
 		};
 	});
@@ -101,15 +127,25 @@
 
 <QueryClientProvider client={queryClient}>
 	<!-- Dynamic SDK wrapper (invisible, handles auth state) -->
-	<DynamicSvelteWrapper />
+	{#if DynamicSvelteWrapper}
+		<svelte:component this={DynamicSvelteWrapper} />
+	{/if}
 
 	<!-- Global modals -->
-	<AuthModal />
-	<SendFundsModal />
-	<DepositModal />
+	{#if AuthModal}
+		<svelte:component this={AuthModal} />
+	{/if}
+	{#if SendFundsModal}
+		<svelte:component this={SendFundsModal} />
+	{/if}
+	{#if DepositModal}
+		<svelte:component this={DepositModal} />
+	{/if}
 
 	<!-- Cookie consent banner -->
-	<CookieConsent onAnalyticsAccepted={enableAnalytics} />
+	{#if CookieConsent}
+		<svelte:component this={CookieConsent} onAnalyticsAccepted={enableAnalytics} />
+	{/if}
 
 	<slot />
 </QueryClientProvider>

@@ -7,23 +7,46 @@
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
-	import { createTokenOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { browser } from '$app/environment';
+	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
-	import { normalizeAddress, parseFloatHex } from '$lib/utils/tokenMath';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import {
 		getMakerInputTokenAddress,
 		getMakerOutputTokenAddress
 	} from '$lib/types/orderPerspective';
 	import Button from './ui/Button.svelte';
-	import {
-		executeMarketOrder,
-		filterQuotesForSide,
-		sortQuotesByPrice
-	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
+
+	type ParseFloatHex = typeof import('$lib/utils/tokenMath').parseFloatHex;
+
+	let parseFloatHexFn: ParseFloatHex | null = null;
+	let parseFloatVersion = 0;
+	let parseFloatImportPromise: Promise<ParseFloatHex> | null = null;
+
+	function normalizeAddress(value: string | null | undefined): string | null {
+		const trimmed = value?.trim();
+		return trimmed ? trimmed.toLowerCase() : null;
+	}
+
+	function loadParseFloatHex(): Promise<ParseFloatHex> {
+		parseFloatImportPromise ??= import('$lib/utils/tokenMath').then((mod) => {
+			parseFloatHexFn = mod.parseFloatHex;
+			parseFloatVersion += 1;
+			return mod.parseFloatHex;
+		});
+		return parseFloatImportPromise;
+	}
+
+	function parseQuoteFloat(hexAmount: string, decimals: number): bigint {
+		if (!parseFloatHexFn) {
+			void loadParseFloatHex();
+			return 0n;
+		}
+		return parseFloatHexFn(hexAmount, decimals);
+	}
 
 	// Analytics tracking
 	let panelOpenTime = Date.now();
@@ -103,7 +126,24 @@
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
 
 	// TanStack Query for quotes — polls every 15s, retries on failure, preserves stale data
-	$: orderbookQuery = createTokenOrderbookQuotesQuery($currentNetwork, selectedTokenAddress);
+	$: orderbookQuery = createQuery<OrderbookQuoteCache>({
+		queryKey: ['tokenOrderbookQuotes', $currentNetwork?.id, selectedTokenAddress],
+		enabled: browser && Boolean($currentNetwork && selectedTokenAddress),
+		staleTime: 30_000,
+		retry: 2,
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+		refetchOnMount: 'always',
+		refetchInterval: 15_000,
+		refetchOnWindowFocus: true,
+		refetchIntervalInBackground: false,
+		queryFn: async () => {
+			if (!browser || !$currentNetwork || !selectedTokenAddress) {
+				return { summary: {}, quotes: [] };
+			}
+			const { refreshTokenQuotes } = await import('$lib/queries/orderbook');
+			return refreshTokenQuotes($currentNetwork.id, selectedTokenAddress);
+		}
+	});
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
 	$: isLoadingQuotes = $orderbookQuery.isPending && !$orderbookQuery.data;
 	$: quoteFetchError = $orderbookQuery.isError;
@@ -221,6 +261,7 @@
 	// ============ MAX LIQUIDITY CALCULATION ============
 	// Calculate maximum USDC that can be spent when buying
 	$: maxBuyUsdcAvailable = (() => {
+		parseFloatVersion;
 		if (askQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
 		let totalUsdc = 0n;
 		const paymentDecimals = paymentToken.decimals ?? 6;
@@ -232,7 +273,7 @@
 			let maxAssetAvailable = 0n;
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
 				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
-				maxAssetAvailable = parseFloatHex(q.maxOutput, outputDecimals);
+				maxAssetAvailable = parseQuoteFloat(q.maxOutput, outputDecimals);
 			}
 			if (maxAssetAvailable <= 0n) continue;
 			const usdcForQuote = BigInt(
@@ -245,6 +286,7 @@
 
 	// Calculate maximum tokens that can be bought (sum of ask maxOutput)
 	$: maxBuyTokensAvailable = (() => {
+		parseFloatVersion;
 		if (askQuotes.length === 0 || !selectedToken) return 0;
 		let totalTokens = 0n;
 		const assetDecimals = selectedToken.decimals ?? 18;
@@ -253,7 +295,7 @@
 			let maxAssetAvailable = 0n;
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
 				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
-				maxAssetAvailable = parseFloatHex(q.maxOutput, outputDecimals);
+				maxAssetAvailable = parseQuoteFloat(q.maxOutput, outputDecimals);
 				if (outputDecimals !== assetDecimals) {
 					const scale = 10n ** BigInt(Math.abs(assetDecimals - outputDecimals));
 					maxAssetAvailable =
@@ -267,6 +309,7 @@
 
 	// Calculate maximum tokens that can be sold
 	$: maxSellTokensAvailable = (() => {
+		parseFloatVersion;
 		if (bidQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
 		let totalTokens = 0n;
 		const paymentDecimals = paymentToken.decimals ?? 6;
@@ -278,7 +321,7 @@
 			let maxUsdcFromBid = 0n;
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
 				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
-				maxUsdcFromBid = parseFloatHex(q.maxOutput, outputDecimals);
+				maxUsdcFromBid = parseQuoteFloat(q.maxOutput, outputDecimals);
 			}
 			if (maxUsdcFromBid <= 0n) continue;
 			const tokensForBid = BigInt(
@@ -291,6 +334,7 @@
 
 	// Calculate maximum USDC that can be received when selling (sum of bid maxOutput)
 	$: maxSellUsdcAvailable = (() => {
+		parseFloatVersion;
 		if (bidQuotes.length === 0 || !paymentToken) return 0;
 		let totalUsdc = 0n;
 		const paymentDecimals = paymentToken.decimals ?? 6;
@@ -299,7 +343,7 @@
 			let maxUsdcFromBid = 0n;
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
 				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
-				maxUsdcFromBid = parseFloatHex(q.maxOutput, outputDecimals);
+				maxUsdcFromBid = parseQuoteFloat(q.maxOutput, outputDecimals);
 				if (outputDecimals !== paymentDecimals) {
 					const scale = 10n ** BigInt(Math.abs(paymentDecimals - outputDecimals));
 					maxUsdcFromBid =
@@ -312,15 +356,18 @@
 	})();
 
 	// ============ QUOTE CALCULATION ============
-	$: quote = computeQuote(
-		isBuying,
-		lastEditedField,
-		topAmount,
-		bottomAmount,
-		askQuotes,
-		bidQuotes,
-		selectedToken,
-		paymentToken
+	$: quote = (
+		parseFloatVersion,
+		computeQuote(
+			isBuying,
+			lastEditedField,
+			topAmount,
+			bottomAmount,
+			askQuotes,
+			bidQuotes,
+			selectedToken,
+			paymentToken
+		)
 	);
 
 	$: syncOtherField(quote, lastEditedField);
@@ -471,7 +518,7 @@
 			let maxAssetAvailable = 0n;
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
 				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
-				maxAssetAvailable = parseFloatHex(q.maxOutput, outputDecimals);
+				maxAssetAvailable = parseQuoteFloat(q.maxOutput, outputDecimals);
 				if (outputDecimals !== assetDecimals) {
 					const scale = 10n ** BigInt(Math.abs(assetDecimals - outputDecimals));
 					maxAssetAvailable =
@@ -523,7 +570,7 @@
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
 				const outputDecimals =
 					q.outputTokenDecimals ?? (direction === 'buy' ? assetDecimals : paymentDecimals);
-				maxAvailable = parseFloatHex(q.maxOutput, outputDecimals);
+				maxAvailable = parseQuoteFloat(q.maxOutput, outputDecimals);
 			}
 			if (maxAvailable <= 0n) continue;
 
@@ -582,7 +629,7 @@
 			let maxUsdcFromBid = 0n;
 			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
 				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
-				maxUsdcFromBid = parseFloatHex(q.maxOutput, outputDecimals);
+				maxUsdcFromBid = parseQuoteFloat(q.maxOutput, outputDecimals);
 			}
 			if (maxUsdcFromBid <= 0n) continue;
 
@@ -689,6 +736,9 @@
 		tradeError = null;
 
 		try {
+			const { executeMarketOrder, filterQuotesForSide, sortQuotesByPrice } = await import(
+				'$lib/services/marketOrderExecution'
+			);
 			const relevantQuotes = filterQuotesForSide(
 				quotes,
 				orderSide,
