@@ -19,6 +19,13 @@ import {
 	type TakeOrderTranscript,
 	type TakeOrderFailureReason
 } from '$lib/services/observability/captureTakeOrderFailure';
+import { getCurrentTradeId } from '$lib/services/observability/tradeId';
+
+// OBS-09 (Plan 02-02 Task 2): mock the tradeId module so tests can drive
+// `getCurrentTradeId()` to return either a uuid string or null.
+vi.mock('$lib/services/observability/tradeId', () => ({
+	getCurrentTradeId: vi.fn(() => null)
+}));
 
 function makeTranscript(overrides: Partial<TakeOrderTranscript> = {}): TakeOrderTranscript {
 	return {
@@ -190,6 +197,63 @@ describe('captureTakeOrderFailure', () => {
 			([, opts]) => (opts as { tags: { failure_reason: string } }).tags.failure_reason
 		);
 		expect(tagsSeen).toEqual(reasons);
+	});
+
+	describe('trade_id correlation tag (OBS-09 / Plan 02-02 Task 2)', () => {
+		it('Test 1: includes trade_id in tags when getCurrentTradeId returns a string', () => {
+			const fakeTradeId = '550e8400-e29b-41d4-a716-446655440000';
+			vi.mocked(getCurrentTradeId).mockReturnValue(fakeTradeId);
+			const captureSpy = vi.spyOn(Sentry, 'captureException');
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+
+			captureTakeOrderFailure(new Error('x'), makeTranscript(), 'no_quotes_available');
+
+			expect(captureSpy).toHaveBeenCalledTimes(1);
+			const [, opts] = captureSpy.mock.calls[0] as [
+				unknown,
+				{ tags: Record<string, string> }
+			];
+			expect(opts.tags.trade_id).toBe(fakeTradeId);
+			// Existing tags still present + unchanged (Test 4 regression guard)
+			expect(opts.tags.failure_reason).toBe('no_quotes_available');
+			expect(opts.tags.side).toBe('ask');
+		});
+
+		it('Test 2: omits trade_id key from tags when getCurrentTradeId returns null', () => {
+			vi.mocked(getCurrentTradeId).mockReturnValue(null);
+			const captureSpy = vi.spyOn(Sentry, 'captureException');
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+
+			captureTakeOrderFailure(new Error('x'), makeTranscript(), 'no_quotes_available');
+
+			const [, opts] = captureSpy.mock.calls[0] as [
+				unknown,
+				{ tags: Record<string, string> }
+			];
+			// Critical: literally no `trade_id` key — assert via Object.keys, not `== null`,
+			// per acceptance criteria. The conditional spread `...(tradeId ? {...} : {})`
+			// must produce an object with no `trade_id` property at all.
+			expect(Object.keys(opts.tags)).not.toContain('trade_id');
+		});
+
+		it('Test 4: failure_reason and side tags unchanged regardless of trade_id presence', () => {
+			vi.mocked(getCurrentTradeId).mockReturnValue('550e8400-e29b-41d4-a716-446655440000');
+			const captureSpy = vi.spyOn(Sentry, 'captureException');
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+
+			captureTakeOrderFailure(
+				new Error('x'),
+				makeTranscript({ side: 'bid' }),
+				'aggregated_failed'
+			);
+
+			const [, opts] = captureSpy.mock.calls[0] as [
+				unknown,
+				{ tags: Record<string, string> }
+			];
+			expect(opts.tags.failure_reason).toBe('aggregated_failed');
+			expect(opts.tags.side).toBe('bid');
+		});
 	});
 
 	it('TakeOrderTranscript carries the D-08 fields (compile-time + runtime shape)', () => {

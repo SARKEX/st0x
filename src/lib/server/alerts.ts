@@ -63,16 +63,12 @@ export async function notifyChainExhausted(
 
 	const url = `https://api.telegram.org/bot${cfg.botToken}/sendMessage`;
 
-	try {
-		await fetch(url, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ chat_id: cfg.chatId, text }),
-			signal: AbortSignal.timeout(3000)
-		});
-	} catch (err) {
-		// Logged by caller (rpcMetrics.reportChainExhausted) so the alert-delivery-failure
-		// shows up next to the chain-exhausted log line. Rethrow so caller can record it.
-		throw err;
-	}
+	// Errors propagate to caller (rpcMetrics.reportChainExhausted) which logs
+	// the alert-delivery-failure next to the chain-exhausted log line.
+	await fetch(url, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ chat_id: cfg.chatId, text }),
+		signal: AbortSignal.timeout(3000)
+	});
 }

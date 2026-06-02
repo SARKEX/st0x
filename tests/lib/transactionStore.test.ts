@@ -282,29 +282,35 @@ describe('transactionStore tests', () => {
 		{
 			name: 'DCA',
 			handler: (store: typeof transactionStore) =>
-				store.handleDcaDeploy({
-					outputToken: PAYMENT_TOKEN,
-					inputToken: STOXs[0],
-					budgetAmount: 1000000000000000000n,
-					selectedPeriod: '1',
-					selectedPeriodUnit: 'Days',
-					kickoff: '0.1',
-					baseline: '1',
-					minTradeAmount: 1000000000000000000n,
-					maxTradeAmount: 1000000000000000000n,
-					depositAmount: 2000000000000000000n
-				}),
+				store.handleDcaDeploy(
+					{
+						outputToken: PAYMENT_TOKEN,
+						inputToken: STOXs[0],
+						budgetAmount: 1000000000000000000n,
+						selectedPeriod: '1',
+						selectedPeriodUnit: 'Days',
+						kickoff: '0.1',
+						baseline: '1',
+						minTradeAmount: 1000000000000000000n,
+						maxTradeAmount: 1000000000000000000n,
+						depositAmount: 2000000000000000000n
+					},
+					{ order_type: 'dca', asset_symbol: 'tNVDA', payment_symbol: 'USDC' }
+				),
 			expectedFn: getDcaDeploymentArgs
 		},
 		{
 			name: 'Limit Order',
 			handler: (store: typeof transactionStore) =>
-				store.handleLimitDeploy({
-					outputToken: PAYMENT_TOKEN,
-					inputToken: STOXs[0],
-					ioRatio: '1',
-					depositAmount: 1000000000000000000n
-				}),
+				store.handleLimitDeploy(
+					{
+						outputToken: PAYMENT_TOKEN,
+						inputToken: STOXs[0],
+						ioRatio: '1',
+						depositAmount: 1000000000000000000n
+					},
+					{ order_type: 'limit', asset_symbol: 'tNVDA', payment_symbol: 'USDC' }
+				),
 			expectedFn: getLimitOrderDeploymentArgs
 		},
 		{

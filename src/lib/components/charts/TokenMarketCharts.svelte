@@ -573,10 +573,8 @@
 							// `interaction.mode = 'nearest'` will still surface them as
 							// `0.0000 @ $price` rows on hover, which reads as a real
 							// zero-volume order.
-							filter: (item: {
-								raw?: { y?: number };
-								parsed?: { y?: number };
-							}) => Number(item.raw?.y ?? item.parsed?.y ?? 0) > 0,
+							filter: (item: { raw?: { y?: number }; parsed?: { y?: number } }) =>
+								Number(item.raw?.y ?? item.parsed?.y ?? 0) > 0,
 							callbacks: {
 								label: (context: {
 									dataset?: { candlestick?: boolean; label?: string };

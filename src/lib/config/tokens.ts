@@ -161,7 +161,7 @@ export const TOKENS: CategorizedToken[] = [
 		// Using a hardcoded fallback until a replacement feed is wired up.
 		fallbackPrice: 82.5,
 		category: 'ST0x',
-		tradingViewSymbol: 'AMEX:SPLG',
+		tradingViewSymbol: 'AMEX:SPYM',
 		tradingViewMarket: 'america',
 		limitOrders: []
 	},
@@ -281,6 +281,25 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '0xb2fe0af6c828efefda3ffda664f919825a535aa28a0f19fc238945c7aff540b1',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:ARKK',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		// wtSGOV — iShares 0-3 Month Treasury Bond ETF. Added via st0x.registry
+		// PR #22 (ST0x-Technology/st0x.registry). This is the first ST0x wrapper
+		// expected to develop a non-1:1 wrap ratio over time (T-bill yield
+		// accrues into the vault, increasing assetsPerShare). Pyth feed wiring
+		// is upstream in rain.pyth PR #20.
+		chainId: base.id,
+		address: '0x78c31580c97101694C70022c83D570150c11e935',
+		unwrappedAddress: '0xc941C1506B7555Ba8C506Fb6c9b9CC259902d612',
+		symbol: 'wtSGOV',
+		decimals: 18,
+		name: 'Wrapped iShares 0-3 Month Treasury Bond ETF ST0x',
+		logoUrl: '/images/ishares.png',
+		priceFeedId: '0x8d6a29bb5ed522931d711bb12c4bbf92af986936e52af582032913b5ffcbf4d5',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:SGOV',
 		tradingViewMarket: 'america',
 		limitOrders: []
 	}

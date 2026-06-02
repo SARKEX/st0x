@@ -96,10 +96,7 @@ export async function walletListPost(
 			parsedAction = 'add';
 			if (wallets.includes(normalizedAddress)) {
 				return {
-					response: json(
-						{ error: `Address already in ${config.label} list` },
-						{ status: 400 }
-					),
+					response: json({ error: `Address already in ${config.label} list` }, { status: 400 }),
 					action: 'add',
 					address: normalizedAddress,
 					success: false,
@@ -112,10 +109,7 @@ export async function walletListPost(
 			const index = wallets.indexOf(normalizedAddress);
 			if (index === -1) {
 				return {
-					response: json(
-						{ error: `Address not found in ${config.label} list` },
-						{ status: 404 }
-					),
+					response: json({ error: `Address not found in ${config.label} list` }, { status: 404 }),
 					action: 'remove',
 					address: normalizedAddress,
 					success: false,

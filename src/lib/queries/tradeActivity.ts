@@ -7,6 +7,7 @@ import {
 	apiGetTradesBatch,
 	type ApiTradeByAddress
 } from '$lib/api/st0xApi';
+import { bucketTimestamp, TRADE_WINDOW_BUCKET_SECONDS } from '$lib/utils/timeWindow';
 
 export type TokenTradeActivityPayload = {
 	trades: ApiTradeByAddress[];
@@ -32,7 +33,10 @@ export function createTokenTradeActivityQuery(
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
-			const now = Math.floor(Date.now() / 1000);
+			// Bucket the window edge so consecutive polls produce identical
+			// startTime/endTime params — letting the upstream REST API serve them
+			// from one cache key instead of a fresh fan-out every second.
+			const now = bucketTimestamp(Math.floor(Date.now() / 1000), TRADE_WINDOW_BUCKET_SECONDS);
 			const from = now - WINDOW_SECONDS;
 			const PAGE_SIZE = 200;
 			let allTrades: ApiTradeByAddress[] = [];
@@ -40,7 +44,10 @@ export function createTokenTradeActivityQuery(
 
 			while (page <= 50) {
 				const response = await apiGetTradesByToken(primaryAddress!, page, PAGE_SIZE, from, now);
-				allTrades = allTrades.concat(response.trades);
+				// `?? []` because the upstream REST API occasionally omits `trades`
+				// on a paginated response; `[].concat(undefined)` returns
+				// `[undefined]`, which then poisons every downstream consumer.
+				allTrades = allTrades.concat(response.trades ?? []);
 				if (!response.pagination.hasMore) break;
 				page++;
 			}
@@ -103,7 +110,7 @@ export function createTakerTradesQuery(
 
 			while (page <= 10) {
 				const response = await apiGetTakerTrades(walletAddress!, { page, pageSize: PAGE_SIZE });
-				allTrades = allTrades.concat(response.trades);
+				allTrades = allTrades.concat(response.trades ?? []);
 				if (!response.pagination.hasMore) break;
 				page++;
 			}

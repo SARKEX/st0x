@@ -12,6 +12,7 @@ import { withConditionalCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
 import type { Network } from '$lib/config/network';
 import { normalizeAddress } from '$lib/utils/tokenMath';
+import { bucketTimestamp, TRADE_WINDOW_BUCKET_SECONDS } from '$lib/utils/timeWindow';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
 import type { ApiTradeByAddress, ApiTradesByAddressResponse } from '$lib/api/st0xApi';
 
@@ -187,10 +188,7 @@ function analyzeApiTrades(
 	return analyzed;
 }
 
-function aggregateNetwork(
-	network: Network,
-	analyzed: AnalyzedApiTrade[]
-): NetworkTradeStats {
+function aggregateNetwork(network: Network, analyzed: AnalyzedApiTrade[]): NetworkTradeStats {
 	const canonicalTokens = new Set<string>(
 		[...TOKENS, ...CRYPTO_TOKENS]
 			.filter((t) => t.chainId === network.chainId)
@@ -202,9 +200,7 @@ function aggregateNetwork(
 	let tradingVolume = 0;
 
 	const rows = new Map<string, TokenTradingRow & { transactions: Set<string> }>();
-	for (const token of [...TOKENS, ...CRYPTO_TOKENS].filter(
-		(t) => t.chainId === network.chainId
-	)) {
+	for (const token of [...TOKENS, ...CRYPTO_TOKENS].filter((t) => t.chainId === network.chainId)) {
 		const addr = normalizeAddress(token.address);
 		if (!addr) continue;
 		rows.set(addr, {
@@ -262,7 +258,9 @@ function aggregateNetwork(
 }
 
 async function computeTradeActivity(): Promise<PublicTradeActivityResponse> {
-	const now = Math.floor(Date.now() / 1000);
+	// Bucket the window edge so the per-token upstream fan-out reuses one cache
+	// key across recomputes instead of cache-busting on every second.
+	const now = bucketTimestamp(Math.floor(Date.now() / 1000), TRADE_WINDOW_BUCKET_SECONDS);
 	const from = now - WINDOW_SECONDS;
 
 	const perNetwork = await Promise.all(

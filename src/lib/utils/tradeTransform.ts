@@ -123,10 +123,7 @@ export function transformApiTakerTradesToDisplay(
 	return displayOrders;
 }
 
-function transformApiTradeEntry(
-	trade: ApiTradeByAddress,
-	chainId: number
-): DisplayOrder | null {
+function transformApiTradeEntry(trade: ApiTradeByAddress, chainId: number): DisplayOrder | null {
 	const inputAddr = trade.inputToken.address.toLowerCase();
 	const outputAddr = trade.outputToken.address.toLowerCase();
 

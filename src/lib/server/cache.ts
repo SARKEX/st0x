@@ -121,19 +121,34 @@ export async function withConditionalCache<T>(
 		console.warn('[Cache] Get failed, computing fresh:', error);
 	}
 
-	// Call the function
-	const result = await fn();
-
-	// Only cache if condition is met
-	if (shouldCache(result)) {
-		try {
-			await cacheSet(key, result, ttlSeconds);
-		} catch (cacheError) {
-			console.warn('[Cache] Set failed:', cacheError);
-		}
+	// Check if computation is already in progress (stampede protection).
+	// Shares the same lock map as withCache: one key → one in-flight compute,
+	// so concurrent cold callers await a single fan-out instead of each running
+	// their own.
+	const existingLock = computeLocks.get(key);
+	if (existingLock) {
+		return existingLock as Promise<T>;
 	}
 
-	return result;
+	const computePromise = (async () => {
+		try {
+			const result = await fn();
+			// Only cache if condition is met
+			if (shouldCache(result)) {
+				try {
+					await cacheSet(key, result, ttlSeconds);
+				} catch (cacheError) {
+					console.warn('[Cache] Set failed:', cacheError);
+				}
+			}
+			return result;
+		} finally {
+			computeLocks.delete(key);
+		}
+	})();
+
+	computeLocks.set(key, computePromise);
+	return computePromise;
 }
 
 // Cache keys for public API

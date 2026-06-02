@@ -47,7 +47,25 @@ export default defineConfig(({ mode }) => ({
 	},
 	build: {
 	  target: 'es2022',
-	  modulePreload: { polyfill: false }
+	  modulePreload: { polyfill: false },
+	  rollupOptions: {
+		output: {
+		  manualChunks(id) {
+			if (!id.includes('node_modules')) return;
+			if (id.includes('@tanstack/')) return 'tanstack-query';
+			if (
+			  id.includes('svelte-wagmi') ||
+			  id.includes('@wagmi/') ||
+			  id.includes('@web3modal/') ||
+			  id.includes('@walletconnect/') ||
+			  id.includes('viem') ||
+			  id.includes('ethers')
+			) {
+			  return 'wallet';
+			}
+		  }
+		}
+	  }
 	},
 	test: {
 	  server: {

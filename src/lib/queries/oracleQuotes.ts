@@ -1,4 +1,5 @@
 import { createQuery } from '@tanstack/svelte-query';
+import { browser } from '$app/environment';
 import type { Network } from '$lib/config/network';
 import { TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
 import { getNetworkOracleSnapshots, type OracleSnapshot } from '$lib/api/pyth';
@@ -35,7 +36,7 @@ async function fetchSpymPrice(): Promise<{
 export function createOracleQuotesQuery(network: Network | null) {
 	return createQuery<Record<string, OracleQuote>>({
 		queryKey: ['oracleQuotes', network?.id],
-		enabled: Boolean(network),
+		enabled: Boolean(browser && network),
 		refetchInterval: 15_000,
 		queryFn: async () => {
 			if (!network) return {};

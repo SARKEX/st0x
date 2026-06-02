@@ -14,7 +14,7 @@ import {
 	getTokenByAnyAddress
 } from '$lib/config/network';
 import { queryClient } from '$lib/clients/queryClient';
-import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
+import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from '$lib/types/orderPerspective';
 
 /**
  * Get the set of addresses that represent a token (wrapped + legacy) for matching quotes.
@@ -69,7 +69,7 @@ export function createOrderbookQuotesQuery(
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['orderbookQuotes', network?.id],
 		enabled: Boolean(browser && network),
-		staleTime: 15_000, // Match 15s poll; upstream API caches ~15s
+		staleTime: 30_000, // Stale after 30s (server caches at 15s)
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchInterval: pollInterval,
@@ -112,7 +112,7 @@ export function getQuotesForToken(
 }
 
 /** Minimum age (ms) of cached data before we re-fetch. Prevents redundant fetches. */
-const TOKEN_QUOTE_FRESHNESS_MS = 5_000;
+const TOKEN_QUOTE_FRESHNESS_MS = 20_000;
 
 /**
  * Fetch fresh quotes for a specific token and merge into global cache.
@@ -254,35 +254,21 @@ export function createTokenOrderbookQuotesQuery(
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
 		enabled: Boolean(browser && network && tokenAddress),
-		staleTime: 15_000, // Match 15s poll; upstream API caches ~15s
+		staleTime: 30_000, // Stale after 30s (server caches at 15s)
 		retry: 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchOnMount: 'always', // Always refresh when component mounts
 		refetchInterval: pollInterval, // Poll every 15s by default on trade pages
 		refetchOnWindowFocus: true, // Only refetch on focus if stale
 		refetchIntervalInBackground: false,
-		// Seed from global cache only when it was updated recently (avoid minutes-old books).
+		// Use global cache as initial data for instant display
 		initialData: () => {
 			if (!network || !tokenAddress) return undefined;
-			const globalState = queryClient.getQueryState(['orderbookQuotes', network.id]);
-			if (
-				!globalState?.dataUpdatedAt ||
-				Date.now() - globalState.dataUpdatedAt > 15_000
-			) {
-				return undefined;
-			}
 			return getQuotesForToken(network.id, tokenAddress);
 		},
 		initialDataUpdatedAt: () => {
 			if (!network) return undefined;
-			const globalState = queryClient.getQueryState(['orderbookQuotes', network.id]);
-			if (
-				!globalState?.dataUpdatedAt ||
-				Date.now() - globalState.dataUpdatedAt > 15_000
-			) {
-				return undefined;
-			}
-			return globalState.dataUpdatedAt;
+			return queryClient.getQueryState(['orderbookQuotes', network.id])?.dataUpdatedAt;
 		},
 		queryFn: async () => {
 			if (!network || !tokenAddress) {
@@ -302,20 +288,15 @@ export function createTokenOrderbookQuotesQuery(
  */
 export function invalidateOrderQueries(networkId?: number, tokenAddress?: string) {
 	if (tokenAddress && networkId) {
-		queryClient.invalidateQueries({
-			queryKey: ['tokenOrderbookQuotes', networkId, tokenAddress]
-		});
+		// Token-specific: fetch fresh data for this token and merge
 		refreshTokenQuotes(networkId, tokenAddress).catch((err) =>
 			console.error('[OrderbookQueries] Token refresh failed:', err)
 		);
 	} else {
+		// Full invalidation: refetch entire global cache
 		queryClient.invalidateQueries({ queryKey: ['orderbookQuotes'] });
-		if (networkId !== undefined) {
-			queryClient.invalidateQueries({ queryKey: ['tokenOrderbookQuotes', networkId] });
-		} else {
-			queryClient.invalidateQueries({ queryKey: ['tokenOrderbookQuotes'] });
-		}
 	}
+	// Always invalidate closed orders query
 	queryClient.invalidateQueries({ queryKey: ['closedOrders'] });
 }
 
@@ -324,13 +305,8 @@ export function invalidateOrderQueries(networkId?: number, tokenAddress?: string
  * Call this after priority data loads to ensure global cache is populated.
  */
 export async function prefetchGlobalOrders(networkId: number) {
-	const state = queryClient.getQueryState(['orderbookQuotes', networkId]);
 	const existing = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
-	const isFresh =
-		Boolean(existing?.quotes?.length) &&
-		Boolean(state?.dataUpdatedAt) &&
-		Date.now() - state!.dataUpdatedAt! < 15_000;
-	if (isFresh) {
+	if (existing?.quotes?.length) {
 		return;
 	}
 
@@ -341,6 +317,6 @@ export async function prefetchGlobalOrders(networkId: number) {
 			const summary = buildSummaryFromQuotes(quotes, networkId);
 			return { summary, quotes };
 		},
-		staleTime: 15_000
+		staleTime: 30_000
 	});
 }

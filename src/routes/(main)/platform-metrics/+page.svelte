@@ -12,11 +12,7 @@
 	import { derived } from 'svelte/store';
 	import { onMount, onDestroy } from 'svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
-	import {
-		createTokenLookup,
-		normalizeAddress,
-		type TokenLookup
-	} from '$lib/utils/tokenMath';
+	import { createTokenLookup, normalizeAddress, type TokenLookup } from '$lib/utils/tokenMath';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
@@ -112,8 +108,7 @@
 			tradeActivity = (await response.json()) as PublicTradeActivityResponse;
 		} catch (error) {
 			console.error('Failed to load trade activity:', error);
-			tradeActivityError =
-				error instanceof Error ? error.message : 'Failed to load trade activity';
+			tradeActivityError = error instanceof Error ? error.message : 'Failed to load trade activity';
 			tradeActivity = null;
 		} finally {
 			tradeActivityLoading = false;

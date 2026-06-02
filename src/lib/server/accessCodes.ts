@@ -82,6 +82,7 @@ const devStore = {
 function pickFromAlphabet(alphabet: string): string {
 	const n = alphabet.length;
 	const limit = Math.floor(256 / n) * n;
+	// eslint-disable-next-line no-constant-condition
 	while (true) {
 		const byte = crypto.randomBytes(1)[0];
 		if (byte < limit) return alphabet[byte % n];
@@ -143,8 +144,7 @@ export async function verifyWalletSignature(
 		});
 		return valid;
 	} catch (error) {
-		const status_or_error =
-			error instanceof Error ? error.message : 'Unknown verification error';
+		const status_or_error = error instanceof Error ? error.message : 'Unknown verification error';
 		recordRpcAttempt({
 			rpc_url: 'fallback-chain-base',
 			fn: 'verifyWalletSignature',

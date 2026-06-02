@@ -48,7 +48,13 @@ import {
 	type TakeOrderTranscript,
 	type TakeOrderFailureReason
 } from '$lib/services/observability/captureTakeOrderFailure';
-import { getMakerInputIOIndex, getMakerOutputIOIndex, getMakerInputTokenAddress, getMakerOutputTokenAddress } from "$lib/types/orderPerspective";
+import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
+import {
+	getMakerInputIOIndex,
+	getMakerOutputIOIndex,
+	getMakerInputTokenAddress,
+	getMakerOutputTokenAddress
+} from '$lib/types/orderPerspective';
 import { withRetry } from '$lib/utils/retry';
 
 // TRADE-03 (Plan 02-06): pre-flight + auto-walk depth bound. Two walks max — the
@@ -117,12 +123,43 @@ export interface MarketOrderInput {
 
 	// Network
 	network: Network;
-
 }
 
 export interface MarketOrderResult {
 	success: boolean;
 	error?: string;
+	/**
+	 * Discriminated error category for the UI — set whenever `success` is false
+	 * so the component can render the right `data-error-class` (and PostHog event
+	 * picks up the right `error_class`) without substring-matching the
+	 * user-facing `error` string. Maps internal `TakeOrderFailureReason` codes
+	 * to the user-facing `ErrorClass` taxonomy used by tradeEvents + the D-09
+	 * error-banner. Absent on success.
+	 */
+	errorClass?: ErrorClass;
+}
+
+/**
+ * Pure mapping from internal failure reason to the user-facing `ErrorClass`
+ * taxonomy. Centralised here so the component never has to re-parse the
+ * user-facing error string (the CodeRabbit-flagged brittleness).
+ */
+function errorClassForReason(reason: TakeOrderFailureReason): ErrorClass {
+	switch (reason) {
+		case 'no_quotes_available':
+		case 'no_walk_fills':
+		case 'preflight_order_vanished':
+			return 'no_liquidity';
+		case 'auto_retry_exhausted':
+			return 'auto_retry_exhausted';
+		case 'preflight_chain_unreachable':
+			return 'preflight_chain_unreachable';
+		case 'unhydrated_fills':
+		case 'aggregated_failed':
+		case 'caught_exception':
+		default:
+			return 'unknown';
+	}
 }
 
 function getQuoteMakerAddress(quote: ProcessedQuote): string | null {
@@ -137,7 +174,10 @@ function getQuoteMakerAddress(quote: ProcessedQuote): string | null {
 	return null;
 }
 
-export function excludeTakerOwnedQuotes(quotes: ProcessedQuote[], takerAddress: string): ProcessedQuote[] {
+export function excludeTakerOwnedQuotes(
+	quotes: ProcessedQuote[],
+	takerAddress: string
+): ProcessedQuote[] {
 	const normalizedTaker = takerAddress.toLowerCase();
 	return quotes.filter((quote) => {
 		const maker = getQuoteMakerAddress(quote);
@@ -195,9 +235,9 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		reason: TakeOrderFailureReason,
 		errOrMessage: unknown,
 		userFacingError: string
-	) => {
+	): MarketOrderResult => {
 		captureTakeOrderFailure(errOrMessage, transcript, reason);
-		return { success: false, error: userFacingError };
+		return { success: false, error: userFacingError, errorClass: errorClassForReason(reason) };
 	};
 
 	try {
@@ -312,10 +352,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 						const sgResult = raindexOrder.convertToSgOrder();
 						if (sgResult.error || !sgResult.value) return;
 						const sgOrder = sgResult.value;
-						const decoded = AbiCoder.defaultAbiCoder().decode(
-							[OrderV4_ABI],
-							sgOrder.orderBytes
-						);
+						const decoded = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
 						const orderData = normalizeOrderData(decoded[0] as OrderV4);
 						for (const fill of walkResult.fills) {
 							if (fill.quote.orderHash === hash) {
@@ -408,9 +445,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			if (preflightResult.error || !preflightResult.value) {
 				return failWith(
 					'preflight_chain_unreachable',
-					new Error(
-						preflightResult.error?.readableMsg ?? 'getOrderQuotesBatch returned no value'
-					),
+					new Error(preflightResult.error?.readableMsg ?? 'getOrderQuotesBatch returned no value'),
 					'Unable to verify orderbook state. Please refresh quotes and retry.'
 				);
 			}
@@ -456,7 +491,9 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				return failWith(
 					'preflight_order_vanished',
 					new Error(
-						`All ${targetedOrders.length} candidate orders failed pre-flight at walk level ${preflightWalkCount + 1}`
+						`All ${targetedOrders.length} candidate orders failed pre-flight at walk level ${
+							preflightWalkCount + 1
+						}`
 					),
 					'No liquidity available right now for this size. Try a smaller amount or check back in a minute.'
 				);
@@ -492,10 +529,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		// Sell → input=payment/output=asset.
 		const survivorAssetTotal = workingFills.reduce((acc, f) => acc + f.assetAmount, 0n);
 		const survivorPaymentTotal = workingFills.reduce((acc, f) => acc + f.paymentAmount, 0n);
-		walkResult.inputAmountFilled =
-			orderSide === 'Buy' ? survivorAssetTotal : survivorPaymentTotal;
-		walkResult.outputAmountGiven =
-			orderSide === 'Buy' ? survivorPaymentTotal : survivorAssetTotal;
+		walkResult.inputAmountFilled = orderSide === 'Buy' ? survivorAssetTotal : survivorPaymentTotal;
+		walkResult.outputAmountGiven = orderSide === 'Buy' ? survivorPaymentTotal : survivorAssetTotal;
 		// === END TRADE-03 pre-flight block ===
 
 		// NOTE: Slippage cap (priceCap) constructed above operates on the survivors from
@@ -571,7 +606,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		const isSpendAnchored = orderSide === 'Sell' || inputMode === 'spend';
 		const aggregatedParams: TakeOrdersParams = {
 			orderData: firstQuote.orderData as OrderV4,
-			ioIndexes: { input: getMakerInputIOIndex(firstQuote) ?? 0, output: getMakerOutputIOIndex(firstQuote) ?? 0 },
+			ioIndexes: {
+				input: getMakerInputIOIndex(firstQuote) ?? 0,
+				output: getMakerOutputIOIndex(firstQuote) ?? 0
+			},
 			takerWantsToken: toTokenInfo(isBuy ? assetToken : paymentToken),
 			takerPaysToken: toTokenInfo(isBuy ? paymentToken : assetToken),
 			requestedTakerWantsAmount: isBuy && inputMode !== 'spend' ? amount : inputAmountFilled,
@@ -631,6 +669,25 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		}
 		const { status, error: txError } = get(transactionStoreInternal);
 		if (status === TransactionStatus.SUCCESS) {
+			// OBS-07 (Plan 02-03 Task 1b): SDK callback boundary collapse.
+			// `handleAggregatedTakeOrdersCalldata` / `handleOracleOrders` already block
+			// through wallet-sign → on-chain dispatch → receipt confirmation by the
+			// time control returns here. There is no per-callback hook at this layer
+			// to distinguish "broadcast" (post-dispatch, pre-confirm) from "confirmed"
+			// (post-receipt). Per plan §Task 1b: emit BOTH back-to-back at the same
+			// boundary so the funnel contract holds (Plan 04 §3 OBS-08 funnel definition).
+			trackTradeEvent('broadcast', {
+				order_type: 'market',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: assetToken.symbol,
+				payment_symbol: paymentToken.symbol
+			});
+			trackTradeEvent('confirmed', {
+				order_type: 'market',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: assetToken.symbol,
+				payment_symbol: paymentToken.symbol
+			});
 			return { success: true };
 		}
 		if (status === TransactionStatus.ERROR) {

@@ -1,9 +1,0 @@
-/registry/settings.yaml
-fixed-limit /registry/fixed-limit.rain
-auction-dca /registry/auction-dca.rain
-grid /registry/grid.rain
-dynamic-spread /registry/dynamic-spread.rain
-canary /registry/canary.rain
-claims /registry/claims.rain
-fixed-spread /registry/fixed-spread.rain
-folio /registry/folio.rain

@@ -18,6 +18,12 @@
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
+	import {
+		wrapExplainerOpen,
+		openWrapExplainer,
+		closeWrapExplainer
+	} from '$lib/stores/wrapExplainerStore';
+	import { panelDenom } from '$lib/stores/panelDenomStore';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
 	import type { SgTrade } from '@rainlanguage/orderbook';
@@ -30,6 +36,13 @@
 		OHLCBucket
 	} from '$lib/components/charts/token-chart-types';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
+	import WrapRatioChip from '$lib/components/wrap/WrapRatioChip.svelte';
+	import WrapRatioCard from '$lib/components/wrap/WrapRatioCard.svelte';
+	import WrapExplainerModal from '$lib/components/wrap/WrapExplainerModal.svelte';
+	import DenomToggle from '$lib/components/wrap/DenomToggle.svelte';
+	import RatioHistoryTab from '$lib/components/wrap/RatioHistoryTab.svelte';
+	import { createExchangeRatesQuery, resolveRatio } from '$lib/queries/exchangeRates';
+	import { priceScale as denomPriceScale } from '$lib/utils/wrapDenom';
 	import { extractBaseSymbol } from '$lib/utils/tradingViewSymbols';
 	import {
 		analyzeTrade,
@@ -57,8 +70,7 @@
 	import {
 		createTokenTradeActivityQuery,
 		createTakerTradesQuery,
-		createBatchTradesQuery,
-		type TokenTradeActivityPayload
+		createBatchTradesQuery
 	} from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -104,6 +116,7 @@
 		currentToken?.address ?? null
 	);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	const exchangeRatesQuery = createExchangeRatesQuery();
 	$: {
 		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
 			$currentNetwork,
@@ -112,6 +125,91 @@
 		tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	}
+
+	// Wrap ratio (assetsPerShare) for the current wrapped token. Defaults to 1
+	// when the API lookup is missing — parity wrappers stay 1:1 and the chip /
+	// callouts hide themselves.
+	$: currentRatio = resolveRatio(
+		$exchangeRatesQuery.data ?? null,
+		currentPythToken?.address ?? currentToken?.address ?? null
+	);
+	// Sticky `hasRatio`: once we've ever resolved a non-1 ratio for the current
+	// token, keep the chip + Ratio History tab visible even if a later refetch
+	// transiently flips currentRatio back to 1 (the safe fallback inside
+	// resolveRatio). Without this stickiness, the chip flickers in/out during
+	// exchange-rates polling, TOKEN_TABS recomputes, and handleTokenTabChange
+	// rejects ratio-tab clicks that race the dropout window. Keyed by the
+	// resolved token address so navigating between tokens correctly resets.
+	let hasEverHadRatioForToken: { address: string; value: boolean } | null = null;
+	$: {
+		const addr = (currentPythToken?.address ?? currentToken?.address ?? '').toLowerCase();
+		const isNonOne = Number.isFinite(currentRatio) && currentRatio !== 1;
+		if (!hasEverHadRatioForToken || hasEverHadRatioForToken.address !== addr) {
+			hasEverHadRatioForToken = { address: addr, value: isNonOne };
+		} else if (isNonOne && !hasEverHadRatioForToken.value) {
+			hasEverHadRatioForToken = { address: addr, value: true };
+		}
+	}
+	$: hasRatio = hasEverHadRatioForToken?.value ?? false;
+
+	// "Ratio History" tab only shows when this wrapper actually has a non-1
+	// ratio — keeps the tab strip lean for parity tokens.
+	$: TOKEN_TABS = (
+		hasRatio
+			? [
+					{ id: 'contract', label: 'Contract' },
+					{ id: 'ratio', label: 'Ratio History' },
+					{ id: 'supply', label: 'Supply' },
+					{ id: 'mints', label: 'Mints' },
+					{ id: 'burns', label: 'Burns' }
+				]
+			: [
+					{ id: 'contract', label: 'Contract' },
+					{ id: 'supply', label: 'Supply' },
+					{ id: 'mints', label: 'Mints' },
+					{ id: 'burns', label: 'Burns' }
+				]
+	) as ReadonlyArray<{ id: string; label: string; badge?: number | string | null }>;
+
+	// Table denomination — shares (t*) matches chart/oracle, wrapped (wt*)
+	// matches wallet balance. Default to shares; user toggles via DenomToggle.
+	let tableDenom: 'unwrapped' | 'wrapped' = 'unwrapped';
+	function handleDenomChange(event: CustomEvent<'unwrapped' | 'wrapped'>) {
+		tableDenom = event.detail;
+	}
+
+	// Price scaling for charts: OHLC + depth arrive in USD per wt* (the
+	// orderbook's native unit). Toggling to 'unwrapped' rescales by dividing
+	// by the ratio so the chart axis labels become USD per share. Identity
+	// transform when ratio is 1 (most tokens today). See `$lib/utils/wrapDenom`
+	// for the shared denom helpers used here and in OrdersTable.
+	$: priceScale = denomPriceScale(tableDenom, currentRatio);
+	$: displayOhlcData =
+		priceScale === 1
+			? ohlcData
+			: ohlcData.map((c) => ({
+					x: c.x,
+					o: c.o * priceScale,
+					h: c.h * priceScale,
+					l: c.l * priceScale,
+					c: c.c * priceScale
+				}));
+	$: displayOrderbookDepth =
+		priceScale === 1
+			? orderbookDepth
+			: {
+					bids: orderbookDepth.bids.map((b) => ({ ...b, price: b.price * priceScale })),
+					asks: orderbookDepth.asks.map((a) => ({ ...a, price: a.price * priceScale }))
+				};
+
+	// Explainer modal state imported from $lib/stores/wrapExplainerStore.ts.
+	// Module-level store decouples open/close propagation from this component's
+	// 100+-var reactive graph — clicks on the chip's onLearnMore prop callback
+	// flow directly through Svelte's store subscription machinery rather than
+	// through the trade page's per-component dirty-bit accounting (which races
+	// on the 6th word boundary under suite-level load and intermittently
+	// dropped updates when the state lived as a top-level `let` or per-
+	// component `writable`).
 
 	// One-shot: fetch legacy address quotes once per token
 	let legacyQuotesFetchedFor: string | null = null;
@@ -272,13 +370,7 @@
 	] as const;
 	type AssetTabId = (typeof ASSET_TABS)[number]['id'];
 	let activeAssetTab: AssetTabId = 'company';
-	const TOKEN_TABS = [
-		{ id: 'contract', label: 'Contract' },
-		{ id: 'supply', label: 'Supply' },
-		{ id: 'mints', label: 'Mints' },
-		{ id: 'burns', label: 'Burns' }
-	] as const;
-	type TokenTabId = (typeof TOKEN_TABS)[number]['id'];
+	type TokenTabId = 'contract' | 'ratio' | 'supply' | 'mints' | 'burns';
 	let activeTokenTab: TokenTabId = 'contract';
 	const ONCHAIN_TABS = [
 		{ id: 'market', label: 'Market Data' },
@@ -379,6 +471,7 @@
 		{ key: '7D', label: '7D' },
 		{ key: '30D', label: '30D' }
 	];
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const tradeToPoint = (
 		trade: SgTrade,
 		assetAddress: string,
@@ -578,7 +671,10 @@
 	// Uses lastTrackedTokenId to ensure tracking fires for each new token during client-side navigation
 	$: if (currentPythToken?.symbol && $page.params.id !== lastTrackedTokenId) {
 		lastTrackedTokenId = $page.params.id;
-		trackPageView('trade_page', {
+		// OBS-08 (Plan 02-03 Task 2c, checker fix #7): emit `page_viewed` with
+		// `page: 'trade'` so the funnel filter (`page === 'trade'`) works at the
+		// intent step. Was previously `'trade_page'` which the funnel cannot match.
+		trackPageView('trade', {
 			token_symbol: currentPythToken.symbol,
 			token_id: $page.params.id
 		});
@@ -601,12 +697,12 @@
 		}
 	};
 	$: currentFeedId = browser ? currentPythToken?.priceFeedId ?? null : null;
-	const handleTokenTabChange = (event: CustomEvent<{ id: string }>) => {
+	function handleTokenTabChange(event: CustomEvent<{ id: string }>) {
 		const nextId = event.detail.id;
 		if (TOKEN_TABS.some((tab) => tab.id === nextId)) {
 			activeTokenTab = nextId as TokenTabId;
 		}
-	};
+	}
 	let showChartModal = false;
 	function openChartModal(event?: Event) {
 		event?.stopPropagation?.();
@@ -714,8 +810,8 @@
 		const assetAddress = (currentPythToken?.address ?? currentToken.address)?.toLowerCase();
 		const quoteAddress = settlementToken.address?.toLowerCase();
 		if (!assetAddress || !quoteAddress) return [];
-		const assetDecimals = Number(currentPythToken?.decimals ?? 18);
-		const quoteDecimals = Number(settlementToken.decimals ?? 6);
+		const _assetDecimals = Number(currentPythToken?.decimals ?? 18);
+		const _quoteDecimals = Number(settlementToken.decimals ?? 6);
 		const range = $tokenTradeQuery?.data?.range ?? null;
 		const now = Date.now();
 		const cutoff = range ? range.from * 1000 : now - TRADE_HISTORY_LOOKBACK_SECONDS * 1000;
@@ -885,9 +981,19 @@
 	$: modalTitle = tokenDisplaySymbol
 		? `Advanced Chart — ${tokenDisplayName} (${tokenDisplaySymbol})`
 		: `Advanced Chart — ${tokenDisplayName}`;
-	$: panelTokenLabel = tokenDisplaySymbol || currentToken?.symbol || tokenDisplayName;
+	// Display symbols for the trade panel. The wrapped symbol is the orderbook
+	// primitive (wtX); the unwrapped symbol is the underlying share (tX). The
+	// `panelDenom` store toggles which one we show in the panel's verb line,
+	// input field, balance row, summary, etc. — see `panelDenomStore.ts`.
+	$: panelWrappedSymbol =
+		currentPythToken?.symbol ?? currentToken?.symbol ?? tokenDisplaySymbol ?? tokenDisplayName;
+	$: panelAssetSymbol = panelWrappedSymbol.replace(/^wt/, 't');
+	$: panelTokenLabel = $panelDenom === 'unwrapped' ? panelAssetSymbol : panelWrappedSymbol;
 	$: panelSummaryVerb = panelOrderSide === 'Buy' ? 'Buying' : 'Selling';
 	$: panelSummaryPreposition = panelOrderSide === 'Buy' ? 'with' : 'for';
+	$: panelRatioCalloutDisplay = Number.isInteger(currentRatio)
+		? String(currentRatio)
+		: currentRatio.toLocaleString('en-US', { maximumFractionDigits: 4 });
 </script>
 
 <svelte:head>
@@ -916,6 +1022,32 @@
 	</div>
 {:else}
 	<div class="space-y-4 p-3 sm:space-y-6 sm:p-6">
+		{#if hasRatio}
+			<!-- Token title row with wrap-ratio chip — only when the token is a
+				 non-parity wrapper, otherwise it's noise. -->
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div class="min-w-0 leading-tight">
+					<h1 class="text-xl font-semibold leading-tight text-white sm:text-2xl">
+						{tokenDisplayName}
+					</h1>
+					<div
+						class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-400 sm:text-sm"
+					>
+						<span class="font-mono tabular-nums"
+							>{currentPythToken?.symbol ?? currentToken.symbol}</span
+						>
+						<span class="text-gray-600">·</span>
+						<span>Wrapped tStock on {$currentNetwork.displayName}</span>
+					</div>
+				</div>
+				<WrapRatioChip
+					ratio={currentRatio}
+					wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+					assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+					onLearnMore={openWrapExplainer}
+				/>
+			</div>
+		{/if}
 		<!-- Header Section with Chart -->
 		<div class="space-y-4 sm:space-y-6">
 			<div class="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-5">
@@ -1003,7 +1135,25 @@
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if buyPrice !== null}
-										${formatNumeric(buyPrice)}
+										{#if hasRatio && currentRatio > 0}
+											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+												/^wt/,
+												't'
+											)}
+											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+											<div class="leading-tight">
+												<div>
+													${formatNumeric(buyPrice / currentRatio)}
+													<span class="text-[10px] font-normal text-gray-500">/ {assetSym}</span>
+												</div>
+												<div class="mt-0.5 text-[11px] font-normal text-gray-400 sm:text-xs">
+													${formatNumeric(buyPrice)}
+													<span class="text-[10px] text-gray-500">/ {wrappedSym}</span>
+												</div>
+											</div>
+										{:else}
+											${formatNumeric(buyPrice)}
+										{/if}
 									{:else}
 										—
 									{/if}
@@ -1017,13 +1167,61 @@
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if sellPrice !== null}
-										${formatNumeric(sellPrice)}
+										{#if hasRatio && currentRatio > 0}
+											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+												/^wt/,
+												't'
+											)}
+											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+											<div class="leading-tight">
+												<div>
+													${formatNumeric(sellPrice / currentRatio)}
+													<span class="text-[10px] font-normal text-gray-500">/ {assetSym}</span>
+												</div>
+												<div class="mt-0.5 text-[11px] font-normal text-gray-400 sm:text-xs">
+													${formatNumeric(sellPrice)}
+													<span class="text-[10px] text-gray-500">/ {wrappedSym}</span>
+												</div>
+											</div>
+										{:else}
+											${formatNumeric(sellPrice)}
+										{/if}
 									{:else}
 										—
 									{/if}
 								</dd>
 							</div>
 						</dl>
+						{#if hasRatio && currentRatio > 0}
+							<!-- Wrap-ratio callout — mirrors the chip pattern. The "What's this?"
+								 button reuses the WrapExplainerStore so the same modal opens
+								 from every entry point. -->
+							{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+								/^wt/,
+								't'
+							)}
+							{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+							<div
+								class="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/5 pt-2 text-[11px] text-gray-400 sm:text-xs"
+							>
+								<span class="font-mono tabular-nums">
+									1 {wrappedSym} = {Number.isInteger(currentRatio)
+										? currentRatio
+										: currentRatio.toLocaleString('en-US', {
+												maximumFractionDigits: 4
+											})}
+									{assetSym}
+								</span>
+								<button
+									type="button"
+									on:click={openWrapExplainer}
+									data-testid="wrap-explainer-trigger"
+									class="inline-flex items-center gap-1 text-blue-300 transition hover:text-blue-200 hover:underline"
+								>
+									What's this?
+								</button>
+							</div>
+						{/if}
 						{#if oracleError}
 							<p class="mt-2 text-xs text-red-400 sm:mt-4">{oracleError}</p>
 						{/if}
@@ -1031,6 +1229,8 @@
 					<div class="grid grid-cols-2 gap-2 sm:gap-3" data-tutorial="buy-sell-buttons">
 						<button
 							type="button"
+							data-testid="open-trade"
+							data-side="buy"
 							class="rounded-xl bg-green-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
 							on:click={() => openTradePanel('Buy')}
 						>
@@ -1038,6 +1238,8 @@
 						</button>
 						<button
 							type="button"
+							data-testid="open-trade"
+							data-side="sell"
 							class="rounded-xl bg-red-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
 							on:click={() => openTradePanel('Sell')}
 						>
@@ -1111,56 +1313,69 @@
 								View on-chain trades, liquidity, orders, and vaults
 							</p>
 						</div>
-						{#if $isAuthenticated && !isEmbeddedWallet}
-							<button
-								type="button"
-								on:click={() =>
-									addTokenToWallet({
-										address: currentToken.address,
-										symbol: currentToken.symbol,
-										decimals: 18,
-										image: currentPythToken?.logoUrl
-									})}
-								class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
-							>
-								<!-- Wallet icon (mobile only) -->
-								<svg
-									class="h-4 w-4 sm:hidden"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
+						<div class="flex items-center gap-2">
+							{#if hasRatio}
+								<DenomToggle
+									value={tableDenom}
+									wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(
+										/^wt/,
+										't'
+									)}
+									on:change={handleDenomChange}
+								/>
+							{/if}
+							{#if $isAuthenticated && !isEmbeddedWallet}
+								<button
+									type="button"
+									on:click={() =>
+										addTokenToWallet({
+											address: currentToken.address,
+											symbol: currentToken.symbol,
+											decimals: 18,
+											image: currentPythToken?.logoUrl
+										})}
+									class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
 								>
-									<path
-										d="M21 12V7H5a2 2 0 0 1 0-4h14v4"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-									<path
-										d="M3 5v14a2 2 0 0 0 2 2h16v-5"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-									<path
-										d="M18 12a2 2 0 0 0 0 4h4v-4Z"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
-								<!-- Plus icon -->
-								<svg
-									class="h-3 w-3 sm:h-4 sm:w-4"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-								>
-									<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
-								</svg>
-								<span class="sm:hidden">Track</span>
-								<span class="hidden sm:inline">Track in Wallet</span>
-							</button>
-						{/if}
+									<!-- Wallet icon (mobile only) -->
+									<svg
+										class="h-4 w-4 sm:hidden"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											d="M21 12V7H5a2 2 0 0 1 0-4h14v4"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+										<path
+											d="M3 5v14a2 2 0 0 0 2 2h16v-5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+										<path
+											d="M18 12a2 2 0 0 0 0 4h4v-4Z"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+									<!-- Plus icon -->
+									<svg
+										class="h-3 w-3 sm:h-4 sm:w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+									</svg>
+									<span class="sm:hidden">Track</span>
+									<span class="hidden sm:inline">Track in Wallet</span>
+								</button>
+							{/if}
+						</div>
 					</div>
 					<TabNav
 						tabs={ONCHAIN_TABS}
@@ -1178,17 +1393,15 @@
 				<div class="min-h-[320px] sm:min-h-[440px]">
 					{#if activeOnchainTab === 'market'}
 						{#await import('$lib/components/charts/TokenMarketCharts.svelte')}
-							<div
-								class="flex min-h-[320px] items-center justify-center sm:min-h-[440px]"
-							>
+							<div class="flex min-h-[320px] items-center justify-center sm:min-h-[440px]">
 								<LoadingSpinner size="md" text="Loading market charts…" />
 							</div>
 						{:then Mod}
 							<svelte:component
 								this={Mod.default}
 								volumeBuckets={tradeVolumeBuckets}
-								depth={orderbookDepth}
-								{ohlcData}
+								depth={displayOrderbookDepth}
+								ohlcData={displayOhlcData}
 								rangeStartMs={historyRangeStartMs}
 								rangeEndMs={historyRangeEndMs}
 								isLoading={chartsLoading}
@@ -1198,7 +1411,11 @@
 								on:rangeChange={(e) => (historyRange = e.detail.key)}
 							/>
 							<div class="mt-2 hidden text-xs text-gray-400 sm:block">
-								All times are displayed in your local timezone
+								All times are displayed in your local timezone{#if hasRatio}
+									· prices in USD per {tableDenom === 'unwrapped'
+										? (currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't') +
+											' (share)'
+										: currentPythToken?.symbol ?? currentToken.symbol + ' (wrapped)'}{/if}
 							</div>
 						{:catch _err}
 							<div class="min-h-[320px] p-4 text-sm text-red-400 sm:min-h-[440px]">
@@ -1214,6 +1431,8 @@
 								errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
 								tokenAddress={currentToken?.address ?? null}
 								showTokenColumn={false}
+								denomination={tableDenom}
+								wrapRatio={currentRatio}
 							/>
 						</div>
 					{:else if activeOnchainTab === 'vaults'}
@@ -1420,6 +1639,18 @@
 					</div>
 					{#if activeTokenTab === 'contract'}
 						<div>
+							{#if hasRatio}
+								<WrapRatioCard
+									ratio={currentRatio}
+									wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(
+										/^wt/,
+										't'
+									)}
+									onLearnMore={openWrapExplainer}
+									onViewHistory={() => (activeTokenTab = 'ratio')}
+								/>
+							{/if}
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex items-center justify-between gap-2">
@@ -1478,6 +1709,21 @@
 									<span class="text-gray-400">Decimals</span>
 									<span>18</span>
 								</div>
+								{#if hasRatio}
+									<div class="flex justify-between">
+										<span class="text-gray-400">Wrap ratio</span>
+										<span class="font-mono tabular-nums"
+											>1 {currentPythToken?.symbol ?? currentToken.symbol} ↔ {Number.isInteger(
+												currentRatio
+											)
+												? currentRatio
+												: currentRatio.toLocaleString('en-US', {
+														maximumFractionDigits: 4
+													})}
+											{(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}</span
+										>
+									</div>
+								{/if}
 								<div class="flex items-center justify-between">
 									<span class="text-gray-400">Proofs</span>
 									<a href={`/trade/${tokenId}/proofs`} class="text-blue-400 hover:text-blue-300">
@@ -1486,6 +1732,15 @@
 								</div>
 							</div>
 						</div>
+					{:else if activeTokenTab === 'ratio' && hasRatio}
+						<RatioHistoryTab
+							wrappedTokenAddress={currentPythToken?.address ?? currentToken.address}
+							wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
+							assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+							{currentRatio}
+							onLearnMore={openWrapExplainer}
+							txHrefBuilder={(tx) => `${$currentNetwork.blockExplorer}/tx/${tx}`}
+						/>
 					{:else if activeTokenTab === 'supply'}
 						<div>
 							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
@@ -1728,9 +1983,6 @@
 							{/if}
 							<div>
 								<h2 class="text-base font-semibold sm:text-lg">{tokenDisplayName}</h2>
-								{#if tokenDisplaySymbol}
-									<p class="text-xs text-gray-400 sm:text-sm">{tokenDisplaySymbol}</p>
-								{/if}
 							</div>
 						</div>
 						<button
@@ -1757,6 +2009,8 @@
 							<div class="grid grid-cols-2 gap-2 sm:gap-3" aria-label="Select order side">
 								<button
 									type="button"
+									data-testid="side-toggle"
+									data-side="buy"
 									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Buy'
 											? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
@@ -1768,6 +2022,8 @@
 								</button>
 								<button
 									type="button"
+									data-testid="side-toggle"
+									data-side="sell"
 									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Sell'
 											? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
@@ -1793,12 +2049,76 @@
 										/>
 									</span>
 								</div>
+								{#if hasRatio}
+									<button
+										type="button"
+										on:click={openWrapExplainer}
+										data-testid="wrap-explainer-trigger"
+										class="block text-left font-mono text-[11px] tabular-nums text-gray-500 transition hover:text-yellow-200 hover:underline sm:text-xs"
+									>
+										1 {panelWrappedSymbol} = {panelRatioCalloutDisplay}
+										{panelAssetSymbol}
+									</button>
+								{/if}
 								<div class="flex items-center gap-1 text-xs text-gray-400 sm:gap-2 sm:text-sm">
 									<span>On</span>
 									<img src="/images/BASE.svg" alt="Base" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
 									<span>{$currentNetwork.displayName}</span>
 								</div>
+								{#if hasRatio}
+									<label
+										class="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-white/5 bg-white/[0.03] p-2 text-xs text-gray-300 sm:text-sm"
+									>
+										<input
+											type="checkbox"
+											data-testid="panel-denom-toggle"
+											checked={$panelDenom === 'unwrapped'}
+											on:change={(e) =>
+												panelDenom.set(e.currentTarget.checked ? 'unwrapped' : 'wrapped')}
+											class="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-transparent text-yellow-400 focus:ring-yellow-400/40"
+										/>
+										<span class="flex-1 leading-snug">
+											Show wrapped token quantities in {panelAssetSymbol} equivalents
+											<span class="mt-0.5 block text-[10px] text-gray-500 sm:text-[11px]">
+												You're still trading wrapped tokens — only the displayed quantities and
+												prices change.
+											</span>
+										</span>
+									</label>
+								{/if}
 							</div>
+							<!--
+								E2E test hooks for mode selection. The Select below is the user-facing
+								control; these sr-only buttons let Playwright drive panelStrategy via
+								data-testid="mode-tab" without depending on <select> semantics. The
+								`sr-only` Tailwind utility hides them from sighted users while keeping
+								them in the accessibility tree. Full mode-tab UX retrofit lands in
+								Plan 01-03 per CONTEXT D-10.
+							-->
+							<button
+								type="button"
+								data-testid="mode-tab"
+								data-mode="market"
+								class="sr-only"
+								tabindex="-1"
+								on:click={() => (panelStrategy = 'market')}>Market</button
+							>
+							<button
+								type="button"
+								data-testid="mode-tab"
+								data-mode="limit"
+								class="sr-only"
+								tabindex="-1"
+								on:click={() => (panelStrategy = 'limit')}>Limit</button
+							>
+							<button
+								type="button"
+								data-testid="mode-tab"
+								data-mode="dca"
+								class="sr-only"
+								tabindex="-1"
+								on:click={() => (panelStrategy = 'dca')}>DCA</button
+							>
 							<label class="block space-y-1.5 sm:space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
 								<span
 									id={PANEL_STRATEGY_LABEL_ID}
@@ -1848,6 +2168,8 @@
 												: (buyPrice ?? oraclePriceData?.price)?.toFixed(4)}
 											{buyPrice}
 											{sellPrice}
+											displayDenom={$panelDenom}
+											wrapRatio={currentRatio}
 										/>
 									{:catch _err}
 										<div class="min-h-[420px] p-4 text-sm text-red-400">
@@ -1861,6 +2183,8 @@
 										{orderbookQuotesQuery}
 										{buyPrice}
 										{sellPrice}
+										displayDenom={$panelDenom}
+										wrapRatio={currentRatio}
 									/>
 								{:else if panelStrategy === 'dca'}
 									{#await import('$lib/components/orders/DcaOrder.svelte')}
@@ -1872,6 +2196,8 @@
 											this={Mod.default}
 											orderSide={panelOrderSide}
 											assetToken={currentPythToken}
+											displayDenom={$panelDenom}
+											wrapRatio={currentRatio}
 										/>
 									{:catch _err}
 										<div class="min-h-[420px] p-4 text-sm text-red-400">
@@ -2020,11 +2346,7 @@
 								<LoadingSpinner size="md" text="Loading TradingView chart…" />
 							</div>
 						{:then Mod}
-							<svelte:component
-								this={Mod.default}
-								symbol={tradingViewSymbol}
-								interval="60"
-							/>
+							<svelte:component this={Mod.default} symbol={tradingViewSymbol} interval="60" />
 						{:catch _err}
 							<div class="flex h-full items-center justify-center text-sm text-red-400">
 								Failed to load TradingView chart. Please reload the page.
@@ -2061,3 +2383,19 @@
 
 <!-- Vault Tutorial -->
 <VaultTutorial onSelectDexTab={handleVaultTutorialTabChange} />
+
+<!-- Wrap-ratio explainer (opened from chip / Contract-tab card / About).
+	 Mounted unconditionally so its internal `show` state survives parent
+	 re-renders (singleTokenQuery refetches briefly null currentToken, which
+	 would otherwise unmount the modal and reset `show` to false). Props
+	 fall back to safe empty strings when currentToken hasn't loaded — the
+	 user can't trigger the modal until the chip is visible, so this only
+	 matters during the initial-render window. -->
+<WrapExplainerModal
+	show={$wrapExplainerOpen}
+	ratio={currentRatio}
+	wrappedSymbol={currentPythToken?.symbol ?? currentToken?.symbol ?? ''}
+	assetSymbol={(currentPythToken?.symbol ?? currentToken?.symbol ?? '').replace(/^wt/, 't')}
+	equityName={currentToken?.name ?? currentToken?.symbol ?? ''}
+	onClose={closeWrapExplainer}
+/>

@@ -11,6 +11,11 @@
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { GetOrdersFilters } from '@rainlanguage/orderbook';
 	import type { DisplayOrder } from '$lib/types/orders';
+	import {
+		displayAmount as denomDisplayAmount,
+		displayPrice as denomDisplayPrice,
+		displaySymbol as denomDisplaySymbol
+	} from '$lib/utils/wrapDenom';
 
 	// Props
 	export let orders: DisplayOrder[] = [];
@@ -26,6 +31,34 @@
 
 	// For fetching closed orders (only needed when showClosedOrdersOption is true)
 	export let tokenAddress: string | null = null;
+
+	// Denomination — when set to 'unwrapped' the table re-labels and re-scales
+	// the per-token size, filled, and price columns to the underlying t* asset
+	// (= wt amount × ratio). Defaults to 'wrapped' so existing callers (e.g.
+	// the dashboard) keep their current behavior. The price column is treated
+	// as USD per wt*, so the unwrapped equivalent is `price / ratio`.
+	export let denomination: 'wrapped' | 'unwrapped' = 'wrapped';
+	export let wrapRatio: number = 1;
+	/** Override for the underlying symbol display when denomination='unwrapped'.
+	 *  Leave undefined to derive from `order.tokenSymbol` by stripping the `wt`
+	 *  prefix (wtCOIN → tCOIN). */
+	export let unwrappedSymbolOverride: string | undefined = undefined;
+
+	// Declared as reactive `$:` so the function identity changes whenever
+	// `denomination` or `wrapRatio` changes. Svelte 4 tracks template-expression
+	// dependencies by the variables it can see in the expression — `denomination`
+	// is hidden inside the function body and therefore invisible to the static
+	// analyzer, so a plain `function displayAmount(x)` declaration would render
+	// stale values when the toggle flips (the table header would update because
+	// it reads `denomination` directly, but the cell values would not). Rebinding
+	// the function on each toggle forces every `displayAmount(...)` /
+	// `displayPrice(...)` / `displaySymbol(...)` call site to re-run.
+	$: displaySymbol = (tokenSymbol: string): string =>
+		denomDisplaySymbol(tokenSymbol, denomination, unwrappedSymbolOverride);
+	$: displayAmount = (amount: number | null | undefined): number | null =>
+		denomDisplayAmount(amount, denomination, wrapRatio);
+	$: displayPrice = (price: number | null | undefined): number | null =>
+		denomDisplayPrice(price, denomination, wrapRatio);
 
 	// Filter state
 	let selectedOrdersFilter: 'my' | 'all' = 'my';
@@ -296,9 +329,26 @@
 						{/if}
 						<th class="pb-3 pr-4 font-medium">Direction</th>
 						<th class="pb-3 pr-4 font-medium">Status</th>
-						<th class="pb-3 pr-4 font-medium">Remaining</th>
-						<th class="pb-3 pr-4 font-medium">Filled</th>
-						<th class="pb-3 pr-4 font-medium">Price</th>
+						<th class="pb-3 pr-4 font-medium">
+							Remaining
+							{#if denomination === 'unwrapped'}
+								<span class="ml-1 normal-case text-gray-500">(shares)</span>
+							{/if}
+						</th>
+						<th class="pb-3 pr-4 font-medium">
+							Filled
+							{#if denomination === 'unwrapped'}
+								<span class="ml-1 normal-case text-gray-500">(shares)</span>
+							{/if}
+						</th>
+						<th class="pb-3 pr-4 font-medium">
+							Price
+							{#if denomination === 'unwrapped'}
+								<span class="ml-1 normal-case text-gray-500">/ share</span>
+							{:else if wrapRatio !== 1}
+								<span class="ml-1 normal-case text-gray-500">/ token</span>
+							{/if}
+						</th>
 						<th class="pb-3 pr-4 font-medium">
 							<span class="hidden sm:inline">Hash</span>
 							<span class="sm:hidden">Link</span>
@@ -351,13 +401,21 @@
 								</td>
 								<td class="py-3 pr-4 text-gray-300">—</td>
 								<td class="py-3 pr-4 text-gray-300">
-									{amount ? Number(amount).toFixed(3) : '—'}
-									{order.tokenSymbol}
+									{#if amount}
+										{@const converted = displayAmount(Number(amount))}
+										{converted != null ? converted.toFixed(3) : '—'}
+									{:else}
+										—
+									{/if}
+									{displaySymbol(order.tokenSymbol)}
 								</td>
 								<td class="py-3 pr-4 text-gray-300">
-									{order.price !== undefined && Number.isFinite(order.price)
-										? order.price.toFixed(3)
-										: '—'}
+									{#if order.price !== undefined && Number.isFinite(order.price)}
+										{@const px = displayPrice(order.price)}
+										{px != null ? px.toFixed(3) : '—'}
+									{:else}
+										—
+									{/if}
 								</td>
 								<td class="py-3 pr-4">
 									{#if txHash}
@@ -422,10 +480,6 @@
 									: maxOutputBigInt > 0n
 										? Number(formatUnits(maxOutputBigInt, tokenDecimals)).toFixed(3)
 										: '—'}
-							{@const currentPrice =
-								order.price !== undefined && order.price !== null && Number.isFinite(order.price)
-									? order.price.toFixed(3)
-									: '—'}
 							{@const isMyOrder = orderOwner.toLowerCase() === $walletAddress?.toLowerCase()}
 							{@const typeLabel =
 								order.type === 'dca' ? 'DCA' : order.type === 'custom' ? 'Custom' : 'Limit'}
@@ -477,18 +531,31 @@
 									{/if}
 								</td>
 								<td class="py-3 pr-4 text-gray-300">
-									{remainingAmount}
-									{order.tokenSymbol}
+									{#if remainingAmount === '—' || remainingAmount === 'n/a' || remainingAmount === '0'}
+										{remainingAmount}
+									{:else}
+										{@const conv = displayAmount(Number(remainingAmount))}
+										{conv != null ? conv.toFixed(3) : remainingAmount}
+									{/if}
+									{displaySymbol(order.tokenSymbol)}
 								</td>
 								<td class="py-3 pr-4 text-gray-300">
 									{#if order.filled !== undefined && order.filled > 0}
-										{order.filled.toFixed(3)}
-										{order.filledSymbol ?? order.tokenSymbol}
+										{@const conv = displayAmount(order.filled)}
+										{(conv ?? order.filled).toFixed(3)}
+										{displaySymbol(order.filledSymbol ?? order.tokenSymbol)}
 									{:else}
 										—
 									{/if}
 								</td>
-								<td class="py-3 pr-4 text-gray-300">{currentPrice}</td>
+								<td class="py-3 pr-4 text-gray-300">
+									{#if order.price !== undefined && order.price !== null && Number.isFinite(order.price)}
+										{@const px = displayPrice(order.price)}
+										{px != null ? px.toFixed(3) : '—'}
+									{:else}
+										—
+									{/if}
+								</td>
 								<td class="py-3 pr-4">
 									{#if quote}
 										{@const raindexUrl = getRaindexOrderUrl(

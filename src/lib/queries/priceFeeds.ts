@@ -1,4 +1,5 @@
 import { createQuery } from '@tanstack/svelte-query';
+import { browser } from '$app/environment';
 import type { Network } from '$lib/config/network';
 import { TOKENS } from '$lib/config/network';
 import { getPythQuotes } from '$lib/api/pyth';
@@ -8,9 +9,7 @@ import { tokensWithPriceFeed } from '$lib/queries/oracleQuotes';
 /** Fetch SPYM price from the liquidity-monitor proxy (no Pyth feed available). */
 async function fetchSpymQuote(network: Network): Promise<TradingViewQuote | null> {
 	// eslint-disable-next-line no-restricted-syntax -- justification: symbol-based lookup, not address — DRIFT-01 (silent wrapped-only matching) does not apply. getTokenByAnyAddress is address-keyed and cannot resolve by symbol.
-	const spymToken = TOKENS.find(
-		(t) => t.symbol === 'wtSPYM' && t.chainId === network.chainId
-	);
+	const spymToken = TOKENS.find((t) => t.symbol === 'wtSPYM' && t.chainId === network.chainId);
 	if (!spymToken) return null;
 
 	try {
@@ -41,7 +40,7 @@ async function fetchSpymQuote(network: Network): Promise<TradingViewQuote | null
 export function createPriceFeedsQuery(network: Network | null) {
 	return createQuery<TradingViewQuote[]>({
 		queryKey: ['priceFeeds', network?.id],
-		enabled: Boolean(network),
+		enabled: Boolean(browser && network),
 		refetchInterval: 15_000,
 		queryFn: async () => {
 			const net = network as Network;
