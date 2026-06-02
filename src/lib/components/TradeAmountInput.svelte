@@ -119,6 +119,7 @@
 	// whichever denom was active at type-time and the user thinks the
 	// conversion isn't working.
 	$: if (inputAmount && canParseDecimals(amountDecimals)) {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- justification: bare reference registers displayScale as a Svelte reactive dependency; it is consumed transitively via activeScale() inside parseDisplayInput, which the compiler cannot see.
 		displayScale; // explicit dep — see comment above
 		try {
 			amount = parseDisplayInput(inputAmount, amountDecimals);

@@ -39,14 +39,13 @@
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div class="min-w-0">
 			<p class="text-[10px] uppercase tracking-wide text-yellow-300/80 sm:text-xs">Wrap Ratio</p>
-			<p
-				class="mt-1 font-mono text-base font-semibold tabular-nums text-gray-100 sm:text-lg"
-			>
-				1 {wrappedSymbol} = {ratioLabel} {assetSymbol}
+			<p class="mt-1 font-mono text-base font-semibold tabular-nums text-gray-100 sm:text-lg">
+				1 {wrappedSymbol} = {ratioLabel}
+				{assetSymbol}
 			</p>
 			<p class="mt-1 text-xs text-gray-400">
-				Each {wrappedSymbol} bundles {ratioLabel} {assetSymbol} shares. Trades and prices on this
-				page are shown <b>per share</b>.
+				Each {wrappedSymbol} bundles {ratioLabel}
+				{assetSymbol} shares. Trades and prices on this page are shown <b>per share</b>.
 			</p>
 			{#if lastChangedRelative}
 				<p class="mt-2 text-[11px] text-gray-500">

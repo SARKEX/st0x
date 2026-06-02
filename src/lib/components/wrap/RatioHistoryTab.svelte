@@ -35,7 +35,9 @@
 
 	function fmtRatio(v: number | null | undefined): string {
 		if (v == null || !Number.isFinite(v)) return '—';
-		return Number.isInteger(v) ? String(v) : v.toLocaleString('en-US', { maximumFractionDigits: 4 });
+		return Number.isInteger(v)
+			? String(v)
+			: v.toLocaleString('en-US', { maximumFractionDigits: 4 });
 	}
 
 	function ratioOfEvent(ev: (typeof events)[number]): number | null {
@@ -69,9 +71,8 @@
 		<div>
 			<h3 class="font-semibold text-white">Wrap Ratio History</h3>
 			<p class="mt-0.5 text-xs text-gray-400 sm:text-sm">
-				Starts at <span class="font-mono">1 : 1</span>. Each rebase below
-				adds more {assetSymbol} per {wrappedSymbol} — usually a dividend or split from the
-				underlying.
+				Starts at <span class="font-mono">1 : 1</span>. Each rebase below adds more {assetSymbol} per
+				{wrappedSymbol} — usually a dividend or split from the underlying.
 				{#if onLearnMore}
 					<button
 						type="button"
@@ -84,7 +85,7 @@
 			</p>
 		</div>
 		<span
-			class="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/35 bg-yellow-400/10 px-2 py-0.5 text-[11px] font-mono tabular-nums text-yellow-200"
+			class="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/35 bg-yellow-400/10 px-2 py-0.5 font-mono text-[11px] tabular-nums text-yellow-200"
 		>
 			Currently 1 : {fmtRatio(currentRatio)}
 		</span>
@@ -116,21 +117,19 @@
 			{#each eventsDesc as ev, idx (ev.blockNumber)}
 				{@const isLatest = idx === 0}
 				{@const newRate = ratioOfEvent(ev)}
-				{@const prev =
-					eventsDesc[idx + 1] != null ? ratioOfEvent(eventsDesc[idx + 1]) : 1}
+				{@const prev = eventsDesc[idx + 1] != null ? ratioOfEvent(eventsDesc[idx + 1]) : 1}
 				<li class="relative pl-6 pr-1">
 					<span
-						class="absolute left-[7px] top-5 bottom-[-4px] w-px bg-white/10"
+						class="absolute bottom-[-4px] left-[7px] top-5 w-px bg-white/10"
 						aria-hidden="true"
 					/>
 					<span
 						class={'absolute left-0 top-2 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border ' +
-							(isLatest
-								? 'border-yellow-400/60 bg-yellow-400/20'
-								: 'border-white/15 bg-white/5')}
+							(isLatest ? 'border-yellow-400/60 bg-yellow-400/20' : 'border-white/15 bg-white/5')}
 						aria-hidden="true"
 					>
-						<span class={'h-1.5 w-1.5 rounded-full ' + (isLatest ? 'bg-yellow-300' : 'bg-gray-400')}
+						<span
+							class={'h-1.5 w-1.5 rounded-full ' + (isLatest ? 'bg-yellow-300' : 'bg-gray-400')}
 						/>
 					</span>
 
@@ -161,7 +160,7 @@
 								{@const pct = ((newRate - prev) / prev) * 100}
 								{@const direction = pct >= 0 ? 'up' : 'down'}
 								<span
-									class={'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-mono tabular-nums ' +
+									class={'inline-flex items-center rounded-full border px-1.5 py-0.5 font-mono text-[10px] tabular-nums ' +
 										(direction === 'up'
 											? 'border-green-400/30 bg-green-400/10 text-green-300'
 											: 'border-red-400/30 bg-red-400/10 text-red-300')}

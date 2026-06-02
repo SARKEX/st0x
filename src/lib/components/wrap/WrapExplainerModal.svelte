@@ -58,10 +58,7 @@
 					<p class="text-[10px] uppercase tracking-[0.14em] text-yellow-300/80 sm:text-xs">
 						New on {wrappedSymbol}
 					</p>
-					<h2
-						id="wrap-explainer-title"
-						class="mt-0.5 text-lg font-semibold text-white sm:text-xl"
-					>
+					<h2 id="wrap-explainer-title" class="mt-0.5 text-lg font-semibold text-white sm:text-xl">
 						What's a Wrapped tStock?
 					</h2>
 				</div>
@@ -89,18 +86,18 @@
 			<!-- Body -->
 			<div class="max-h-[68vh] overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
 				<!-- Ratio illustration -->
-				<div
-					class="mb-5 rounded-xl border border-yellow-400/25 bg-yellow-400/[0.06] p-4 sm:p-5"
-				>
+				<div class="mb-5 rounded-xl border border-yellow-400/25 bg-yellow-400/[0.06] p-4 sm:p-5">
 					<p class="text-[11px] uppercase tracking-wide text-yellow-300/80">The Wrap Ratio</p>
 					<div class="mt-2 flex flex-wrap items-baseline gap-x-3 leading-tight">
 						<span
 							class="whitespace-nowrap font-mono text-2xl font-semibold tabular-nums text-white sm:text-3xl"
-						>1&nbsp;{wrappedSymbol}</span>
+							>1&nbsp;{wrappedSymbol}</span
+						>
 						<span class="text-2xl text-gray-400 sm:text-3xl">=</span>
 						<span
 							class="whitespace-nowrap font-mono text-2xl font-semibold tabular-nums text-white sm:text-3xl"
-						>{ratioLabel}&nbsp;{assetSymbol}</span>
+							>{ratioLabel}&nbsp;{assetSymbol}</span
+						>
 					</div>
 					<p class="mt-3 text-xs text-gray-400 sm:text-sm">
 						Each <span class="text-gray-200">{wrappedSymbol}</span> in your wallet is redeemable for
@@ -112,8 +109,7 @@
 				<h3 class="text-sm font-semibold text-white">Prices and history use shares.</h3>
 				<p class="mt-1 text-sm text-gray-400">
 					Every chart, oracle price, and quote on this page is shown in
-					<span class="text-gray-200">shares of {equityName}</span> — the same units you'd see on a
-					brokerage.
+					<span class="text-gray-200">shares of {equityName}</span> — the same units you'd see on a brokerage.
 				</p>
 
 				<div class="my-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -130,7 +126,8 @@
 							{wrappedSymbol}
 						</p>
 						<p class="text-[11px] text-gray-500">
-							1 {wrappedSymbol} bundles {ratioLabel} {assetSymbol}
+							1 {wrappedSymbol} bundles {ratioLabel}
+							{assetSymbol}
 						</p>
 					</div>
 				</div>
@@ -138,8 +135,8 @@
 				<h3 class="mt-5 text-sm font-semibold text-white">What you'll actually receive.</h3>
 				<p class="mt-1 text-sm text-gray-400">
 					When you order
-					<span class="text-gray-200">{EXAMPLE_SHARES} shares</span>,
-					your wallet will show <span class="text-gray-200">{exampleWrapped} {wrappedSymbol}</span>
+					<span class="text-gray-200">{EXAMPLE_SHARES} shares</span>, your wallet will show
+					<span class="text-gray-200">{exampleWrapped} {wrappedSymbol}</span>
 					— not {EXAMPLE_SHARES} tokens. The token count is smaller because each one is worth
 					{ratioLabel}× more.
 				</p>
@@ -174,11 +171,11 @@
 
 				<h3 class="mt-6 text-sm font-semibold text-white">Built for DeFi</h3>
 				<p class="mt-1 text-sm text-gray-400">
-					Wrapping makes the token DeFi-ready. DeFi protocols track deposited balances
-					internally — they can't see when a dividend or stock split changes your underlying
-					holdings. By rolling those events into the wrap ratio, your {wrappedSymbol} quietly
-					compounds (each token becomes worth a bit more {assetSymbol} over time) without
-					throwing the protocol's accounting out of sync.
+					Wrapping makes the token DeFi-ready. DeFi protocols track deposited balances internally —
+					they can't see when a dividend or stock split changes your underlying holdings. By rolling
+					those events into the wrap ratio, your {wrappedSymbol} quietly compounds (each token becomes
+					worth a bit more {assetSymbol} over time) without throwing the protocol's accounting out of
+					sync.
 				</p>
 
 				<h3 class="mt-6 text-sm font-semibold text-white">
@@ -192,8 +189,8 @@
 					>
 						Dashboard → Holdings <IconExternalLink width="11" height="11" />
 					</a>
-					and use <span class="text-gray-200">Unwrap</span> on any {wrappedSymbol} balance to get
-					back the underlying {assetSymbol}.
+					and use <span class="text-gray-200">Unwrap</span> on any {wrappedSymbol} balance to get back
+					the underlying {assetSymbol}.
 				</p>
 			</div>
 

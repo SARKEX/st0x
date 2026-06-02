@@ -42,7 +42,10 @@
 					aria-hidden="true"
 				>
 					<circle cx="12" cy="12" r="9" />
-					<path d="M9.5 9.2a2.5 2.5 0 1 1 3.6 2.27c-.7.32-1.1.74-1.1 1.53V14" stroke-linecap="round" />
+					<path
+						d="M9.5 9.2a2.5 2.5 0 1 1 3.6 2.27c-.7.32-1.1.74-1.1 1.53V14"
+						stroke-linecap="round"
+					/>
 					<circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
 				</svg>
 				What's this?

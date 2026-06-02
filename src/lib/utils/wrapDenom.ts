@@ -78,10 +78,7 @@ export function displayPrice(
  * Charts iterate over many points, so it's worth computing the multiplier
  * once at the reactive boundary and multiplying inside the loop.
  */
-export function priceScale(
-	denomination: Denomination,
-	ratio: number | null | undefined
-): number {
+export function priceScale(denomination: Denomination, ratio: number | null | undefined): number {
 	if (denomination === 'wrapped') return 1;
 	return 1 / safeRatio(ratio);
 }

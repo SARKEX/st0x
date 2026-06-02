@@ -55,8 +55,8 @@
 	</div>
 	<p class="mt-1 text-[11.5px] text-gray-400">
 		{#if empty}
-			1 {wrappedSymbol} bundles {ratioLabel} {assetSymbol} shares — you'll see the {wrappedSymbol} count
-			in your wallet, not the share count.
+			1 {wrappedSymbol} bundles {ratioLabel}
+			{assetSymbol} shares — you'll see the {wrappedSymbol} count in your wallet, not the share count.
 		{:else}
 			= <span class="font-mono tabular-nums text-gray-200">{fmtNum(sharesAmount, 4)}</span>
 			{assetSymbol} shares ·

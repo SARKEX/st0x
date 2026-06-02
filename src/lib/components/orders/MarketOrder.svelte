@@ -265,15 +265,18 @@
 	$: displayedAssetSymbol =
 		displayDenom === 'unwrapped' && assetToken
 			? assetToken.symbol.replace(/^wt/, 't')
-			: (assetToken?.symbol ?? '');
+			: assetToken?.symbol ?? '';
 	$: displayScale =
 		displayDenom === 'unwrapped' && Number.isFinite(wrapRatio) && wrapRatio > 0 ? wrapRatio : 1;
-	$: displayedSpendingTokenSymbol =
-		orderSide === 'Buy' ? paymentTokenSymbol : displayedAssetSymbol;
+	$: displayedSpendingTokenSymbol = orderSide === 'Buy' ? paymentTokenSymbol : displayedAssetSymbol;
 	/** USDC per displayed asset unit (USDC/wt when wrapped, USDC/t when unwrapped). */
 	$: displayedMarketPrice = displayScale > 0 ? marketPrice / displayScale : marketPrice;
 	$: displayedBestOrderbookPrice =
-		bestOrderbookPrice == null ? null : displayScale > 0 ? bestOrderbookPrice / displayScale : bestOrderbookPrice;
+		bestOrderbookPrice == null
+			? null
+			: displayScale > 0
+				? bestOrderbookPrice / displayScale
+				: bestOrderbookPrice;
 	$: showShareEquivalent = displayDenom === 'unwrapped' && displayScale !== 1;
 	$: wtDecimalsForSummary = showShareEquivalent ? 5 : 3;
 
@@ -1112,10 +1115,9 @@
 								formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
 							)}
 							{@const balanceScale = orderSide === 'Sell' ? displayScale : 1}
-							{@const balanceRounded =
-								Math.round(balanceFormatted * balanceScale * 1000) / 1000}
+							{@const balanceRounded = Math.round(balanceFormatted * balanceScale * 1000) / 1000}
 							Balance: {balanceRounded.toFixed(3)}
-							{orderSide === 'Sell' ? displayedSpendingTokenSymbol : (spendingToken?.symbol ?? '')}
+							{orderSide === 'Sell' ? displayedSpendingTokenSymbol : spendingToken?.symbol ?? ''}
 						{:else}
 							Balance: —
 						{/if}
@@ -1287,7 +1289,8 @@
 										: displayedMarketPrice}
 								{#if perTPrice !== null}
 									<div class="text-[11px] text-gray-500">
-										equivalent to ~{perTPrice.toFixed(2)} {paymentTokenSymbol} per {displayedAssetSymbol}
+										equivalent to ~{perTPrice.toFixed(2)}
+										{paymentTokenSymbol} per {displayedAssetSymbol}
 									</div>
 								{/if}
 							{/if}
@@ -1303,8 +1306,8 @@
 						{#if insufficientBalanceError}
 							<div class="mt-2 text-sm text-red-400">
 								Insufficient {orderSide === 'Sell'
-								? displayedSpendingTokenSymbol
-								: (spendingToken?.symbol ?? 'token')} balance
+									? displayedSpendingTokenSymbol
+									: spendingToken?.symbol ?? 'token'} balance
 							</div>
 						{/if}
 						{#if insufficientLiquidityWarning && !insufficientBalanceError}

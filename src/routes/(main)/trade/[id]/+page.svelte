@@ -1144,9 +1144,7 @@
 											<div class="leading-tight">
 												<div>
 													${formatNumeric(buyPrice / currentRatio)}
-													<span class="text-[10px] font-normal text-gray-500"
-														>/ {assetSym}</span
-													>
+													<span class="text-[10px] font-normal text-gray-500">/ {assetSym}</span>
 												</div>
 												<div class="mt-0.5 text-[11px] font-normal text-gray-400 sm:text-xs">
 													${formatNumeric(buyPrice)}
@@ -1178,9 +1176,7 @@
 											<div class="leading-tight">
 												<div>
 													${formatNumeric(sellPrice / currentRatio)}
-													<span class="text-[10px] font-normal text-gray-500"
-														>/ {assetSym}</span
-													>
+													<span class="text-[10px] font-normal text-gray-500">/ {assetSym}</span>
 												</div>
 												<div class="mt-0.5 text-[11px] font-normal text-gray-400 sm:text-xs">
 													${formatNumeric(sellPrice)}
@@ -1322,60 +1318,63 @@
 								<DenomToggle
 									value={tableDenom}
 									wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
-									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(
+										/^wt/,
+										't'
+									)}
 									on:change={handleDenomChange}
 								/>
 							{/if}
-						{#if $isAuthenticated && !isEmbeddedWallet}
-							<button
-								type="button"
-								on:click={() =>
-									addTokenToWallet({
-										address: currentToken.address,
-										symbol: currentToken.symbol,
-										decimals: 18,
-										image: currentPythToken?.logoUrl
-									})}
-								class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
-							>
-								<!-- Wallet icon (mobile only) -->
-								<svg
-									class="h-4 w-4 sm:hidden"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
+							{#if $isAuthenticated && !isEmbeddedWallet}
+								<button
+									type="button"
+									on:click={() =>
+										addTokenToWallet({
+											address: currentToken.address,
+											symbol: currentToken.symbol,
+											decimals: 18,
+											image: currentPythToken?.logoUrl
+										})}
+									class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
 								>
-									<path
-										d="M21 12V7H5a2 2 0 0 1 0-4h14v4"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-									<path
-										d="M3 5v14a2 2 0 0 0 2 2h16v-5"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-									<path
-										d="M18 12a2 2 0 0 0 0 4h4v-4Z"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
-								<!-- Plus icon -->
-								<svg
-									class="h-3 w-3 sm:h-4 sm:w-4"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-								>
-									<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
-								</svg>
-								<span class="sm:hidden">Track</span>
-								<span class="hidden sm:inline">Track in Wallet</span>
-							</button>
-						{/if}
+									<!-- Wallet icon (mobile only) -->
+									<svg
+										class="h-4 w-4 sm:hidden"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path
+											d="M21 12V7H5a2 2 0 0 1 0-4h14v4"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+										<path
+											d="M3 5v14a2 2 0 0 0 2 2h16v-5"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+										<path
+											d="M18 12a2 2 0 0 0 0 4h4v-4Z"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+									<!-- Plus icon -->
+									<svg
+										class="h-3 w-3 sm:h-4 sm:w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
+									</svg>
+									<span class="sm:hidden">Track</span>
+									<span class="hidden sm:inline">Track in Wallet</span>
+								</button>
+							{/if}
 						</div>
 					</div>
 					<TabNav
@@ -1644,7 +1643,10 @@
 								<WrapRatioCard
 									ratio={currentRatio}
 									wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
-									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(
+										/^wt/,
+										't'
+									)}
 									onLearnMore={openWrapExplainer}
 									onViewHistory={() => (activeTokenTab = 'ratio')}
 								/>
@@ -1735,7 +1737,7 @@
 							wrappedTokenAddress={currentPythToken?.address ?? currentToken.address}
 							wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
 							assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
-							currentRatio={currentRatio}
+							{currentRatio}
 							onLearnMore={openWrapExplainer}
 							txHrefBuilder={(tx) => `${$currentNetwork.blockExplorer}/tx/${tx}`}
 						/>
@@ -2054,7 +2056,8 @@
 										data-testid="wrap-explainer-trigger"
 										class="block text-left font-mono text-[11px] tabular-nums text-gray-500 transition hover:text-yellow-200 hover:underline sm:text-xs"
 									>
-										1 {panelWrappedSymbol} = {panelRatioCalloutDisplay} {panelAssetSymbol}
+										1 {panelWrappedSymbol} = {panelRatioCalloutDisplay}
+										{panelAssetSymbol}
 									</button>
 								{/if}
 								<div class="flex items-center gap-1 text-xs text-gray-400 sm:gap-2 sm:text-sm">

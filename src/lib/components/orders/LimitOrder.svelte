@@ -71,7 +71,7 @@
 	$: displayedAssetSymbol =
 		displayDenom === 'unwrapped' && assetToken
 			? assetToken.symbol.replace(/^wt/, 't')
-			: (assetToken?.symbol ?? '');
+			: assetToken?.symbol ?? '';
 	$: displayScale =
 		displayDenom === 'unwrapped' && Number.isFinite(wrapRatio) && wrapRatio > 0 ? wrapRatio : 1;
 	$: showShareEquivalent = displayDenom === 'unwrapped' && displayScale !== 1;
