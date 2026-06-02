@@ -261,6 +261,7 @@
 	// ============ MAX LIQUIDITY CALCULATION ============
 	// Calculate maximum USDC that can be spent when buying
 	$: maxBuyUsdcAvailable = (() => {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
 		parseFloatVersion;
 		if (askQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
 		let totalUsdc = 0n;
@@ -286,6 +287,7 @@
 
 	// Calculate maximum tokens that can be bought (sum of ask maxOutput)
 	$: maxBuyTokensAvailable = (() => {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
 		parseFloatVersion;
 		if (askQuotes.length === 0 || !selectedToken) return 0;
 		let totalTokens = 0n;
@@ -309,6 +311,7 @@
 
 	// Calculate maximum tokens that can be sold
 	$: maxSellTokensAvailable = (() => {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
 		parseFloatVersion;
 		if (bidQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
 		let totalTokens = 0n;
@@ -334,6 +337,7 @@
 
 	// Calculate maximum USDC that can be received when selling (sum of bid maxOutput)
 	$: maxSellUsdcAvailable = (() => {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
 		parseFloatVersion;
 		if (bidQuotes.length === 0 || !paymentToken) return 0;
 		let totalUsdc = 0n;
@@ -356,9 +360,10 @@
 	})();
 
 	// ============ QUOTE CALCULATION ============
-	$: quote = (
-		parseFloatVersion,
-		computeQuote(
+	$: quote = (() => {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
+		parseFloatVersion;
+		return computeQuote(
 			isBuying,
 			lastEditedField,
 			topAmount,
@@ -367,8 +372,8 @@
 			bidQuotes,
 			selectedToken,
 			paymentToken
-		)
-	);
+		);
+	})();
 
 	$: syncOtherField(quote, lastEditedField);
 
