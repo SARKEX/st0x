@@ -65,6 +65,17 @@
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	export let buyPrice: number | null = null; // Best bid price (what you get when selling)
 	export let sellPrice: number | null = null; // Best ask price (what you pay when buying)
+	/** Share-denominated display toggle — see MarketOrder for the contract. */
+	export let displayDenom: 'wrapped' | 'unwrapped' = 'wrapped';
+	export let wrapRatio: number = 1;
+	$: displayedAssetSymbol =
+		displayDenom === 'unwrapped' && assetToken
+			? assetToken.symbol.replace(/^wt/, 't')
+			: assetToken?.symbol ?? '';
+	$: displayScale =
+		displayDenom === 'unwrapped' && Number.isFinite(wrapRatio) && wrapRatio > 0 ? wrapRatio : 1;
+	$: showShareEquivalent = displayDenom === 'unwrapped' && displayScale !== 1;
+	$: wtDecimalsForSummary = showShareEquivalent ? 5 : 3;
 
 	// Filter tokens based on current network
 	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
@@ -437,6 +448,8 @@
 						bind:isError={selectedAmountError}
 						showUnit={false}
 						showMaxButton={false}
+						{displayScale}
+						unitOverride={displayedAssetSymbol}
 					/>
 					<!-- Percentage buttons -->
 					<div class="mt-2 flex gap-2">
@@ -455,7 +468,7 @@
 					<div class="mb-2 block text-sm font-medium text-gray-300">
 						Limit Price
 						<span class="ml-1 text-xs text-gray-500"
-							>({settlementLabel} per {assetToken.symbol})</span
+							>({settlementLabel} per {displayedAssetSymbol})</span
 						>
 					</div>
 					<Input
@@ -475,14 +488,27 @@
 			<div class={containerStyles.cardBordered}>
 				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
 				<div class="space-y-2 text-sm">
-					<div class="flex justify-between">
+					<div class="flex items-start justify-between gap-3">
 						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-						<span class="font-medium">
-							{selectedAmount
-								? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
-								: '0'}
-							{assetToken.symbol}
-						</span>
+						<div class="text-right">
+							<span class="font-medium">
+								{(selectedAmount
+									? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
+									: 0
+								).toFixed(wtDecimalsForSummary)}
+								{assetToken.symbol}
+							</span>
+							{#if showShareEquivalent}
+								<div class="text-[11px] text-gray-500">
+									equivalent to {(
+										(selectedAmount
+											? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
+											: 0) * displayScale
+									).toFixed(5)}
+									{displayedAssetSymbol}
+								</div>
+							{/if}
+						</div>
 					</div>
 					<div class="flex justify-between">
 						<span class="text-gray-400">At price</span>

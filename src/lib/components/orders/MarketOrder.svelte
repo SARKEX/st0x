@@ -51,6 +51,16 @@
 	 */
 	export let buyPrice: number | null = null;
 	export let sellPrice: number | null = null;
+	/**
+	 * When `displayDenom === 'unwrapped'`, the input field, balance row, market
+	 * price, and order summary are re-labeled in the share token (tX) and
+	 * displayed values are scaled by `wrapRatio` (so a wt-denominated BigInt
+	 * of 0.01 wtSGOV reads as 0.01003 tSGOV on a 1.0027 ratio). The order
+	 * itself still goes on-chain in wt — `selectedAmount` stays wt
+	 * regardless of denom. `wrapRatio` is ignored when 'wrapped'.
+	 */
+	export let displayDenom: 'wrapped' | 'unwrapped' = 'wrapped';
+	export let wrapRatio: number = 1;
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
 	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
@@ -250,6 +260,25 @@
 
 	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.paymentTokens?.[0];
 	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
+
+	// Display denom helpers — see the `displayDenom`/`wrapRatio` prop docs.
+	$: displayedAssetSymbol =
+		displayDenom === 'unwrapped' && assetToken
+			? assetToken.symbol.replace(/^wt/, 't')
+			: assetToken?.symbol ?? '';
+	$: displayScale =
+		displayDenom === 'unwrapped' && Number.isFinite(wrapRatio) && wrapRatio > 0 ? wrapRatio : 1;
+	$: displayedSpendingTokenSymbol = orderSide === 'Buy' ? paymentTokenSymbol : displayedAssetSymbol;
+	/** USDC per displayed asset unit (USDC/wt when wrapped, USDC/t when unwrapped). */
+	$: displayedMarketPrice = displayScale > 0 ? marketPrice / displayScale : marketPrice;
+	$: displayedBestOrderbookPrice =
+		bestOrderbookPrice == null
+			? null
+			: displayScale > 0
+				? bestOrderbookPrice / displayScale
+				: bestOrderbookPrice;
+	$: showShareEquivalent = displayDenom === 'unwrapped' && displayScale !== 1;
+	$: wtDecimalsForSummary = showShareEquivalent ? 5 : 3;
 
 	// Errors
 	let selectedAmountError: boolean = false;
@@ -1066,24 +1095,29 @@
 								showMaxButton={false}
 								compact={true}
 								noBorder={true}
+								displayScale={inputMode === 'spend' ? 1 : displayScale}
 							/>
 						</div>
 
 						<!-- Right side: Token symbol -->
 						<span class="py-3 pl-2 pr-4 text-sm font-medium text-gray-300">
-							{inputMode === 'spend' ? paymentTokenSymbol : assetToken.symbol}
+							{inputMode === 'spend' ? paymentTokenSymbol : displayedAssetSymbol}
 						</span>
 					</div>
 
-					<!-- Balance display -->
+					<!-- Balance display. When the spending token is the asset and the user
+					     opted into the share-denominated view, scale the displayed balance
+					     by the wrap ratio and use the share symbol. Payment-token spends
+					     (USDC) are unaffected since they aren't wrapped. -->
 					<div class="mt-1.5 text-sm text-gray-400">
 						{#if spendingTokenBalanceDecimals !== null}
 							{@const balanceFormatted = parseFloat(
 								formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
 							)}
-							{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
+							{@const balanceScale = orderSide === 'Sell' ? displayScale : 1}
+							{@const balanceRounded = Math.round(balanceFormatted * balanceScale * 1000) / 1000}
 							Balance: {balanceRounded.toFixed(3)}
-							{spendingToken?.symbol ?? ''}
+							{orderSide === 'Sell' ? displayedSpendingTokenSymbol : spendingToken?.symbol ?? ''}
 						{:else}
 							Balance: —
 						{/if}
@@ -1112,20 +1146,20 @@
 				<div>
 					<div class="mb-2 block text-sm font-medium text-gray-300">
 						Market Price
-						<span class="ml-1 text-xs text-gray-500">(per {assetToken.symbol})</span>
+						<span class="ml-1 text-xs text-gray-500">(per {displayedAssetSymbol})</span>
 					</div>
 					<div class="relative">
 						<input
 							type="text"
 							value={!selectedAmount || selectedAmount === 0n
-								? bestOrderbookPrice !== null
-									? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+								? displayedBestOrderbookPrice !== null
+									? `~${displayedBestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
 									: 'No quotes available'
 								: isLoadingPrice
 									? 'Loading...'
 									: priceError
 										? 'Price unavailable'
-										: `~${marketPrice.toFixed(2)} ${paymentTokenSymbol}`}
+										: `~${displayedMarketPrice.toFixed(2)} ${paymentTokenSymbol}`}
 							disabled
 							class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
 						/>
@@ -1196,18 +1230,37 @@
 							</span>
 						</div>
 					{:else}
-						<!-- Amount mode: show buying/selling amount -->
-						<div class="flex justify-between">
+						<!-- Amount mode: show buying/selling amount. The Order Summary is
+						     the on-chain ground truth, so we always render the wt
+						     quantity here regardless of the panel denom toggle. When
+						     unwrapped is active we bump precision to 5 decimals so the
+						     wrap-ratio gap is actually visible (otherwise e.g. 0.00997
+						     wt vs 0.01 t both round to "0.010" and the user thinks the
+						     conversion didn't happen). -->
+						<div class="flex items-start justify-between gap-3">
 							<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
-							<span class="font-medium">
-								{selectedAmount
-									? parseFloat(formatUnits(selectedAmount, assetToken.decimals)).toFixed(3)
-									: '0'}
-								{assetToken.symbol}
-							</span>
+							<div class="text-right">
+								<span class="font-medium">
+									{(selectedAmount
+										? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
+										: 0
+									).toFixed(wtDecimalsForSummary)}
+									{assetToken.symbol}
+								</span>
+								{#if showShareEquivalent}
+									<div class="text-[11px] text-gray-500">
+										equivalent to {(
+											(selectedAmount
+												? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
+												: 0) * displayScale
+										).toFixed(5)}
+										{displayedAssetSymbol}
+									</div>
+								{/if}
+							</div>
 						</div>
 					{/if}
-					<div class="flex justify-between">
+					<div class="flex items-start justify-between gap-3">
 						<span class="text-gray-400">
 							{#if !selectedAmount || selectedAmount === 0n}
 								{orderSide === 'Buy' ? 'Best ask' : 'Best bid'}
@@ -1215,19 +1268,33 @@
 								Avg. price
 							{/if}
 						</span>
-						<span class="font-medium">
-							{#if !selectedAmount || selectedAmount === 0n}
-								{bestOrderbookPrice !== null
-									? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
-									: 'N/A'}
-							{:else if isLoadingPrice}
-								Loading...
-							{:else if priceError}
-								N/A
-							{:else}
-								~{marketPrice.toFixed(2)} {paymentTokenSymbol}
+						<div class="text-right">
+							<span class="font-medium">
+								{#if !selectedAmount || selectedAmount === 0n}
+									{bestOrderbookPrice !== null
+										? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+										: 'N/A'}
+								{:else if isLoadingPrice}
+									Loading...
+								{:else if priceError}
+									N/A
+								{:else}
+									~{marketPrice.toFixed(2)} {paymentTokenSymbol}
+								{/if}
+							</span>
+							{#if displayDenom === 'unwrapped' && displayScale !== 1 && !isLoadingPrice && !priceError}
+								{@const perTPrice =
+									!selectedAmount || selectedAmount === 0n
+										? displayedBestOrderbookPrice
+										: displayedMarketPrice}
+								{#if perTPrice !== null}
+									<div class="text-[11px] text-gray-500">
+										equivalent to ~{perTPrice.toFixed(2)}
+										{paymentTokenSymbol} per {displayedAssetSymbol}
+									</div>
+								{/if}
 							{/if}
-						</span>
+						</div>
 					</div>
 					<div class="mt-2 border-t border-white/10 pt-2">
 						<div class="flex justify-between">
@@ -1238,7 +1305,9 @@
 						</div>
 						{#if insufficientBalanceError}
 							<div class="mt-2 text-sm text-red-400">
-								Insufficient {spendingToken?.symbol ?? 'token'} balance
+								Insufficient {orderSide === 'Sell'
+									? displayedSpendingTokenSymbol
+									: spendingToken?.symbol ?? 'token'} balance
 							</div>
 						{/if}
 						{#if insufficientLiquidityWarning && !insufficientBalanceError}

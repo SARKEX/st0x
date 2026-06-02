@@ -82,7 +82,7 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 			pageSize: PAGE_SIZE
 		});
 
-		for (const trade of response.trades) {
+		for (const trade of response.trades ?? []) {
 			const key = `${trade.txHash}:${trade.orderHash ?? ''}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
@@ -102,7 +102,7 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 			pageSize: PAGE_SIZE
 		});
 
-		for (const trade of response.trades) {
+		for (const trade of response.trades ?? []) {
 			const key = `${trade.txHash}:${trade.orderHash ?? ''}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
