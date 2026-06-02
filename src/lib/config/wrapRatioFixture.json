@@ -1,0 +1,60 @@
+{
+	"_comment": "Hardcoded wrap-ratio data for ERC4626-style wrappers until the /v1/tokens/exchange-rates API ships. Values verified on Base via cast on 2026-05-28 (block 46604184). See HANDOVER notes in PR #189. Only wtSGOV currently exhibits a non-1:1 ratio; other wrappers are implicitly 1.0 and resolveRatio() falls through to its 1.0 default.",
+	"rates": [
+		{
+			"share": {
+				"address": "0x78c31580c97101694c70022c83d570150c11e935",
+				"symbol": "wtSGOV",
+				"decimals": 18
+			},
+			"asset": {
+				"address": "0xc941c1506b7555ba8c506fb6c9b9cc259902d612",
+				"symbol": "tSGOV",
+				"decimals": 18
+			},
+			"assetsPerShare": "1.002700626096609112",
+			"blockNumber": 46604184,
+			"blockTimestamp": 1779997717,
+			"capturedAt": "2026-05-28 13:08:37"
+		}
+	],
+	"history": {
+		"0x78c31580c97101694c70022c83d570150c11e935": {
+			"share": {
+				"address": "0x78c31580c97101694c70022c83d570150c11e935",
+				"symbol": "wtSGOV",
+				"decimals": 18
+			},
+			"asset": {
+				"address": "0xc941c1506b7555ba8c506fb6c9b9cc259902d612",
+				"symbol": "tSGOV",
+				"decimals": 18
+			},
+			"events": [
+				{
+					"type": "snapshot",
+					"blockNumber": 43868604,
+					"blockTimestamp": 1774526555,
+					"assetsPerShare": "1.0",
+					"capturedAt": "2026-03-26 12:02:35"
+				},
+				{
+					"type": "donation",
+					"blockNumber": 45905949,
+					"blockTimestamp": 1778601245,
+					"txHash": "0xeb3de2c68b35d44427f7486f9e4a4e0927534e41e1fc9739a2adf4157fd1d4bb",
+					"donor": "0x975789f46b5de4624d6a4c3b3679901edf1a5bda",
+					"assetAmount": "0.00279185",
+					"newAssetsPerShare": "1.002700626096609112"
+				},
+				{
+					"type": "snapshot",
+					"blockNumber": 46604184,
+					"blockTimestamp": 1779997717,
+					"assetsPerShare": "1.002700626096609112",
+					"capturedAt": "2026-05-28 13:08:37"
+				}
+			]
+		}
+	}
+}
