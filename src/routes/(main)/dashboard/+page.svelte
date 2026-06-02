@@ -40,6 +40,8 @@
 	import { createTakerTradesQuery, createBatchTradesQuery } from '$lib/queries/tradeActivity';
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
 	import { calculatePnL } from '$lib/utils/costBasis';
+	import { createExchangeRatesQuery, resolveRatio } from '$lib/queries/exchangeRates';
+	import { holdingsDenom } from '$lib/stores/panelDenomStore';
 	import { manualCostBasisStore, type ManualCostBasisEntry } from '$lib/stores/manualCostBasis';
 	import { derived } from 'svelte/store';
 	import { onDestroy } from 'svelte';
@@ -935,6 +937,16 @@
 	// Cost basis query for P&L calculation - one-shot (no polling, refreshes on window focus)
 	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress);
 
+	// Wrap-ratio lookup so the Holdings table can flip wt↔t when the user
+	// toggles `holdingsDenom`. Backed by the hardcoded SGOV fixture today;
+	// will switch to the live /v1/tokens/exchange-rates API when it ships.
+	const exchangeRatesQuery = createExchangeRatesQuery();
+	$: holdingsRatesLookup = $exchangeRatesQuery?.data ?? null;
+	$: resolveHoldingRatio = (address: string): number =>
+		$holdingsDenom === 'unwrapped' ? resolveRatio(holdingsRatesLookup, address) : 1;
+	$: displayUnwrappedSymbol = (sym: string): string =>
+		$holdingsDenom === 'unwrapped' ? sym.replace(/^wt/, 't') : sym;
+
 	// Load manual cost basis entries when wallet changes
 	$: manualCostBasisStore.loadForWallet($walletAddress);
 
@@ -1377,7 +1389,22 @@
 					<!-- Holdings Section (Asset Tokens) -->
 					<Section>
 						<div id="holdings"></div>
-						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Holdings</h2>
+						<div class="mb-3 flex flex-wrap items-center justify-between gap-3 sm:mb-4">
+							<h2 class="text-base font-semibold sm:text-lg">Holdings</h2>
+							<label
+								class="inline-flex cursor-pointer items-center gap-2 text-xs text-gray-300 sm:text-sm"
+							>
+								<input
+									type="checkbox"
+									data-testid="holdings-denom-toggle"
+									checked={$holdingsDenom === 'unwrapped'}
+									on:change={(e) =>
+										holdingsDenom.set(e.currentTarget.checked ? 'unwrapped' : 'wrapped')}
+									class="h-3.5 w-3.5 rounded border-white/20 bg-transparent text-yellow-400 focus:ring-yellow-400/40"
+								/>
+								<span>Display holdings in unwrapped equivalents</span>
+							</label>
+						</div>
 						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
 							Wrapped tokens combined across wallet and vaults. We recommend only using wrapped
 							tokens for DEX/DeFi usage.
@@ -1426,28 +1453,30 @@
 									</thead>
 									<tbody>
 										{#each assetHoldings as holding}
+											{@const rowRatio = resolveHoldingRatio(holding.address)}
+											{@const rowSymbol = displayUnwrappedSymbol(holding.symbol)}
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
 														logoUrl={getTokenByAnyAddress(holding.address)?.logoUrl}
-														symbol={holding.symbol}
+														symbol={rowSymbol}
 														name={holding.name}
 														hideNameOnMobile={true}
 													/>
 												</td>
 												<td
 													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
-													>{holding.walletBalanceNum.toFixed(4)}</td
+													>{(holding.walletBalanceNum * rowRatio).toFixed(4)}</td
 												>
 												<td
 													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
-													>{holding.vaultBalanceNum.toFixed(4)}</td
+													>{(holding.vaultBalanceNum * rowRatio).toFixed(4)}</td
 												>
 												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
-													>{holding.totalBalance.toFixed(4)}</td
+													>{(holding.totalBalance * rowRatio).toFixed(4)}</td
 												>
 												<td class="hidden px-2 py-2 text-sm sm:table-cell sm:px-4 sm:py-3"
-													>${holding.price.toFixed(2)}</td
+													>${(holding.price / rowRatio).toFixed(2)}</td
 												>
 												<td class="hidden px-2 py-2 text-sm sm:table-cell sm:px-4 sm:py-3">
 													{#if $costBasisQuery?.isLoading}
@@ -1455,7 +1484,7 @@
 													{:else}
 														<div class="flex items-center gap-1">
 															{#if holding.avgCostBasis !== null}
-																<span>${holding.avgCostBasis.toFixed(2)}</span>
+																<span>${(holding.avgCostBasis / rowRatio).toFixed(2)}</span>
 															{:else}
 																<span class="text-gray-500">—</span>
 															{/if}

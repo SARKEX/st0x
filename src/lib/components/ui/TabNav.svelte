@@ -1,6 +1,10 @@
 <script lang="ts">
-	// Tabs: array of { id: string; label: string }
-	export let tabs: ReadonlyArray<{ id: string; label: string }> = [];
+	// Tabs: array of { id: string; label: string; badge? }
+	export let tabs: ReadonlyArray<{
+		id: string;
+		label: string;
+		badge?: number | string | null;
+	}> = [];
 	export let activeId: string;
 	// Emit change events
 	import { createEventDispatcher } from 'svelte';
@@ -62,6 +66,13 @@
 					: 'border-transparent text-gray-400 hover:text-white')}
 		>
 			{tab.label}
+			{#if tab.badge != null && tab.badge !== ''}
+				<span
+					class="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-white/10 px-1 text-[10px] text-gray-300"
+				>
+					{tab.badge}
+				</span>
+			{/if}
 		</button>
 	{/each}
 </div>

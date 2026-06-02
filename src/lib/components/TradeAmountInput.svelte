@@ -24,6 +24,20 @@
 	export let compact: boolean = false;
 	export let noBorder: boolean = false;
 
+	// Optional label override — when set, this string is shown as the input's
+	// trailing unit instead of `amountToken.symbol`. Used by the trade panel
+	// to flip wtX ↔ tX when the user toggles share-denominated display on.
+	export let unitOverride: string | undefined = undefined;
+
+	// Display-only scale factor. When > 0 and !== 1, the user types values
+	// in the SCALED denomination (e.g. tSGOV shares) while `amount` remains
+	// in the token's native denomination (wtSGOV wei). Math is:
+	//   amount  = parseUnits(inputString / displayScale, decimals)
+	//   display = formatUnits(amount * displayScale, decimals)
+	// `displayScale` is a float — the wrap ratio is bounded (1.0–~2.0) and
+	// only has ~4 significant digits in practice, so float precision is fine.
+	export let displayScale: number = 1;
+
 	// Expose balance to parent component
 	export let balance: bigint = 0n;
 	export let balanceDecimals: number | null = null;
@@ -69,9 +83,46 @@
 		amount = undefined;
 	};
 
+	function activeScale(): number {
+		return Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1;
+	}
+
+	// Convert a user-typed string (in the displayed denomination) into a wt-
+	// denominated BigInt at `amountDecimals` precision. When `displayScale`
+	// is 1 (the default) this is just `parseUnits`. When >1, we divide by
+	// the ratio first so the stored BigInt is the on-chain (wt) amount.
+	function parseDisplayInput(input: string, decimals: number): bigint {
+		const scale = activeScale();
+		if (scale === 1) return parseUnits(input, decimals);
+		// `parseFloat` is OK here: the wrap ratio's significant digits (~4) and
+		// typical user inputs (≤ 10^10) stay well within float64 precision.
+		const tValue = parseFloat(input);
+		if (!Number.isFinite(tValue)) throw new Error('invalid input');
+		const wtValue = tValue / scale;
+		// Clamp to the token's decimals so we never exceed parseUnits' digit
+		// budget. toFixed(decimals) gives a fixed-point string with up to
+		// `decimals` fractional digits — safe input for parseUnits.
+		return parseUnits(wtValue.toFixed(decimals), decimals);
+	}
+
+	function formatWtAsDisplay(wt: bigint, decimals: number): string {
+		const scale = activeScale();
+		const native = formatUnits(wt, decimals);
+		if (scale === 1) return native;
+		const tValue = parseFloat(native) * scale;
+		return tValue.toFixed(decimals);
+	}
+
+	// Reference `displayScale` here so Svelte's reactive tracker re-runs this
+	// block when the parent flips the share-denominated toggle after the user
+	// has already typed. Without this the bound `amount` BigInt stays in
+	// whichever denom was active at type-time and the user thinks the
+	// conversion isn't working.
 	$: if (inputAmount && canParseDecimals(amountDecimals)) {
+		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- justification: bare reference registers displayScale as a Svelte reactive dependency; it is consumed transitively via activeScale() inside parseDisplayInput, which the compiler cannot see.
+		displayScale; // explicit dep — see comment above
 		try {
-			amount = parseUnits(inputAmount, amountDecimals);
+			amount = parseDisplayInput(inputAmount, amountDecimals);
 		} catch {
 			amount = undefined;
 		}
@@ -79,11 +130,13 @@
 		amount = undefined;
 	}
 
-	// Expose function to set amount from parent (for percentage buttons)
+	// Expose function to set amount from parent (for percentage buttons).
+	// Parent always speaks wt-denominated BigInts; we render the display
+	// string in whichever denomination is active.
 	export function setAmountValue(newAmount: bigint) {
 		if (!canParseDecimals(amountDecimals)) return;
 		amount = newAmount;
-		inputAmount = formatUnits(newAmount, amountDecimals);
+		inputAmount = formatWtAsDisplay(newAmount, amountDecimals);
 	}
 
 	$: balancePromise = (async () => {
@@ -139,7 +192,7 @@
 		if (!canParseDecimals(amountDecimals)) {
 			return;
 		}
-		inputAmount = formatUnits(balance, amountDecimals);
+		inputAmount = formatWtAsDisplay(balance, amountDecimals);
 		amount = balance;
 	};
 </script>
@@ -149,7 +202,7 @@
 		{...$$restProps}
 		bind:amount={inputAmount}
 		type="number"
-		unit={showUnit ? amountToken.symbol : ''}
+		unit={showUnit ? unitOverride ?? amountToken.symbol : ''}
 		maxButton={showMaxButton}
 		on:setValueToMax={setValueToMax}
 		{dataTestId}
@@ -165,10 +218,11 @@
 				</span>
 			{:then data}
 				{#if data}
-					{@const balanceFormatted = parseFloat(formatUnits(data.balance, data.decimals))}
+					{@const balanceFormatted =
+						parseFloat(formatUnits(data.balance, data.decimals)) * activeScale()}
 					{@const balanceRounded = Math.round(balanceFormatted * 1000) / 1000}
 					Balance: {balanceRounded.toFixed(3)}
-					{(balanceToken ?? amountToken)?.symbol}
+					{unitOverride ?? (balanceToken ?? amountToken)?.symbol}
 				{:else}
 					Balance: —
 				{/if}

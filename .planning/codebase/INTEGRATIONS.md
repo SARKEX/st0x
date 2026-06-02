@@ -33,10 +33,10 @@
 - Base URL: env `ST0X_API_URL`
 - Auth: HTTP Basic via `ST0X_API_KEY` + `ST0X_API_SECRET` (`btoa('key:secret')`, server-only)
 - Allowlist of proxied routes (with per-route Vercel edge cache):
-  - `GET v1/orders/token/:address` — `private, no-store` (browser + Vercel CDN; upstream API caches ~15s)
-  - `GET v1/trades/token/:address` — same as orders/token
+  - `GET v1/orders/token/:address` — `s-maxage=5, stale-while-revalidate=120`
+  - `GET v1/trades/token/:address` — `s-maxage=5, stale-while-revalidate=120`
   - `GET v1/orders/owner/:address`, `GET v1/trades/:address`, `GET v1/trades/taker/:address` — no shared cache
-  - `POST v1/trades/batch` — no cache
+  - `POST v1/trades/query` — no cache
   - `GET health`
 - Client wrapper: `src/lib/api/st0xApi.ts` (typed `apiGet*` functions; all gated to browser context)
 
