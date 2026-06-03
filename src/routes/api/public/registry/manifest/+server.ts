@@ -21,7 +21,18 @@ function absolutizeManifestLine(line: string, origin: string): string {
 }
 
 export const GET: RequestHandler = async ({ fetch, url }) => {
-	const upstream = await fetch('/registry/manifest', { cache: 'no-store' });
+	let upstream: Response;
+	try {
+		upstream = await fetch('/registry/manifest', { cache: 'no-store' });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.warn('[registry/manifest] upstream fetch failed:', message);
+		return new Response(`Failed to load registry manifest: ${message}`, {
+			status: 502,
+			headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+		});
+	}
+
 	if (!upstream.ok) {
 		return new Response(`Failed to load registry manifest (${upstream.status})`, {
 			status: upstream.status
