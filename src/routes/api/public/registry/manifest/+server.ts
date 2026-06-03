@@ -1,3 +1,6 @@
+// Public API proxy for the rain.strategies manifest. Canonical generation lives at
+// /registry/manifest (src/routes/registry/manifest/+server.ts); this endpoint
+// re-exposes it under /api/public/ for unauthenticated, open-CORS consumers.
 import type { RequestHandler } from './$types';
 
 function absolutizeManifestLine(line: string, origin: string): string {
@@ -39,4 +42,3 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
 		}
 	});
 };
-
