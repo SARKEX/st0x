@@ -329,6 +329,9 @@ export type MarketMakingDeploymentArgs = {
 	amountIsFastExit: boolean;
 	notAmountIsFastExit: boolean;
 	initialIo: string;
+	nextTradeMultiplier?: string;
+	costBasisMultiplier?: string;
+	timePerEpoch?: string;
 	maxAmount: bigint;
 	minAmount: bigint;
 	depositAmountToken1: bigint;
@@ -359,10 +362,9 @@ export const getMarketMakingDeploymentArgs = async (
 
 	gui.setFieldValue('min-amount', formatUnits(args.minAmount, args.token1.decimals));
 
-	// Default Args
-	gui.setFieldValue('next-trade-multiplier', '1.01');
-	gui.setFieldValue('cost-basis-multiplier', '1');
-	gui.setFieldValue('time-per-epoch', '3600');
+	gui.setFieldValue('next-trade-multiplier', args.nextTradeMultiplier || '1.01');
+	gui.setFieldValue('cost-basis-multiplier', args.costBasisMultiplier || '1');
+	gui.setFieldValue('time-per-epoch', args.timePerEpoch || '3600');
 
 	gui.setDeposit('token1', formatUnits(args.depositAmountToken1, args.token1.decimals));
 	gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));

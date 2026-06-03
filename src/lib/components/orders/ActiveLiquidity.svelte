@@ -73,6 +73,27 @@
 	let outputVaultId1Error: boolean = false;
 	let outputVaultId2Error: boolean = false;
 	let initialIoError: boolean = false;
+	let nextTradeMultiplier = '1.01';
+	let costBasisMultiplier = '1';
+	let timePerEpoch = '3600';
+	let nextTradeMultiplierError: boolean = false;
+	let costBasisMultiplierError: boolean = false;
+	let timePerEpochError: boolean = false;
+
+	const validatePositiveNumber = (value: string | undefined) => {
+		if (!value || value.trim() === '') return 'Value is required';
+		const parsed = Number(value);
+		if (!Number.isFinite(parsed) || parsed <= 0) return 'Value must be greater than 0';
+		return undefined;
+	};
+
+	const validatePositiveInteger = (value: string | undefined) => {
+		const err = validatePositiveNumber(value);
+		if (err) return err;
+		const parsed = Number(value);
+		if (!Number.isInteger(parsed)) return 'Value must be an integer number of seconds';
+		return undefined;
+	};
 
 	$: isToken1SameAsToken2 =
 		selectedToken1.address.toLowerCase() === selectedToken2.address.toLowerCase();
@@ -92,6 +113,9 @@
 		token1DepositAmountError ||
 		token2DepositAmountError ||
 		initialIoError ||
+		nextTradeMultiplierError ||
+		costBasisMultiplierError ||
+		timePerEpochError ||
 		isToken1SameAsToken2;
 
 	const handleDsfDeploy = () => {
@@ -109,7 +133,10 @@
 				inputVaultIdToken1: inputVaultId1,
 				inputVaultIdToken2: inputVaultId2,
 				outputVaultIdToken1: outputVaultId1,
-				outputVaultIdToken2: outputVaultId2
+				outputVaultIdToken2: outputVaultId2,
+				nextTradeMultiplier,
+				costBasisMultiplier,
+				timePerEpoch
 			});
 		}
 	};
@@ -235,6 +262,41 @@
 			<div class="space-y-4 rounded-lg border border-white/5 bg-gray-800/30 p-4">
 				<h4 class="text-sm font-medium text-gray-300">Advanced Options</h4>
 				<div>
+					<span class="mb-2 block text-sm font-medium text-gray-300">Strategy Parameters</span>
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+						<div class="relative">
+							<span class="mb-1 block text-sm font-medium text-gray-300">Next Trade Multiplier</span>
+							<Input
+								type="number"
+								step="0.0001"
+								bind:amount={nextTradeMultiplier}
+								validate={validatePositiveNumber}
+								bind:isError={nextTradeMultiplierError}
+							/>
+						</div>
+						<div class="relative">
+							<span class="mb-1 block text-sm font-medium text-gray-300">Cost Basis Multiplier</span>
+							<Input
+								type="number"
+								step="0.0001"
+								bind:amount={costBasisMultiplier}
+								validate={validatePositiveNumber}
+								bind:isError={costBasisMultiplierError}
+							/>
+						</div>
+						<div class="relative">
+							<span class="mb-1 block text-sm font-medium text-gray-300">Time Per Epoch (seconds)</span>
+							<Input
+								type="number"
+								step="1"
+								bind:amount={timePerEpoch}
+								validate={validatePositiveInteger}
+								bind:isError={timePerEpochError}
+							/>
+						</div>
+					</div>
+				</div>
+				<div>
 					<span class="mb-2 block text-sm font-medium text-gray-300">Enter Vault IDs</span>
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
 						<div class="space-y-2">
@@ -322,15 +384,15 @@
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Cost Basis</span>
-					<span class="font-medium text-white">1</span>
+					<span class="font-medium text-white">{costBasisMultiplier}</span>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Spread</span>
-					<span class="font-medium text-white">1</span>
+					<span class="font-medium text-white">{nextTradeMultiplier}</span>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">Time Per Epoch</span>
-					<span class="font-medium text-white">1 hour</span>
+					<span class="font-medium text-white">{timePerEpoch}s</span>
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-gray-400">{selectedToken1.symbol} Fast Exit</span>
