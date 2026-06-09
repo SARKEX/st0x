@@ -145,7 +145,8 @@ function convertApiOrderToProcessedQuote(
 		orderData,
 		orderbookId: order.orderbookId,
 		inputTokenDecimals: order.inputToken.decimals ?? inputMeta.decimals ?? 18,
-		outputTokenDecimals: order.outputToken.decimals ?? outputMeta.decimals ?? 18
+		outputTokenDecimals: order.outputToken.decimals ?? outputMeta.decimals ?? 18,
+		orderType: order.orderType
 	};
 
 	// Pre-compute side and price using describeQuote (DRY with tokenMath)
