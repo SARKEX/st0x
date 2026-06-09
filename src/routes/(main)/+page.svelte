@@ -4,7 +4,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
-	import { getAllTokensByNetwork, getTokenByAnyAddress } from '$lib/config/network';
+	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { formatUnits } from 'viem';
@@ -63,8 +63,8 @@
 		}
 	}
 
-	// Filter tokens by current network
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: apiTokens = $apiTokensQuery.data ?? [];
 
 	// Price feeds query — same source the sidebar uses for symbol-based price lookup
 	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
@@ -145,9 +145,9 @@
 				// Resolve token info (handles wrapped/unwrapped/legacy address variants),
 				// then use symbol-based lookup against the priceFeeds query — same pattern
 				// the sidebar uses so home/sidebar stay consistent.
-				const tokenInfo = getTokenByAnyAddress(sft.address);
+				const tokenInfo = findApiTokenByAnyAddress(apiTokens, sft.address);
 				const symbolForPrice = tokenInfo?.symbol ?? sft.symbol;
-				const quote = findQuoteForSymbol(symbolForPrice, priceQuotes, ALL_TOKENS);
+				const quote = findQuoteForSymbol(symbolForPrice, priceQuotes, apiTokens);
 				const price = quote?.close ?? null;
 
 				rows.push({
@@ -421,7 +421,7 @@
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
 											<TokenDisplay
-												logoUrl={getTokenByAnyAddress(token.address)?.logoUrl}
+												logoUrl={findApiTokenByAnyAddress(apiTokens, token.address)?.logoUrl}
 												symbol={token.symbol}
 												name={token.name}
 											/>

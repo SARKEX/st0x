@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
 	import { formatUnits } from 'viem';
-	import { TOKENS, getTokenByAnyAddress } from '$lib/config/network';
+	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	// PERF-01: LimitOrder + DcaOrder are lazy-loaded via {#await import()} below
 	// (only fetched when their tab is selected). MarketOrder stays eager — it is
@@ -106,7 +106,9 @@
 	// Use single token query - checks global cache first, falls back to single fetch
 	$: singleTokenQuery = createSingleSftQuery(tokenId, $currentNetwork, queryClient);
 	$: currentToken = $singleTokenQuery.data;
-	const tokensLookup = createTokenLookup(TOKENS);
+	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: apiTokens = $apiTokensQuery.data ?? [];
+	$: tokensLookup = createTokenLookup(apiTokens);
 	let orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
 		$currentNetwork,
 		currentToken?.address ?? null
@@ -354,10 +356,7 @@
 	// Note: currentToken.address from subgraph may differ from the wrapped token address
 	$: currentPythToken = (() => {
 		if (!tokenId || !$currentNetwork?.chainId) return undefined;
-		// DRIFT-01: getTokenByAnyAddress already matches wrapped/unwrapped/legacy
-		// address variants (and the wrapped-address path is a strict subset of
-		// what it covers), so the previous two-step lookup collapses to one call.
-		const match = getTokenByAnyAddress(tokenId);
+		const match = findApiTokenByAnyAddress(apiTokens, tokenId);
 		return match?.chainId === $currentNetwork.chainId ? match : undefined;
 	})();
 	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);

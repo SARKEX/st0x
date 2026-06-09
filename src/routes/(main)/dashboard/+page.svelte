@@ -22,8 +22,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { formatUnits, erc20Abi } from 'viem';
 	import { readContracts, getBalance } from '@wagmi/core';
-	import { getAllTokensByNetwork } from '$lib/config/network';
-	import { TOKENS, PAYMENT_TOKENS_BY_NETWORK, getTokenByAnyAddress } from '$lib/config/tokens';
+	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import { goto } from '$app/navigation';
 	import { transformApiTakerTradesToDisplay } from '$lib/utils/tradeTransform';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -73,22 +72,18 @@
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
 
-	// Filter tokens by current network
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: ALL_TOKENS = $apiTokensQuery.data ?? [];
+	$: paymentTokens = ALL_TOKENS.filter((token) => token.category === 'CRYPTO');
 
 	// Set of valid token addresses (asset tokens + payment tokens) for filtering
 	$: validTokenAddresses = (() => {
 		if (!$currentNetwork) return new Set<string>();
 		const addresses = new Set<string>();
-		// Add asset tokens for current network
-		for (const token of TOKENS) {
-			if (token.chainId === $currentNetwork.chainId) {
-				addresses.add(token.address.toLowerCase());
-			}
-		}
-		// Add payment tokens for current network
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
 		for (const token of paymentTokens) {
+			addresses.add(token.address.toLowerCase());
+		}
+		for (const token of ALL_TOKENS.filter((token) => token.category === 'ST0x')) {
 			addresses.add(token.address.toLowerCase());
 		}
 		return addresses;
@@ -98,10 +93,8 @@
 	$: tStockAddresses = (() => {
 		if (!$currentNetwork) return new Set<string>();
 		const addresses = new Set<string>();
-		for (const token of TOKENS) {
-			if (token.chainId === $currentNetwork.chainId && token.category === 'ST0x') {
-				addresses.add(token.address.toLowerCase());
-			}
+		for (const token of ALL_TOKENS.filter((token) => token.category === 'ST0x')) {
+			addresses.add(token.address.toLowerCase());
 		}
 		return addresses;
 	})();
@@ -351,13 +344,20 @@
 	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
 	// Query user's wallet holdings from SFTs - fetches balances via multicall (single RPC request)
-	// We query balances on WRAPPED token addresses (from TOKENS config) since that's what users trade
+	// We query balances on wrapped token addresses from the REST API token list since those are traded.
 	const walletHoldingsQuery = createQuery(
 		derived(
 			[isAuthenticated, walletAddress, sfts, currentNetwork, wagmiConfig],
 			([$isAuthenticated, $walletAddress, $sfts, $currentNetwork, $wagmiConfig]) => ({
 				queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
-				enabled: !!($isAuthenticated && $walletAddress && $sfts && $currentNetwork && $wagmiConfig),
+				enabled: !!(
+					$isAuthenticated &&
+					$walletAddress &&
+					$sfts &&
+					$currentNetwork &&
+					$wagmiConfig &&
+					ALL_TOKENS.length
+				),
 				refetchOnMount: 'always' as const,
 				refetchInterval: QUERY_POLL_INTERVAL_MS,
 				staleTime: QUERY_STALE_TIME_MS,
@@ -365,13 +365,13 @@
 					if (!$sfts || !$walletAddress || !$wagmiConfig) return [];
 					const normalizedWalletAddress = $walletAddress.toLowerCase();
 
-					// Map subgraph SFTs to their wrapped token addresses from TOKENS config
+					// Map subgraph SFTs to their wrapped token addresses from the API token list.
 					// The subgraph returns unwrapped addresses, but we need to query wrapped token balances
 					const sftsWithWrappedAddresses = $sfts.map((sft) => {
-						const tokenConfig = getTokenByAnyAddress(sft.address);
+						const tokenConfig = findApiTokenByAnyAddress(ALL_TOKENS, sft.address);
 						return {
 							...sft,
-							wrappedAddress: tokenConfig?.address ?? sft.address // Use wrapped address if found
+							wrappedAddress: tokenConfig?.address ?? sft.address
 						};
 					});
 
@@ -402,8 +402,7 @@
 								walletBalance = userHolder ? BigInt(userHolder.balance) : 0n;
 							}
 
-							// Use wrapped token info from config
-							const tokenConfig = getTokenByAnyAddress(sft.address);
+							const tokenConfig = findApiTokenByAnyAddress(ALL_TOKENS, sft.address);
 
 							return {
 								id: sft.id,
@@ -422,7 +421,7 @@
 								(holder: { address: string }) =>
 									holder.address.toLowerCase() === normalizedWalletAddress
 							);
-							const tokenConfig = getTokenByAnyAddress(sft.address);
+							const tokenConfig = findApiTokenByAnyAddress(ALL_TOKENS, sft.address);
 							return {
 								id: sft.id,
 								address: tokenConfig?.address ?? sft.address,
@@ -450,7 +449,6 @@
 				staleTime: QUERY_STALE_TIME_MS,
 				queryFn: async () => {
 					if (!$currentNetwork || !$walletAddress || !$wagmiConfig) return [];
-					const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
 					if (paymentTokens.length === 0) return [];
 
 					const contracts = paymentTokens.map((token) => ({
@@ -797,7 +795,6 @@
 	// Split portfolio into funds (payment tokens) and holdings (asset tokens)
 	$: paymentTokenAddresses = (() => {
 		if (!$currentNetwork) return new Set<string>();
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork.chainId] ?? [];
 		return new Set(paymentTokens.map((t) => t.address.toLowerCase()));
 	})();
 
@@ -809,7 +806,6 @@
 		);
 
 		// Ensure USDC is always shown (even with 0 balance)
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
 		for (const token of paymentTokens) {
 			const exists = funds.some((f) => f.address.toLowerCase() === token.address.toLowerCase());
 			if (!exists) {
@@ -1343,7 +1339,7 @@
 											{@const isEth = holding.address === 'native'}
 											{@const paymentToken = isEth
 												? null
-												: (PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? []).find(
+												: paymentTokens.find(
 														(t) => t.address.toLowerCase() === holding.address.toLowerCase()
 													)}
 											{@const logoUrl = isEth ? '/images/ETH.svg' : paymentToken?.logoUrl}
@@ -1458,7 +1454,7 @@
 											<tr class="hover:bg-white/5">
 												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
 													<TokenDisplay
-														logoUrl={getTokenByAnyAddress(holding.address)?.logoUrl}
+														logoUrl={findApiTokenByAnyAddress(ALL_TOKENS, holding.address)?.logoUrl}
 														symbol={rowSymbol}
 														name={holding.name}
 														hideNameOnMobile={true}
@@ -1592,7 +1588,8 @@
 																		address: holding.address,
 																		symbol: holding.symbol,
 																		decimals: holding.decimals,
-																		image: getTokenByAnyAddress(holding.address)?.logoUrl
+																		image: findApiTokenByAnyAddress(ALL_TOKENS, holding.address)
+																			?.logoUrl
 																	})}
 																class="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-1.5 text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
 																title="Track in Wallet"

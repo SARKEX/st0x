@@ -6,18 +6,30 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { erc20Abi } from 'viem';
 	import { readContracts } from '@wagmi/core';
-	import { PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
+	import { createApiTokensQuery } from '$lib/queries/tokens';
 
 	let dismissed = false;
+	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: paymentTokens = ($apiTokensQuery.data ?? []).filter((token) => token.category === 'CRYPTO');
 
 	// Share the same query key as dashboard to avoid duplicate RPC calls
 	// Uses same settings as dashboard - invalidation happens after transactions
 	$: usdcBalanceQuery = createQuery({
-		queryKey: ['usdcWalletBalance', $walletAddress, $currentNetwork?.chainId],
-		enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+		queryKey: [
+			'usdcWalletBalance',
+			$walletAddress,
+			$currentNetwork?.chainId,
+			paymentTokens.map((token) => token.address).join(',')
+		],
+		enabled: !!(
+			$isAuthenticated &&
+			$walletAddress &&
+			$currentNetwork &&
+			$wagmiConfig &&
+			paymentTokens.length
+		),
 		staleTime: 30_000, // Consider data fresh for 30 seconds
 		queryFn: async () => {
-			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
 			if (paymentTokens.length === 0 || !$walletAddress) return [];
 
 			// Build multicall contracts array

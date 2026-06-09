@@ -2,13 +2,13 @@
 	import { web3Modal, wagmiConfig } from 'svelte-wagmi';
 	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
-	import { getAllTokensByNetwork } from '$lib/config/network';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi, formatUnits, parseUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import { createApiTokensQuery } from '$lib/queries/tokens';
 	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
@@ -54,14 +54,19 @@
 	let previousTokenSymbol: string | null = null;
 
 	// ============ TOKEN SELECTION (completely independent) ============
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
-	$: tradableTokens = ALL_TOKENS.filter((t) => t.category === 'ST0x');
+	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: apiTokens = $apiTokensQuery.data ?? [];
+	$: tradableTokens = apiTokens.filter((t) => t.category === 'ST0x');
 
 	let selectedTokenAddress: string | null = null;
 	let isDropdownOpen = false;
 
 	// Auto-select first token on mount
-	$: if (tradableTokens.length > 0 && !selectedTokenAddress) {
+	$: if (
+		tradableTokens.length > 0 &&
+		(!selectedTokenAddress ||
+			!tradableTokens.some((t) => t.address.toLowerCase() === selectedTokenAddress?.toLowerCase()))
+	) {
 		selectedTokenAddress = tradableTokens[0].address;
 	}
 
