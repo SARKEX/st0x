@@ -82,7 +82,7 @@
 	import { wagmiConfig } from 'svelte-wagmi';
 	import { isAuthenticated, walletAddress, authMethod } from '$lib/stores/authStore';
 	import { dynamicSession } from '$lib/stores/dynamicStore';
-	import { promptWalletConnection, promptLogin, walletRegistered } from '$lib/stores/accessStore';
+	import { promptWalletConnection } from '$lib/stores/accessStore';
 	import { tutorialWantsTradePanel } from '$lib/stores/tutorialStore';
 	import { startVaultTutorial, vaultTutorialActive } from '$lib/stores/vaultTutorialStore';
 	import VaultTutorial from '$lib/components/VaultTutorial.svelte';
@@ -687,11 +687,6 @@
 		// Check if wallet is connected before opening trade panel
 		if (!$isAuthenticated) {
 			promptWalletConnection();
-			return;
-		}
-		// Check if wallet is registered
-		if (!$walletRegistered) {
-			promptLogin();
 			return;
 		}
 		panelOrderSide = side;

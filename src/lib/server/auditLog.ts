@@ -8,10 +8,6 @@ import { getClientIp } from './rateLimit';
 
 // Audit event types
 export type AuditEventType =
-	| 'WALLET_REGISTRATION'
-	| 'ACCESS_CODE_CREATED'
-	| 'ACCESS_CODE_DELETED'
-	| 'ACCESS_CODE_UPDATED'
 	| 'ADMIN_LOGIN'
 	| 'ADMIN_LOGIN_FAILED'
 	| 'SNAPSHOT_GENERATED'
@@ -25,15 +21,7 @@ export type AuditEventType =
 	| 'TEAM_WALLET_ADDED'
 	| 'TEAM_WALLET_REMOVED'
 	| 'CRON_JOB_EXECUTED'
-	| 'RATE_LIMIT_EXCEEDED'
-	| 'ACCESS_DENIED'
-	| 'REFERRAL_JOIN'
-	| 'REFERRAL_LINK'
-	| 'REFERRAL_CACHE_REFRESH'
-	| 'REFERRAL_UPDATE'
-	| 'REFERRAL_UPDATE_FAILED'
-	| 'REFERRAL_MIGRATION'
-	| 'REFERRAL_MIGRATION_FAILED';
+	| 'RATE_LIMIT_EXCEEDED';
 
 export interface AuditLogEntry {
 	id: string;

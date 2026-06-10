@@ -14,7 +14,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isAuthenticated } from '$lib/stores/authStore';
 	import Modal from '$lib/components/ui/Modal.svelte';
-	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
+	import { promptWalletConnection } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
 	import { classifyError } from '$lib/services/observability/classifyError';
@@ -225,11 +225,6 @@
 		// Check if user is connected
 		if (!$isAuthenticated) {
 			promptWalletConnection();
-			return;
-		}
-		// Check if user is registered
-		if (!$walletRegistered) {
-			promptLogin();
 			return;
 		}
 
