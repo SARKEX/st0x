@@ -1,6 +1,7 @@
 import { derived, writable, type Readable } from 'svelte/store';
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
+import type { ApiTokenProofsResponse } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
 import { networks } from '$lib/config/network';
 import type { OracleQuote } from '$lib/queries/oracleQuotes';
@@ -27,6 +28,7 @@ function createNetworkQueryStore<T>(
 }
 
 export const sftMetadata = writable<MetaV1S[] | null>(null);
+export const tokenProofs = writable<ApiTokenProofsResponse | null>(null);
 export const currentNetwork = writable<Network>(networks[0]); // Base is default
 
 // Re-export wrongNetwork from authStore to maintain backward compatibility

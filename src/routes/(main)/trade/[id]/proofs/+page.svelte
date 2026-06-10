@@ -1,15 +1,17 @@
 <script lang="ts">
 	import type { Schema } from '$lib/types/SchemaQueryResponse';
-	import { currentToken } from '$lib/stores';
-	import { addSchemaToReceipts } from '$lib/utils/schemas';
+	import { currentToken, tokenProofs } from '$lib/stores';
+	import { addSchemaToReceiptVaultInformations } from '$lib/utils/schemas';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import ViewMetadata from './ViewMetadata.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
 
 	let schemas: Schema[] = [];
-	$: if ($currentToken) {
-		// @ts-expect-error - addSchemaToReceipts return shape is compatible with Schema[] for ViewMetadata
-		schemas = addSchemaToReceipts($currentToken);
+	$: if ($tokenProofs) {
+		// @ts-expect-error - schema decoder return shape is compatible with Schema[] for ViewMetadata
+		schemas = addSchemaToReceiptVaultInformations($tokenProofs.schemas);
+	} else {
+		schemas = [];
 	}
 </script>
 

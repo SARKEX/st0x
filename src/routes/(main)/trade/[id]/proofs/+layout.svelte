@@ -1,39 +1,65 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getSftMetadata, getSftById } from '$lib/api/subgraph';
+	import { apiGetTokenProofs } from '$lib/api/st0xApi';
 	import { page } from '$app/stores';
-	import { sftMetadata, currentNetwork, sfts, currentToken } from '$lib/stores';
+	import { sftMetadata, tokenProofs, currentNetwork, sfts, currentToken } from '$lib/stores';
+	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 
 	const { id } = $page.params;
 
 	$: query = createQuery({
-		queryKey: ['getSftMetadata', id, $currentNetwork?.id],
-		enabled: !!$currentNetwork?.metadata_subgraph_url,
-		queryFn: () => getSftMetadata(id, $currentNetwork.metadata_subgraph_url as string)
+		queryKey: ['getTokenProofs', id, $currentNetwork?.id],
+		enabled: Boolean(browser && id),
+		queryFn: () => apiGetTokenProofs(id)
 	});
 
 	$: if ($query && $query.data) {
-		sftMetadata.set($query.data);
+		tokenProofs.set($query.data);
+		sftMetadata.set($query.data.metadata);
+	} else if ($query?.error) {
+		tokenProofs.set(null);
+		sftMetadata.set(null);
 	}
 
-	// Fetch full vault by id when not in sfts (e.g. direct navigation to /trade/[id]/proofs)
-	$: vaultQuery = createQuery({
-		queryKey: ['getSftById', id, $currentNetwork?.id],
-		enabled: !!$currentNetwork && !!id,
-		queryFn: () => getSftById(id, $currentNetwork!)
-	});
-
-	// Set currentToken: prefer vault from sfts (instant), else use vault from getSftById
+	// Set currentToken: prefer cached vault details for display name, then fall back to token config.
 	$: if (id) {
+		const wrappedAddress = $query?.data?.address?.toLowerCase();
 		const foundInSfts = $sfts?.find(
-			(v: OffchainAssetReceiptVault) => v.id === id || v.address?.toLowerCase() === id.toLowerCase()
+			(v: OffchainAssetReceiptVault) =>
+				v.id === id ||
+				v.address?.toLowerCase() === id.toLowerCase() ||
+				(wrappedAddress && v.address?.toLowerCase() === wrappedAddress)
 		);
 		if (foundInSfts) {
 			currentToken.set(foundInSfts);
-		} else if ($vaultQuery?.data) {
-			currentToken.set($vaultQuery.data);
+		} else if ($query?.data) {
+			const token = getTokenByAnyAddress(id) ?? getTokenByAnyAddress($query.data.address);
+			currentToken.set({
+				id: $query.data.address,
+				totalShares: '0',
+				address: $query.data.address as `0x${string}`,
+				deployer: '',
+				admin: '',
+				name: token?.name ?? token?.symbol ?? $query.data.address,
+				symbol: token?.symbol ?? '',
+				deployTimestamp: '',
+				receiptContractAddress: '',
+				tokenHolders: [],
+				receiptVaultInformations: $query.data.schemas.map((schema) => ({
+					id: schema.id,
+					information: schema.information,
+					timestamp: String(schema.timestamp),
+					caller: { address: '' },
+					transaction: { blockNumber: '' }
+				})),
+				withdraws: [],
+				deposits: [],
+				shareTransfers: [],
+				chainId: $currentNetwork?.chainId
+			});
 		}
 	}
 </script>

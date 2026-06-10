@@ -7,6 +7,7 @@
 
 import { browser } from '$app/environment';
 import { fetchJson } from '$lib/clients/http';
+import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 
 // ============================================================================
 // Shared Types (match Rust API camelCase serialization)
@@ -143,6 +144,32 @@ export interface ApiTradesBatchResponse {
 }
 
 // ============================================================================
+// Token Proof Types
+// ============================================================================
+
+export interface ApiTokenProofSchema {
+	id: string;
+	information: string;
+	timestamp: number;
+}
+
+export interface ApiTokenProofReceipt {
+	id: string;
+	receiptId: string;
+	txHash: string;
+	type: 'deposit' | 'withdraw';
+	information: string;
+	timestamp: number;
+}
+
+export interface ApiTokenProofsResponse {
+	address: string;
+	metadata: MetaV1S[];
+	schemas: ApiTokenProofSchema[];
+	receipts: ApiTokenProofReceipt[];
+}
+
+// ============================================================================
 // API Client
 // ============================================================================
 
@@ -196,6 +223,14 @@ export async function apiGetOrdersByToken(
 export async function apiGetTokens(): Promise<ApiToken[]> {
 	assertBrowser('apiGetTokens');
 	return fetchJson<ApiToken[]>(apiUrl('/v1/tokens'));
+}
+
+/**
+ * Fetch raw proof/attestation metadata for a tokenized asset.
+ */
+export async function apiGetTokenProofs(address: string): Promise<ApiTokenProofsResponse> {
+	assertBrowser('apiGetTokenProofs');
+	return fetchJson<ApiTokenProofsResponse>(apiUrl(`/v1/tokens/${address}/proofs`));
 }
 
 /**

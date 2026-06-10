@@ -30,6 +30,11 @@ function getAuthHeader(): string {
 const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
 	{ method: 'GET', pattern: /^health$/ },
 	{ method: 'GET', pattern: /^v1\/tokens$/ },
+	{
+		method: 'GET',
+		pattern: /^v1\/tokens\/[^/]+\/proofs$/,
+		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+	},
 	// Shared endpoints — same response for all users, cache at Vercel edge
 	{
 		method: 'GET',
