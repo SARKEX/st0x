@@ -1,7 +1,6 @@
 <script lang="ts">
 	import '../../app.css';
 	import { onMount } from 'svelte';
-	import { initTokenSwapAnnouncement } from '$lib/stores/announcementStore';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import TickerTape from '$lib/components/TickerTape.svelte';
@@ -15,8 +14,6 @@
 	type TransactionModalComponent = typeof import('$lib/components/TransactionModal.svelte').default;
 	type RainlangConfirmationModalComponent =
 		typeof import('$lib/components/RainlangConfirmationModal.svelte').default;
-	type TokenSwapAnnouncementModalComponent =
-		typeof import('$lib/components/announcements/TokenSwapAnnouncementModal.svelte').default;
 	type WalletConnectionModalComponent =
 		typeof import('$lib/components/WalletConnectionModal.svelte').default;
 	type TutorialComponent = typeof import('$lib/components/Tutorial.svelte').default;
@@ -25,7 +22,6 @@
 
 	let TransactionModal: TransactionModalComponent | null = null;
 	let RainlangConfirmationModal: RainlangConfirmationModalComponent | null = null;
-	let TokenSwapAnnouncementModal: TokenSwapAnnouncementModalComponent | null = null;
 	let WalletConnectionModal: WalletConnectionModalComponent | null = null;
 	let Tutorial: TutorialComponent | null = null;
 	let LowFundsBanner: LowFundsBannerComponent | null = null;
@@ -35,7 +31,6 @@
 		const [
 			transactionModal,
 			rainlangConfirmationModalComponent,
-			tokenSwapAnnouncementModal,
 			walletConnectionModal,
 			tutorial,
 			lowFundsBanner,
@@ -43,7 +38,6 @@
 		] = await Promise.all([
 			import('$lib/components/TransactionModal.svelte'),
 			import('$lib/components/RainlangConfirmationModal.svelte'),
-			import('$lib/components/announcements/TokenSwapAnnouncementModal.svelte'),
 			import('$lib/components/WalletConnectionModal.svelte'),
 			import('$lib/components/Tutorial.svelte'),
 			import('$lib/components/LowFundsBanner.svelte'),
@@ -52,7 +46,6 @@
 
 		TransactionModal = transactionModal.default;
 		RainlangConfirmationModal = rainlangConfirmationModalComponent.default;
-		TokenSwapAnnouncementModal = tokenSwapAnnouncementModal.default;
 		WalletConnectionModal = walletConnectionModal.default;
 		Tutorial = tutorial.default;
 		LowFundsBanner = lowFundsBanner.default;
@@ -60,7 +53,6 @@
 	}
 
 	onMount(() => {
-		initTokenSwapAnnouncement();
 		void loadDeferredLayoutComponents();
 	});
 
@@ -184,10 +176,6 @@
 			/>
 		{/if}
 	</div>
-
-	{#if TokenSwapAnnouncementModal}
-		<svelte:component this={TokenSwapAnnouncementModal} />
-	{/if}
 
 	<!-- Connection Modal -->
 	{#if WalletConnectionModal}

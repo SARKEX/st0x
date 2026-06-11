@@ -256,13 +256,10 @@ export const test = base.extend<UiFixtures>({
 				(globalThis as any).Date = Patched;
 			}, pinMs);
 		}
-		// Pre-dismiss one-time announcement modals — they auto-open on fresh
-		// browser sessions (no localStorage entry) and intercept pointer events
-		// on the page under test. The modal logic lives in
-		// src/lib/stores/announcementStore.ts; the localStorage key is the
-		// production-facing one (do NOT change without updating both sides).
+		// Pre-dismiss one-time onboarding modals — they auto-open on fresh browser
+		// sessions (no localStorage entry) and intercept pointer events on the page
+		// under test.
 		await page.addInitScript(() => {
-			window.localStorage.setItem('st0x_token_swap_announcement_seen', 'true');
 			// Pre-dismiss the vault tutorial. The trade page (src/routes/(main)/trade/[id]/+page.svelte:336-348)
 			// auto-fires a vault tutorial on the FIRST switch to `panelStrategy = 'limit'`
 			// or `'dca'`, and that handler CLOSES the trade panel (line 345) before
