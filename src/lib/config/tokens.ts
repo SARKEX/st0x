@@ -302,6 +302,26 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NYSE:SGOV',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		// wtSPCX — Space Exploration Technologies Corp (SpaceX). Deployed on Base
+		// 2026-06-10 ahead of the 2026-06-12 Nasdaq IPO (ticker SPCX, ISIN
+		// US84615Q1031). Newly listed, so Pyth has no feed yet — using a hardcoded
+		// fallbackPrice at the $135 IPO price until a real feed is wired up
+		// (mirrors the wtSPYM pattern above).
+		chainId: base.id,
+		address: '0x19F89aaEf8a93f38A974beca9776f09aB844887F',
+		unwrappedAddress: '0xc585AeB8B76c5F5e4215470A7625258e86ED7746',
+		symbol: 'wtSPCX',
+		decimals: 18,
+		name: 'Wrapped Space Exploration Technologies Corp. ST0x',
+		logoUrl: '/images/SPCX.svg',
+		priceFeedId: '',
+		fallbackPrice: 135,
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:SPCX',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
