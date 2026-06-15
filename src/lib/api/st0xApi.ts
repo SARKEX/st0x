@@ -170,6 +170,50 @@ export interface ApiTokenProofsResponse {
 }
 
 // ============================================================================
+// Wrap Ratio Types
+// ============================================================================
+
+export interface ApiWrapRatio {
+	shareAddress: string;
+	assetAddress: string;
+	assetsPerShare: string;
+	blockNumber: number;
+	blockTimestamp: number;
+	capturedAt: string;
+}
+
+export interface ApiWrapRatioError {
+	shareAddress: string;
+	message: string;
+}
+
+export interface ApiWrapRatiosResponse {
+	data: ApiWrapRatio[];
+	errors: ApiWrapRatioError[];
+}
+
+export interface ApiWrapRatioHistoryEvent {
+	type: 'snapshot';
+	blockNumber: number;
+	blockTimestamp: number;
+	assetsPerShare: string;
+	capturedAt: string;
+}
+
+export interface ApiWrapRatioHistoryResponse {
+	shareAddress: string;
+	assetAddress: string;
+	events: ApiWrapRatioHistoryEvent[];
+	pagination: {
+		page: number;
+		pageSize: number;
+		totalEvents: number;
+		totalPages: number;
+		hasMore: boolean;
+	};
+}
+
+// ============================================================================
 // API Client
 // ============================================================================
 
@@ -231,6 +275,38 @@ export async function apiGetTokens(): Promise<ApiToken[]> {
 export async function apiGetTokenProofs(address: string): Promise<ApiTokenProofsResponse> {
 	assertBrowser('apiGetTokenProofs');
 	return fetchJson<ApiTokenProofsResponse>(apiUrl(`/v1/tokens/${address}/proofs`));
+}
+
+/**
+ * Fetch current wrap ratios for supported wrapped tokens.
+ */
+export async function apiGetWrapRatios(): Promise<ApiWrapRatiosResponse> {
+	assertBrowser('apiGetWrapRatios');
+	return fetchJson<ApiWrapRatiosResponse>(apiUrl('/v1/tokens/wrap-ratio'));
+}
+
+/**
+ * Fetch current wrap ratio for a single wrapped token.
+ */
+export async function apiGetWrapRatio(wrappedTokenAddress: string): Promise<ApiWrapRatio> {
+	assertBrowser('apiGetWrapRatio');
+	return fetchJson<ApiWrapRatio>(apiUrl(`/v1/tokens/wrap-ratio/${wrappedTokenAddress}`));
+}
+
+/**
+ * Fetch snapshot history for a wrapped token's wrap ratio.
+ */
+export async function apiGetWrapRatioHistory(
+	wrappedTokenAddress: string,
+	options?: { page?: number; pageSize?: number }
+): Promise<ApiWrapRatioHistoryResponse> {
+	assertBrowser('apiGetWrapRatioHistory');
+	return fetchJson<ApiWrapRatioHistoryResponse>(
+		apiUrl(`/v1/tokens/wrap-ratio/${wrappedTokenAddress}/history`, {
+			page: options?.page,
+			pageSize: options?.pageSize
+		})
+	);
 }
 
 /**

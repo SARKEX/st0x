@@ -3,12 +3,8 @@
 // Ratio History tab).
 //
 // Target token: **wtSGOV** (iShares 0-3 Month T-Bill ETF). SGOV's wrap
-// ratio is 1.002700626096609112 today (verified on Base via
-// `cast call wtSGOV.convertToAssets(1e18)` at block 46604184). The value
-// plus a single historical dividend distribution event are pinned in
-// `src/lib/config/wrapRatioFixture.json`; the UI reads from that file
-// directly (no API call), so this spec doesn't need to mock the rates
-// endpoint anymore.
+// ratio is stubbed from the REST API response shape so the test covers the
+// production data path without depending on staging data.
 //
 // Why SGOV: SGOV isn't in the SFT subgraph yet, so `getSftById` returns
 // null quickly — `singleTokenQuery` resolves fast, the page falls back to
@@ -22,15 +18,94 @@ import { test, expect } from './fixtures';
 const WT_SGOV_ADDRESS = '0x78c31580c97101694C70022c83D570150c11e935';
 const T_SGOV_ADDRESS = '0xc941C1506B7555Ba8C506Fb6c9b9CC259902d612';
 
-// Mirrors the value pinned in `src/lib/config/wrapRatioFixture.json`. The
-// UI renders ratios with `toLocaleString('en-US', { maximumFractionDigits: 4 })`,
-// so 1.002700626096609112 displays as "1.0027".
+// The UI renders ratios with
+// `toLocaleString('en-US', { maximumFractionDigits: 4 })`.
 const RATIO_DISPLAY = '1.0027';
 
-test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
-	test('chip, explainer, ratio history, denom toggle render with the SGOV fixture', async ({
+test.describe('Wrap ratio UX — non-1:1 wtSGOV (REST API)', () => {
+	test('chip, explainer, ratio history, denom toggle render with REST wrap-ratio data', async ({
 		page
 	}) => {
+		await page.route(/\/api\/st0x\/v1\/tokens/, async (route) => {
+			const url = new URL(route.request().url());
+			const pathname = url.pathname.toLowerCase();
+			if (url.pathname === '/api/st0x/v1/tokens') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify([
+						{
+							address: WT_SGOV_ADDRESS,
+							symbol: 'wtSGOV',
+							decimals: 18,
+							name: 'Wrapped iShares 0-3 Month Treasury Bond ETF ST0x',
+							network: { chainId: 8453 },
+							extensions: {
+								category: 'ST0x',
+								unwrappedAddress: T_SGOV_ADDRESS
+							}
+						}
+					])
+				});
+				return;
+			}
+			if (pathname === `/api/st0x/v1/tokens/wrap-ratio/${WT_SGOV_ADDRESS.toLowerCase()}/history`) {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						shareAddress: WT_SGOV_ADDRESS,
+						assetAddress: T_SGOV_ADDRESS,
+						events: [
+							{
+								type: 'snapshot',
+								blockNumber: 46604184,
+								blockTimestamp: 1748430000,
+								assetsPerShare: '1.0',
+								capturedAt: '1748430000'
+							},
+							{
+								type: 'snapshot',
+								blockNumber: 46604185,
+								blockTimestamp: 1748433600,
+								assetsPerShare: '1.002700626096609112',
+								capturedAt: '1748433600'
+							}
+						],
+						pagination: {
+							page: 1,
+							pageSize: 100,
+							totalEvents: 2,
+							totalPages: 1,
+							hasMore: false
+						}
+					})
+				});
+				return;
+			}
+			if (url.pathname === '/api/st0x/v1/tokens/wrap-ratio') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						data: [
+							{
+								shareAddress: WT_SGOV_ADDRESS,
+								assetAddress: T_SGOV_ADDRESS,
+								assetsPerShare: '1.002700626096609112',
+								blockNumber: 46604185,
+								blockTimestamp: 1748433600,
+								capturedAt: '1748433600'
+							}
+						],
+						errors: []
+					})
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
 		// Stub the SFT subgraph for the SGOV singleTokenQuery so it resolves fast
 		// and deterministically. SGOV's Goldsky entry is sparse / cold so the
 		// upstream request can rate-limit or hit the fixtures.ts retry loop
@@ -88,7 +163,11 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
 		// Dismiss the "No USDC found" announcement banner so its dismiss-X button
 		// doesn't accidentally absorb the click flow if Playwright targets the
 		// wrong stacking layer.
-		await page.locator('button[aria-label="Dismiss"]').first().click({ trial: true }).catch(() => {});
+		await page
+			.locator('button[aria-label="Dismiss"]')
+			.first()
+			.click({ trial: true })
+			.catch(() => {});
 
 		const trigger = page.locator('[data-testid="wrap-explainer-trigger"]').first();
 		await expect(trigger).toBeVisible();
@@ -119,11 +198,9 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
 		// The contract tab is the default tab in Token Details. The yellow card
 		// at the top has the ratio + "Unwrap in Dashboard" CTA.
 		await expect(page.getByText('Wrap Ratio').first()).toBeVisible();
-		await expect(
-			page.getByRole('link', { name: /Unwrap in Dashboard/i }).first()
-		).toBeVisible();
+		await expect(page.getByRole('link', { name: /Unwrap in Dashboard/i }).first()).toBeVisible();
 
-		// ───────── 4. Ratio History tab — timeline + events ─────────
+		// ───────── 4. Ratio History tab - timeline + snapshots ─────────
 		// Tab click sometimes drops on the floor if hasRatio briefly flips while
 		// the page is still hydrating (it's reactive over the same currentRatio
 		// that drives the tab strip). Retry until the panel content appears.
@@ -133,15 +210,12 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
 			await ratioTab.click();
 			await expect(page.getByText('Wrap Ratio History')).toBeVisible({ timeout: 1_500 });
 		}).toPass({ timeout: 15_000, intervals: [500, 1_000, 2_000] });
-		// The fixture has one donation event between two bookkeeping snapshots.
-		// We filter snapshots out of the user-facing list, so only the "Rebase"
-		// item plus the synthetic "Deployed" anchor should render. The "current"
-		// pill should mark the rebase (most-recent real event).
-		await expect(page.getByText(/^Rebase$/).first()).toBeVisible();
+		// REST history returns sampled snapshots only. The most recent snapshot
+		// gets the "latest" pill, followed by the synthetic deployment anchor.
+		await expect(page.getByText(/^Snapshot$/).first()).toBeVisible();
 		await expect(page.getByText(/^Deployed$/).first()).toBeVisible();
-		await expect(page.getByText('current').first()).toBeVisible();
-		// And we shouldn't render any "Snapshot" rows anymore — they were noise.
-		await expect(page.getByText(/^Snapshot$/i)).toHaveCount(0);
+		await expect(page.getByText('latest').first()).toBeVisible();
+		await expect(page.getByText(/^Rebase$/i)).toHaveCount(0);
 
 		// ───────── 5. DenomToggle in the On-chain Market header ─────────
 		const sharesBtn = page.getByRole('tab', { name: 'Shares (tSGOV)' });
@@ -192,14 +266,20 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (hardcoded fixture)', () => {
 			// pre-fix code failed: header changed but cells stayed in wt.
 			await expect(ordersPanel.locator('tbody').getByText(/wtSGOV/i)).toHaveCount(0);
 			await expect(
-				ordersPanel.locator('tbody').getByText(/(?<!w)tSGOV/i).first()
+				ordersPanel
+					.locator('tbody')
+					.getByText(/(?<!w)tSGOV/i)
+					.first()
 			).toBeVisible();
 
 			// And toggling back to wrapped flips them all back.
 			await tokensBtn.click();
 			await expect(tokensBtn).toHaveAttribute('aria-selected', 'true');
 			await expect(
-				ordersPanel.locator('tbody').getByText(/wtSGOV/i).first()
+				ordersPanel
+					.locator('tbody')
+					.getByText(/wtSGOV/i)
+					.first()
 			).toBeVisible({ timeout: 5_000 });
 		}
 	});

@@ -3,8 +3,8 @@
 
 	/**
 	 * Step chart of the wrap ratio (assetsPerShare) over time. Each input event
-	 * is a snapshot or donation point; the line steps up/down at each event and
-	 * extends flat to "now" at the right edge.
+	 * is a sampled snapshot; the line steps up/down at each event and extends
+	 * flat to "now" at the right edge.
 	 *
 	 * Events are expected sorted ascending by blockTimestamp.
 	 */
@@ -13,16 +13,11 @@
 	export let assetSymbol: string;
 
 	function rateOf(ev: ExchangeRateEvent): number | null {
-		if (ev.type === 'snapshot') {
-			const v = Number(ev.assetsPerShare);
-			return Number.isFinite(v) ? v : null;
-		}
-		const v = ev.newAssetsPerShare == null ? NaN : Number(ev.newAssetsPerShare);
+		const v = Number(ev.assetsPerShare);
 		return Number.isFinite(v) ? v : null;
 	}
 
-	// Drop events with no readable rate (the API may return null on donations
-	// it couldn't price; they'll self-heal on the next read).
+	// Drop events with no readable rate; they'll self-heal on the next sample.
 	$: pts = events
 		.map((e) => ({ ev: e, rate: rateOf(e) }))
 		.filter((p): p is { ev: ExchangeRateEvent; rate: number } => p.rate != null);
@@ -36,8 +31,8 @@
 	$: innerW = w - padL - padR;
 	$: innerH = h - padT - padB;
 
-	// The wrap ratio is bounded below by 1.0 (vault assets ≥ shares minted by
-	// construction — issuer donations only add, never remove). Anchoring the
+	// The wrap ratio is bounded below by 1.0 (vault assets >= shares minted by
+	// construction). Anchoring the
 	// y-axis at 0 wastes 99% of the plot area on impossible values; the
 	// previous fixed `0..yMax` axis made a 1 → 1.0027 step look flat. We
 	// instead frame the axis tightly around the actual data with a small
