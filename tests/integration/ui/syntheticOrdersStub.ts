@@ -42,7 +42,9 @@ function encodeVaultBalanceHex(decimalString: string): string {
 	const parsed = Float.parse(decimalString);
 	if (parsed.error || !parsed.value) {
 		throw new Error(
-			`encodeVaultBalanceHex: Float.parse failed for "${decimalString}": ${parsed.error?.readableMsg ?? 'no value'}`
+			`encodeVaultBalanceHex: Float.parse failed for "${decimalString}": ${
+				parsed.error?.readableMsg ?? 'no value'
+			}`
 		);
 	}
 	return parsed.value.asHex();
@@ -147,9 +149,7 @@ function makerOrderToSgOrder(o: DeployedMakerOrder): SgOrder {
 		},
 		orderbook: { id: orderbookId },
 		ordersAsOutput: [],
-		ordersAsInput: [
-			{ id: o.orderHash.toLowerCase(), orderHash: o.orderHash, active: true }
-		],
+		ordersAsInput: [{ id: o.orderHash.toLowerCase(), orderHash: o.orderHash, active: true }],
 		balanceChanges: []
 	};
 	const outputVault: SgVault = {
@@ -169,9 +169,7 @@ function makerOrderToSgOrder(o: DeployedMakerOrder): SgOrder {
 			decimals: String(o.outputToken.decimals)
 		},
 		orderbook: { id: orderbookId },
-		ordersAsOutput: [
-			{ id: o.orderHash.toLowerCase(), orderHash: o.orderHash, active: true }
-		],
+		ordersAsOutput: [{ id: o.orderHash.toLowerCase(), orderHash: o.orderHash, active: true }],
 		ordersAsInput: [],
 		balanceChanges: []
 	};
@@ -270,6 +268,7 @@ function makerOrderToApiSummary(o: DeployedMakerOrder): ApiOrderSummary {
 	return {
 		orderHash: o.orderHash,
 		owner: o.owner,
+		chainId: o.chainId,
 		orderBytes: o.orderBytes,
 		inputToken: {
 			address: o.inputToken.address,
@@ -284,6 +283,9 @@ function makerOrderToApiSummary(o: DeployedMakerOrder): ApiOrderSummary {
 		outputVaultBalance: o.outputVaultBalance,
 		maxOutput: o.maxOutput,
 		ioRatio: o.ioRatio,
+		orderType: 'limit',
+		active: true,
+		removedAt: null,
 		createdAt: o.timestampAdded,
 		orderbookId: o.orderbookAddress.toLowerCase()
 	};

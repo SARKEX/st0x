@@ -101,6 +101,7 @@ export interface DeployedMakerOrder {
 	/** ABI-encoded OrderV4 — the same bytes the subgraph would index as `orderBytes`. */
 	orderBytes: `0x${string}`;
 	owner: `0x${string}`;
+	chainId: number;
 	orderbookAddress: `0x${string}`;
 	inputToken: { address: `0x${string}`; symbol: string; decimals: number };
 	outputToken: { address: `0x${string}`; symbol: string; decimals: number };
@@ -331,6 +332,7 @@ export async function deployMakerLimitOrder(
 		orderHash,
 		orderBytes,
 		owner: account.address,
+		chainId: base.id,
 		orderbookAddress: args.orderbookAddress,
 		inputToken: sdkInputToken,
 		outputToken: sdkOutputToken,

@@ -1,16 +1,23 @@
 <script lang="ts">
 	import { formatUnits } from 'viem';
+	import { AbiCoder } from 'ethers';
 	import { currentNetwork } from '$lib/stores';
 	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
+	import { normalizeAddress, parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 	import transactionStore from '$lib/stores/transaction';
-	import { type ProcessedQuote, classifyOrderType } from '$lib/utils/orderbook';
+	import {
+		type ProcessedQuote,
+		OrderV4_ABI,
+		normalizeOrderData,
+		type OrderType
+	} from '$lib/utils/orderbook';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { createRaindexClient } from '$lib/clients/raindex';
-	import type { GetOrdersFilters } from '@rainlanguage/orderbook';
+	import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
 	import type { DisplayOrder } from '$lib/types/orders';
+	import { apiGetOrdersByOwner, type ApiOrderSummary } from '$lib/api/st0xApi';
+	import { TOKENS, type Network } from '$lib/config/network';
 	import {
 		displayAmount as denomDisplayAmount,
 		displayPrice as denomDisplayPrice,
@@ -69,6 +76,8 @@
 	// Pagination
 	let currentPage = 1;
 	const ITEMS_PER_PAGE = 10;
+	const CLOSED_ORDERS_PAGE_SIZE = 50;
+	const MAX_CLOSED_ORDER_PAGES = 100;
 
 	// Reset pagination when filter changes
 	$: if (selectedOrdersFilter || selectedOrderTypeFilter || selectedDirectionFilter) {
@@ -83,6 +92,143 @@
 	// Update selected filter when connection changes
 	$: if (!$isAuthenticated && selectedOrdersFilter === 'my') {
 		selectedOrdersFilter = 'all';
+	}
+
+	function orderInvolvesToken(order: ApiOrderSummary, token: string | null): boolean {
+		if (!token) return true;
+		const normalizedToken = normalizeAddress(token);
+		const normalizedInput = normalizeAddress(order.inputToken.address);
+		const normalizedOutput = normalizeAddress(order.outputToken.address);
+		return Boolean(
+			normalizedToken &&
+				(normalizedInput === normalizedToken || normalizedOutput === normalizedToken)
+		);
+	}
+
+	function orderMatchesNetwork(
+		order: ApiOrderSummary,
+		network: Network | null | undefined
+	): boolean {
+		return network ? order.chainId === network.chainId : false;
+	}
+
+	function findIoIndexByToken<T extends { token: string }>(
+		items: T[] | undefined,
+		token: string
+	): number {
+		const normalizedToken = normalizeAddress(token);
+		if (!items || !normalizedToken) return -1;
+		return items.findIndex((item) => normalizeAddress(item.token) === normalizedToken);
+	}
+
+	function vaultIdToHex(vaultId: unknown): string | undefined {
+		if (typeof vaultId === 'string') {
+			if (vaultId.startsWith('0x') && vaultId.length === 66) return vaultId;
+			try {
+				return `0x${BigInt(vaultId).toString(16).padStart(64, '0')}`;
+			} catch {
+				return undefined;
+			}
+		}
+		if (typeof vaultId === 'bigint') {
+			return `0x${vaultId.toString(16).padStart(64, '0')}`;
+		}
+		return undefined;
+	}
+
+	function decodeOrderData(order: ApiOrderSummary): OrderV4 | undefined {
+		if (!order.orderBytes) return undefined;
+		try {
+			const decoded = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], order.orderBytes);
+			return normalizeOrderData(decoded[0] as OrderV4);
+		} catch (error) {
+			console.warn(`[OrdersTable] Failed to decode orderBytes for ${order.orderHash}:`, error);
+			return undefined;
+		}
+	}
+
+	function resolveAssetAddress(order: ApiOrderSummary, token: string | null): string | null {
+		if (token && orderInvolvesToken(order, token)) return normalizeAddress(token);
+
+		const normalizedInput = normalizeAddress(order.inputToken.address);
+		const normalizedOutput = normalizeAddress(order.outputToken.address);
+		const st0xToken = TOKENS.find((configuredToken) => {
+			if (
+				configuredToken.chainId !== $currentNetwork?.chainId ||
+				configuredToken.category !== 'ST0x'
+			) {
+				return false;
+			}
+			const configuredAddress = normalizeAddress(configuredToken.address);
+			return configuredAddress === normalizedInput || configuredAddress === normalizedOutput;
+		});
+		return st0xToken ? normalizeAddress(st0xToken.address) : normalizedOutput;
+	}
+
+	function apiOrderToClosedDisplayOrder(
+		order: ApiOrderSummary,
+		token: string | null
+	): DisplayOrder | null {
+		const orderData = decodeOrderData(order);
+		const inputIOIndex = findIoIndexByToken(orderData?.validInputs, order.inputToken.address);
+		const outputIOIndex = findIoIndexByToken(orderData?.validOutputs, order.outputToken.address);
+		const inputVault = inputIOIndex >= 0 ? orderData?.validInputs?.[inputIOIndex] : undefined;
+		const outputVault = outputIOIndex >= 0 ? orderData?.validOutputs?.[outputIOIndex] : undefined;
+		const inputVaultId = vaultIdToHex(inputVault?.vaultId);
+		const outputVaultId = vaultIdToHex(outputVault?.vaultId);
+
+		const inputTokenAddress = order.inputToken.address;
+		const outputTokenAddress = order.outputToken.address;
+		const assetAddress = resolveAssetAddress(order, token);
+		const isBuy = Boolean(
+			assetAddress && normalizeAddress(inputTokenAddress) === normalizeAddress(assetAddress)
+		);
+		const displayToken = isBuy ? order.inputToken : order.outputToken;
+		const displayType: Exclude<OrderType, 'dynamic-spread'> =
+			order.orderType === 'dynamic-spread' ? 'custom' : order.orderType;
+
+		const sgOrder = {
+			orderHash: order.orderHash,
+			owner: order.owner,
+			active: order.active,
+			orderbook: { id: order.orderbookId },
+			orderBytes: order.orderBytes
+		} as SgOrder;
+
+		const quote: ProcessedQuote = {
+			orderHash: order.orderHash,
+			maxOutput: '',
+			ratio: '',
+			inputTokenSymbol: order.inputToken.symbol,
+			outputTokenSymbol: order.outputToken.symbol,
+			inputTokenAddress,
+			outputTokenAddress,
+			inputIOIndex: inputIOIndex >= 0 ? inputIOIndex : 0,
+			outputIOIndex: outputIOIndex >= 0 ? outputIOIndex : 0,
+			inputVaultId,
+			outputVaultId,
+			orderData,
+			sgOrder,
+			orderbookId: order.orderbookId,
+			inputTokenDecimals: order.inputToken.decimals,
+			outputTokenDecimals: order.outputToken.decimals,
+			orderType: order.orderType
+		};
+
+		return {
+			type: displayType,
+			orderHash: order.orderHash,
+			timestamp: order.removedAt ?? order.createdAt ?? 0,
+			side: isBuy ? 'Buy' : 'Sell',
+			quote,
+			tokenSymbol: displayToken.symbol,
+			tokenAddress: displayToken.address,
+			inputTokenSymbol: order.inputToken.symbol,
+			outputTokenSymbol: order.outputToken.symbol,
+			price: undefined,
+			isActive: order.active,
+			isFilled: false
+		};
 	}
 
 	// Helper function to create the closed orders query
@@ -101,22 +247,27 @@
 				if (!enabled || !network || !signer) {
 					return [];
 				}
-				const client = await createRaindexClient();
-				const filters: GetOrdersFilters = {
-					owners: [signer as `0x${string}`],
-					active: false
-				};
-				// Only filter by token if provided
-				if (token) {
-					const tokenAddr = token as `0x${string}`;
-					filters.tokens = { inputs: [tokenAddr], outputs: [tokenAddr] };
+				const orders: ApiOrderSummary[] = [];
+				let page = 1;
+				let hasMore = true;
+				while (hasMore && page <= MAX_CLOSED_ORDER_PAGES) {
+					const result = await apiGetOrdersByOwner(signer, {
+						page,
+						pageSize: CLOSED_ORDERS_PAGE_SIZE,
+						state: 'inactive'
+					});
+					orders.push(
+						...result.orders.filter(
+							(order) => orderMatchesNetwork(order, network) && orderInvolvesToken(order, token)
+						)
+					);
+					hasMore = result.pagination.hasMore;
+					page++;
 				}
-				const result = await client.getOrders([network.id], filters, 1);
-				if (result.error) {
-					console.error('[closedOrdersQuery] Error:', result.error);
-					return [];
+				if (hasMore) {
+					console.warn(`[closedOrdersQuery] Hit pagination cap (${MAX_CLOSED_ORDER_PAGES} pages)`);
 				}
-				return result.value?.orders ?? [];
+				return orders;
 			}
 		});
 	}
@@ -155,63 +306,11 @@
 					continue;
 				}
 
-				const sgOrderResult = order.convertToSgOrder();
-				if (sgOrderResult.error || !sgOrderResult.value) {
+				const closedOrder = apiOrderToClosedDisplayOrder(order, tokenAddress);
+				if (!closedOrder) {
 					continue;
 				}
-				const sgOrder = sgOrderResult.value;
-
-				const inputVault = sgOrder.inputs?.[0];
-				const outputVault = sgOrder.outputs?.[0];
-
-				// Determine token symbol and address for display
-				const inputTokenSymbol = inputVault?.token?.symbol ?? '';
-				const outputTokenSymbol = outputVault?.token?.symbol ?? '';
-				const inputTokenAddress = inputVault?.token?.address ?? '';
-				const outputTokenAddress = outputVault?.token?.address ?? '';
-
-				// Determine side and token info based on token position
-				// If order INPUT is the asset, this is a BUY order (order receives the asset)
-				// If order OUTPUT is the asset, this is a SELL order (order gives the asset)
-				const isBuy = tokenAddress
-					? inputVault?.token?.address?.toLowerCase() === tokenAddress.toLowerCase()
-					: false;
-
-				const displayTokenSymbol = isBuy ? inputTokenSymbol : outputTokenSymbol;
-				const displayTokenAddress = isBuy ? inputTokenAddress : outputTokenAddress;
-
-				// Classify the order type using rainlang
-				const orderType = classifyOrderType(order.rainlang) ?? 'custom';
-				const displayType = orderType === 'dynamic-spread' ? 'custom' : orderType;
-
-				result.push({
-					type: displayType,
-					orderHash: order.orderHash,
-					timestamp: sgOrder.timestampAdded ? Number(sgOrder.timestampAdded) : 0,
-					side: isBuy ? 'Buy' : 'Sell',
-					quote: {
-						orderHash: order.orderHash,
-						orderbookId: order.orderbook,
-						inputVaultId: inputVault?.vaultId
-							? `0x${BigInt(inputVault.vaultId).toString(16).padStart(64, '0')}`
-							: undefined,
-						outputVaultId: outputVault?.vaultId
-							? `0x${BigInt(outputVault.vaultId).toString(16).padStart(64, '0')}`
-							: undefined,
-						inputTokenAddress,
-						outputTokenAddress,
-						inputTokenSymbol,
-						outputTokenSymbol,
-						sgOrder
-					} as ProcessedQuote,
-					tokenSymbol: displayTokenSymbol,
-					tokenAddress: displayTokenAddress,
-					inputTokenSymbol,
-					outputTokenSymbol,
-					price: undefined,
-					isActive: false,
-					isFilled: false
-				});
+				result.push(closedOrder);
 			}
 		}
 

@@ -38,12 +38,16 @@ function orderSummary(overrides: Partial<ApiOrderSummary> = {}): ApiOrderSummary
 	return {
 		orderHash: '0x-order',
 		owner: '0x-owner',
+		chainId: 8453,
 		orderBytes: '',
 		inputToken: { address: paymentToken.address, symbol: paymentToken.symbol, decimals: 6 },
 		outputToken: stockToken,
 		outputVaultBalance: '100',
 		maxOutput: '2.5',
 		ioRatio: '1.2',
+		orderType: 'limit',
+		active: true,
+		removedAt: null,
 		createdAt: 1,
 		orderbookId: '0x-orderbook',
 		...overrides
@@ -71,6 +75,15 @@ describe('fetchAndQuoteTokenOrders', () => {
 
 		expect(quotes).toHaveLength(1);
 		expect(quotes[0].maxOutput).toBe(Float.parse('2.5').value?.asHex());
+	});
+
+	it('uses the REST orderType classification', async () => {
+		mockOrders([orderSummary({ orderType: 'dca' })]);
+
+		const quotes = await fetchAndQuoteTokenOrders(8453, stockToken.address, paymentToken);
+
+		expect(quotes).toHaveLength(1);
+		expect(quotes[0].orderType).toBe('dca');
 	});
 
 	it('drops orders when REST maxOutput is missing', async () => {

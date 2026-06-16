@@ -73,12 +73,16 @@ export interface ApiSwapCalldataResponse {
 export interface ApiOrderSummary {
 	orderHash: string;
 	owner: string;
+	chainId: number;
 	orderBytes: string;
 	inputToken: ApiTokenRef;
 	outputToken: ApiTokenRef;
 	outputVaultBalance: string;
 	maxOutput?: string | null;
 	ioRatio: string;
+	orderType: 'limit' | 'dca' | 'dynamic-spread' | 'custom';
+	active: boolean;
+	removedAt?: number | null;
 	createdAt: number;
 	orderbookId: string;
 }
@@ -169,13 +173,19 @@ function apiUrl(path: string, params?: Record<string, string | number | undefine
  */
 export async function apiGetOrdersByToken(
 	tokenAddress: string,
-	options?: { page?: number; pageSize?: number; side?: 'input' | 'output' }
+	options?: {
+		page?: number;
+		pageSize?: number;
+		side?: 'input' | 'output';
+		state?: 'active' | 'inactive' | 'all';
+	}
 ): Promise<ApiOrdersListResponse> {
 	assertBrowser('apiGetOrdersByToken');
 	const url = apiUrl(`/v1/orders/token/${tokenAddress}`, {
 		page: options?.page,
 		pageSize: options?.pageSize,
-		side: options?.side
+		side: options?.side,
+		state: options?.state
 	});
 	return fetchJson<ApiOrdersListResponse>(url);
 }
@@ -251,12 +261,13 @@ export async function apiGetTakerTrades(
  */
 export async function apiGetOrdersByOwner(
 	ownerAddress: string,
-	options?: { page?: number; pageSize?: number }
+	options?: { page?: number; pageSize?: number; state?: 'active' | 'inactive' | 'all' }
 ): Promise<ApiOrdersListResponse> {
 	assertBrowser('apiGetOrdersByOwner');
 	const url = apiUrl(`/v1/orders/owner/${ownerAddress}`, {
 		page: options?.page,
-		pageSize: options?.pageSize
+		pageSize: options?.pageSize,
+		state: options?.state
 	});
 	return fetchJson<ApiOrdersListResponse>(url);
 }
