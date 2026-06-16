@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { getAllTokensByNetwork } from '$lib/config/network';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { CategorizedToken } from '$lib/config/network';
+	import { createApiTokensQuery } from '$lib/queries/tokens';
 	import type { PythToken } from '$lib/types';
 	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -48,8 +48,8 @@
 	$: displayScale =
 		displayDenom === 'unwrapped' && Number.isFinite(wrapRatio) && wrapRatio > 0 ? wrapRatio : 1;
 
-	// Filter tokens based on current network
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: ALL_TOKENS = $apiTokensQuery.data ?? [];
 
 	// Initialize tokens - accumulating token from prop, settlement token for settlement
 	let selectedInputToken: CategorizedToken;
@@ -61,15 +61,10 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
-			// eslint-disable-next-line no-restricted-syntax -- justification: lookup against the network-scoped ALL_TOKENS universe (assets + payment tokens) for a payment-token (USDC). DRIFT-01's getTokenByAnyAddress only resolves ST0x asset-token address variants and would never match USDC, so it is not a valid replacement here.
 			const match = ALL_TOKENS.find(
 				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
 			);
-			selectedOutputToken =
-				match ||
-				(settlementTokenConfig as unknown as CategorizedToken) ||
-				selectedOutputToken ||
-				ALL_TOKENS[0];
+			selectedOutputToken = match || selectedOutputToken;
 		} else {
 			selectedOutputToken = selectedOutputToken || ALL_TOKENS[0];
 		}

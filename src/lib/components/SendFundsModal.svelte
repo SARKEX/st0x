@@ -10,7 +10,7 @@
 	} from '$lib/stores/dynamicStore';
 	import { sendTransaction } from '$lib/services/walletService';
 	import { currentNetwork } from '$lib/stores';
-	import { PAYMENT_TOKENS_BY_NETWORK, TOKENS } from '$lib/config/tokens';
+	import { createApiTokensQuery } from '$lib/queries/tokens';
 	import {
 		parseEther,
 		parseUnits,
@@ -32,32 +32,21 @@
 		logoUrl?: string;
 	}
 
+	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: apiTokens = $apiTokensQuery.data ?? [];
+
 	// Build available tokens list based on current network
 	$: availableTokens = (() => {
 		const tokens: TokenOption[] = [
 			{ symbol: 'ETH', name: 'Ethereum', address: 'native', decimals: 18 }
 		];
 
-		// Add payment tokens for current network (USDC, etc.)
-		const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[$currentNetwork?.chainId ?? 0] ?? [];
-		for (const token of paymentTokens) {
+		for (const token of apiTokens) {
 			tokens.push({
 				symbol: token.symbol,
 				name: token.name,
 				address: token.address as `0x${string}`,
 				decimals: token.decimals,
-				logoUrl: token.logoUrl
-			});
-		}
-
-		// Add asset tokens (tStocks) for current network
-		const assetTokens = TOKENS.filter((t) => t.chainId === $currentNetwork?.chainId);
-		for (const token of assetTokens) {
-			tokens.push({
-				symbol: token.symbol,
-				name: token.name,
-				address: token.address as `0x${string}`,
-				decimals: 18, // tStocks use 18 decimals
 				logoUrl: token.logoUrl
 			});
 		}

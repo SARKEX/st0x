@@ -4,7 +4,7 @@
 	import type { CategorizedToken } from '$lib/config/network';
 
 	export let options: CategorizedToken[] = [];
-	export let selected: CategorizedToken;
+	export let selected: CategorizedToken | undefined;
 	export let placeholder: string = 'Select a token';
 
 	const dispatch = createEventDispatcher();
