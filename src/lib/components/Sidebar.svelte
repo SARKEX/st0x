@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { currentNetwork, sfts } from '$lib/stores';
 	import { page } from '$app/stores';
-	import { getAllTokensByNetwork, getTokenByAnyAddress } from '$lib/config/tokens';
+	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
@@ -25,8 +25,8 @@
 
 	let sortedAssets: AssetWithMetrics[] = [];
 
-	// Get all tokens for the current network
-	$: ALL_TOKENS = $currentNetwork ? getAllTokensByNetwork($currentNetwork.chainId) : [];
+	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: apiTokens = $apiTokensQuery.data ?? [];
 
 	// Calculate assets sorted by volume
 	$: sortedAssets = $sfts
@@ -43,13 +43,9 @@
 					);
 					const totalVolume = depositVolume + withdrawVolume;
 					// Use token config symbol for price lookup so legacy symbols (e.g. tSTOX) resolve to the wrapped token's price feed (wtSTOX / AMEX:SPLG)
-					const tokenInfo = getTokenByAnyAddress(sft.address);
+					const tokenInfo = findApiTokenByAnyAddress(apiTokens, sft.address);
 					const symbolForPrice = tokenInfo?.symbol ?? sft.symbol;
-					const quote = findQuoteForSymbol(
-						symbolForPrice,
-						$priceFeedsQuery?.data ?? [],
-						ALL_TOKENS
-					);
+					const quote = findQuoteForSymbol(symbolForPrice, $priceFeedsQuery?.data ?? [], apiTokens);
 					const price = quote?.close ?? 0;
 					const volumeInShares = parseFloat(formatUnits(totalVolume, 18));
 					const dollarVolume = volumeInShares * price;
@@ -138,7 +134,7 @@
 			</div>
 			<div class="space-y-0.5">
 				{#each sortedAssets as asset}
-					{@const tokenInfo = getTokenByAnyAddress(asset.address)}
+					{@const tokenInfo = findApiTokenByAnyAddress(apiTokens, asset.address)}
 					<a
 						href={`/trade/${tokenInfo?.address ?? asset.id}`}
 						on:click={() => {

@@ -46,7 +46,7 @@ function getTokenMetadata(address: string, tokens: PythToken[]) {
 /**
  * Convert an API OrderSummary into a ProcessedQuote.
  *
- * Uses Float.parse() to convert the server's decimal ioRatio and outputVaultBalance
+ * Uses Float.parse() to convert the server's decimal ioRatio and maxOutput
  * back into hex-encoded Float strings, preserving compatibility with walkOrderbook
  * and computeEmergencyRatioHex which expect hex Float format.
  *
@@ -87,10 +87,8 @@ function convertApiOrderToProcessedQuote(
 	if (ratioFloat.error || !ratioFloat.value) return null;
 	const ratio = ratioFloat.value.asHex();
 
-	// Use simulated maxOutput from quote (smaller than vault balance for DCA/strategy orders),
-	// falling back to vault balance when quote data is unavailable
-	const maxOutputSource = order.maxOutput || order.outputVaultBalance;
-	const maxOutputFloat = Float.parse(maxOutputSource);
+	if (!order.maxOutput) return null;
+	const maxOutputFloat = Float.parse(order.maxOutput);
 	if (maxOutputFloat.error || !maxOutputFloat.value) return null;
 	const maxOutput = maxOutputFloat.value.asHex();
 

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 	import Section from '$lib/components/ui/Section.svelte';
-	import { getAllTokensByNetwork, networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
+	import { networks } from '$lib/config/network';
 	import type { CategorizedToken, Network } from '$lib/config/network';
+	import { apiGetTokens } from '$lib/api/st0xApi';
 	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import MetricCard from '$lib/components/ui/MetricCard.svelte';
@@ -17,10 +18,13 @@
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
+	import { normalizeApiTokensForNetwork } from '$lib/queries/tokens';
 	import type { PublicTradeActivityResponse } from '../../api/public/trade-activity/+server';
 	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	import { walletAddress } from '$lib/stores/authStore';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { browser } from '$app/environment';
 
 	interface TvlApiResponse {
 		success: boolean;
@@ -44,6 +48,23 @@
 
 	const priceFeedQueries = networks.map((network) => createPriceFeedsQuery(network));
 	const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
+	const apiTokensQuery = createQuery<CategorizedToken[]>({
+		queryKey: ['st0xApiTokens', 'allNetworks'],
+		enabled: browser,
+		staleTime: 0,
+		refetchOnMount: 'always',
+		refetchOnWindowFocus: true,
+		queryFn: async () => {
+			const apiTokens = await apiGetTokens();
+			const tokens = networks.flatMap((network) =>
+				normalizeApiTokensForNetwork(apiTokens, network.chainId)
+			);
+			return tokens.filter(
+				(token, index, self) =>
+					index === self.findIndex((t) => t.address.toLowerCase() === token.address.toLowerCase())
+			);
+		}
+	});
 
 	const allPriceFeedQueries = derived(priceFeedQueries, (queries) => queries);
 	const allOrderbookQueries = derived(orderbookQueries, (queries) => queries);
@@ -222,26 +243,14 @@
 	}
 
 	// Token metadata helpers
-	$: ALL_TOKENS = (() => {
-		const allTokens: CategorizedToken[] = [];
-		networks.forEach((network) => {
-			const networkTokens = getAllTokensByNetwork(network.chainId);
-			allTokens.push(...networkTokens);
-		});
-		return allTokens.filter(
-			(token, index, self) =>
-				index === self.findIndex((t) => t.address.toLowerCase() === token.address.toLowerCase())
-		);
-	})();
+	$: ALL_TOKENS = $apiTokensQuery.data ?? [];
 
 	let tokenLookup: TokenLookup<CategorizedToken> = createTokenLookup([]);
 	$: tokenLookup = createTokenLookup(ALL_TOKENS);
 
 	// Create canonical token set (both ST0x and Crypto tokens)
 	$: canonicalTokens = new Set<string>(
-		[...TOKENS, ...CRYPTO_TOKENS]
-			.map((token) => normalizeAddress(token.address))
-			.filter(Boolean) as string[]
+		ALL_TOKENS.map((token) => normalizeAddress(token.address)).filter(Boolean) as string[]
 	);
 
 	// Map per-network server response by chainId for quick lookup
@@ -314,7 +323,7 @@
 
 	// Build a set of tStock addresses for identification
 	$: tStockAddresses = new Set<string>(
-		TOKENS.filter((t) => t.category === 'ST0x')
+		ALL_TOKENS.filter((t) => t.category === 'ST0x')
 			.map((t) => normalizeAddress(t.address))
 			.filter(Boolean) as string[]
 	);
@@ -507,10 +516,12 @@
 		// Calculate per-network TVL from admin token TVL data
 		// Sum up TVL for tokens that belong to this network
 		let networkTvl = 0;
-		TOKENS.filter((t) => t.chainId === network.chainId).forEach((token) => {
-			const tokenTvl = adminTokenTvl[token.symbol] ?? 0;
-			networkTvl += tokenTvl;
-		});
+		ALL_TOKENS.filter((t) => t.chainId === network.chainId && t.category === 'ST0x').forEach(
+			(token) => {
+				const tokenTvl = adminTokenTvl[token.symbol] ?? 0;
+				networkTvl += tokenTvl;
+			}
+		);
 
 		return {
 			network,
