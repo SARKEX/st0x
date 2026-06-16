@@ -1,11 +1,18 @@
 import { MAGIC_NUMBERS } from '$lib/config/constants';
 import { cborDecode, bytesToMeta } from '$lib/utils/helpers';
-import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
+import type {
+	OffchainAssetReceiptVault,
+	ReceiptVaultInformation
+} from '$lib/types/OffchainAssetReceiptVault';
 
-export const addSchemaToReceipts = (vault: OffchainAssetReceiptVault) => {
+type RawReceiptVaultInformation = Pick<ReceiptVaultInformation, 'id' | 'information'> & {
+	timestamp: string | number;
+};
+
+export const addSchemaToReceiptVaultInformations = (
+	receiptVaultInformations: RawReceiptVaultInformation[]
+) => {
 	const tempSchema: { displayName: string; hash: string }[] = [];
-
-	const receiptVaultInformations = vault.receiptVaultInformations;
 
 	if (receiptVaultInformations.length) {
 		for (const data of receiptVaultInformations) {
@@ -31,3 +38,6 @@ export const addSchemaToReceipts = (vault: OffchainAssetReceiptVault) => {
 	}
 	return tempSchema;
 };
+
+export const addSchemaToReceipts = (vault: OffchainAssetReceiptVault) =>
+	addSchemaToReceiptVaultInformations(vault.receiptVaultInformations);

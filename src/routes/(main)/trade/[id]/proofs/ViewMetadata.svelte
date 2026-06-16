@@ -24,12 +24,12 @@
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let mappedMetaV1: any[] = [];
 
-	$: if (vault && $sftMetadata) {
-		if ($sftMetadata?.length > 0) {
-			mappedMetaV1 = $sftMetadata.slice(0, 1).map((metaV1) => {
-				return getReceiptSchema(metaV1);
-			});
-		}
+	$: if (vault && $sftMetadata?.length) {
+		mappedMetaV1 = $sftMetadata.slice(0, 1).map((metaV1) => {
+			return getReceiptSchema(metaV1);
+		});
+	} else {
+		mappedMetaV1 = [];
 	}
 </script>
 
