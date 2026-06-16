@@ -18,6 +18,54 @@ export interface ApiTokenRef {
 	decimals: number;
 }
 
+export interface ApiToken extends ApiTokenRef {
+	name?: string | null;
+	isin?: string | null;
+	label?: string;
+	network?: unknown;
+	[key: string]: unknown;
+}
+
+// ============================================================================
+// Swap Types
+// ============================================================================
+
+export interface ApiSwapQuoteRequest {
+	inputToken: string;
+	outputToken: string;
+	outputAmount: string;
+}
+
+export interface ApiSwapQuoteResponse {
+	inputToken: string;
+	outputToken: string;
+	outputAmount: string;
+	estimatedOutput: string;
+	estimatedInput: string;
+	estimatedIoRatio: string;
+}
+
+export interface ApiSwapCalldataRequest extends ApiSwapQuoteRequest {
+	taker: string;
+	maximumIoRatio: string;
+}
+
+export interface ApiApproval {
+	token: string;
+	spender: string;
+	amount: string;
+	symbol: string;
+	approvalData: string;
+}
+
+export interface ApiSwapCalldataResponse {
+	to: string;
+	data: string;
+	value: string;
+	estimatedInput: string;
+	approvals: ApiApproval[];
+}
+
 // ============================================================================
 // Order Types
 // ============================================================================
@@ -146,6 +194,40 @@ export async function apiGetOrdersByToken(
 		side: options?.side
 	});
 	return fetchJson<ApiOrdersListResponse>(url);
+}
+
+/**
+ * Fetch the canonical supported token list from the REST API.
+ */
+export async function apiGetTokens(): Promise<ApiToken[]> {
+	assertBrowser('apiGetTokens');
+	return fetchJson<ApiToken[]>(apiUrl('/v1/tokens'));
+}
+
+/**
+ * Fetch a fresh API-built swap quote.
+ */
+export async function apiGetSwapQuote(request: ApiSwapQuoteRequest): Promise<ApiSwapQuoteResponse> {
+	assertBrowser('apiGetSwapQuote');
+	return fetchJson<ApiSwapQuoteResponse>(apiUrl('/v1/swap/quote'), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(request)
+	});
+}
+
+/**
+ * Fetch ready-to-send swap calldata from the API.
+ */
+export async function apiGetSwapCalldata(
+	request: ApiSwapCalldataRequest
+): Promise<ApiSwapCalldataResponse> {
+	assertBrowser('apiGetSwapCalldata');
+	return fetchJson<ApiSwapCalldataResponse>(apiUrl('/v1/swap/calldata'), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(request)
+	});
 }
 
 /**
