@@ -1,24 +1,24 @@
 /**
  * Wrap-ratio (exchange-rate) data source.
  *
- * Reads from a hardcoded JSON fixture (`$lib/config/wrapRatioFixture.json`)
- * instead of an upstream API. The /v1/tokens/exchange-rates(/history)
- * endpoint isn't live yet; when it ships, swap the loader implementations
- * and the rest of the UI (chip, denom toggle, Ratio History tab) keeps
- * working unchanged because the shapes match the planned API contract.
- *
- * Only wtSGOV has a non-1:1 rate today (1.002700626096609112 — verified
- * on Base via `cast call wtSGOV.convertToAssets(1e18)` at block 46604184).
- * Every other wrapper implicitly resolves to 1.0 via the safe default in
- * `resolveRatio`.
+ * The REST API returns wrap-ratio rows with share/asset addresses. The website
+ * composes display metadata from /v1/tokens so existing UI surfaces can keep
+ * working with token refs instead of doing local chain/indexer reads.
  */
-import { createQuery } from '@tanstack/svelte-query';
 import { browser } from '$app/environment';
-import fixture from '$lib/config/wrapRatioFixture.json';
+import {
+	apiGetTokens,
+	apiGetWrapRatioHistory,
+	apiGetWrapRatios,
+	type ApiWrapRatio,
+	type ApiWrapRatioHistoryResponse,
+	type ApiWrapRatiosResponse
+} from '$lib/api/st0xApi';
+import type { CategorizedToken } from '$lib/config/tokens';
+import { findApiTokenByAnyAddress, normalizeApiTokensForNetwork } from '$lib/queries/tokens';
+import { createQuery } from '@tanstack/svelte-query';
 
-// ============================================================================
-// Types — kept identical in shape to what the API contract will return.
-// ============================================================================
+const BASE_CHAIN_ID = 8453;
 
 export interface TokenRef {
 	address: string;
@@ -29,47 +29,27 @@ export interface TokenRef {
 export interface ExchangeRate {
 	share: TokenRef;
 	asset: TokenRef;
-	assetsPerShare: string; // decimal string — e.g. "1.0", "1.002700626096609112"
+	assetsPerShare: string;
 	blockNumber: number;
 	blockTimestamp: number;
-	capturedAt: string; // "YYYY-MM-DD HH:MM:SS"
+	capturedAt: string;
 }
 
-export type ExchangeRateEventType = 'snapshot' | 'donation';
-
-export interface ExchangeRateEventBase {
-	type: ExchangeRateEventType;
-	blockNumber: number;
-	blockTimestamp: number;
-}
-
-export interface ExchangeRateSnapshot extends ExchangeRateEventBase {
+export interface ExchangeRateSnapshot {
 	type: 'snapshot';
+	blockNumber: number;
+	blockTimestamp: number;
 	assetsPerShare: string;
 	capturedAt: string;
 }
 
-export interface ExchangeRateDonation extends ExchangeRateEventBase {
-	type: 'donation';
-	txHash: string;
-	donor: string;
-	assetAmount: string;
-	newAssetsPerShare: string | null;
-}
-
-export type ExchangeRateEvent = ExchangeRateSnapshot | ExchangeRateDonation;
+export type ExchangeRateEvent = ExchangeRateSnapshot;
 
 export interface ExchangeRateHistoryResponse {
 	share: TokenRef;
 	asset: TokenRef;
 	events: ExchangeRateEvent[];
-	pagination: {
-		page: number;
-		pageSize: number;
-		totalEvents: number;
-		totalPages: number;
-		hasMore: boolean;
-	};
+	pagination: ApiWrapRatioHistoryResponse['pagination'];
 }
 
 export interface ExchangeRateLookup {
@@ -81,36 +61,94 @@ export interface ExchangeRateLookup {
 	all: ExchangeRate[];
 }
 
-// ============================================================================
-// Fixture loader
-// ============================================================================
-
-interface WrapRatioFixture {
-	rates: ExchangeRate[];
-	history: Record<string, Omit<ExchangeRateHistoryResponse, 'pagination'>>;
+function toKey(address: string | null | undefined): string {
+	return address?.toLowerCase() ?? '';
 }
 
-const FIXTURE = fixture as unknown as WrapRatioFixture;
+function tokenToRef(token: CategorizedToken | null | undefined, fallbackAddress: string): TokenRef {
+	return {
+		address: token?.address ?? fallbackAddress,
+		symbol: token?.symbol ?? '',
+		decimals: token?.decimals ?? 18
+	};
+}
 
-function buildLookup(rates: ExchangeRate[]): ExchangeRateLookup {
+function unwrapSymbol(symbol: string): string {
+	if (!symbol) return '';
+	return symbol.startsWith('wt') ? `t${symbol.slice(2)}` : symbol.replace(/^w/, '');
+}
+
+function exactTokenByAddress(tokens: CategorizedToken[], address: string): CategorizedToken | null {
+	const key = toKey(address);
+	return tokens.find((token) => toKey(token.address) === key) ?? null;
+}
+
+function buildTokenRefs(
+	tokens: CategorizedToken[],
+	shareAddress: string,
+	assetAddress: string
+): { share: TokenRef; asset: TokenRef } {
+	const shareToken =
+		exactTokenByAddress(tokens, shareAddress) ?? findApiTokenByAnyAddress(tokens, shareAddress);
+	const exactAssetToken = exactTokenByAddress(tokens, assetAddress);
+	const share = tokenToRef(shareToken, shareAddress);
+	const asset = exactAssetToken
+		? tokenToRef(exactAssetToken, assetAddress)
+		: {
+				address: assetAddress,
+				symbol: unwrapSymbol(share.symbol),
+				decimals: share.decimals
+			};
+	return { share, asset };
+}
+
+export function buildLookup(rates: ExchangeRate[]): ExchangeRateLookup {
 	const byShareAddress: Record<string, ExchangeRate> = {};
 	const byAssetAddress: Record<string, ExchangeRate> = {};
 	for (const rate of rates) {
-		const share = rate.share.address?.toLowerCase();
-		const asset = rate.asset.address?.toLowerCase();
+		const share = toKey(rate.share.address);
+		const asset = toKey(rate.asset.address);
 		if (share) byShareAddress[share] = rate;
 		if (asset) byAssetAddress[asset] = rate;
 	}
 	return { byShareAddress, byAssetAddress, all: rates };
 }
 
-const LOOKUP: ExchangeRateLookup = buildLookup(FIXTURE.rates);
+export function mapApiWrapRatio(row: ApiWrapRatio, tokens: CategorizedToken[]): ExchangeRate {
+	const { share, asset } = buildTokenRefs(tokens, row.shareAddress, row.assetAddress);
+	return {
+		share,
+		asset,
+		assetsPerShare: row.assetsPerShare,
+		blockNumber: row.blockNumber,
+		blockTimestamp: row.blockTimestamp,
+		capturedAt: row.capturedAt
+	};
+}
+
+export function mapApiWrapRatioHistory(
+	response: ApiWrapRatioHistoryResponse,
+	tokens: CategorizedToken[]
+): ExchangeRateHistoryResponse {
+	const { share, asset } = buildTokenRefs(tokens, response.shareAddress, response.assetAddress);
+	return {
+		share,
+		asset,
+		events: response.events.map((event) => ({
+			type: 'snapshot',
+			blockNumber: event.blockNumber,
+			blockTimestamp: event.blockTimestamp,
+			assetsPerShare: event.assetsPerShare,
+			capturedAt: event.capturedAt
+		})),
+		pagination: response.pagination
+	};
+}
 
 /**
  * Returns the wrap ratio (number of underlying t* per 1 wt*) for a given
  * token address — accepts either the share (wt*) or asset (t*) address.
- * Returns 1 when the lookup is missing the entry (safe default — parity
- * wrappers stay 1:1).
+ * Returns 1 when the lookup is missing the entry.
  */
 export function resolveRatio(
 	lookup: ExchangeRateLookup | null | undefined,
@@ -124,62 +162,53 @@ export function resolveRatio(
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 }
 
-/**
- * TanStack-shaped query so existing consumers (`$exchangeRatesQuery.data`)
- * keep working when the live API replaces the fixture. The queryFn is
- * synchronous-with-Promise-wrap — there's no network call.
- */
-export function createExchangeRatesQuery() {
+function warnWrapRatioErrors(response: ApiWrapRatiosResponse): void {
+	if (response.errors?.length) {
+		console.warn('[wrap-ratio] REST API returned partial errors', response.errors);
+	}
+}
+
+export function createExchangeRatesQuery(chainId: number = BASE_CHAIN_ID) {
 	return createQuery<ExchangeRateLookup>({
-		queryKey: ['exchangeRates'],
+		queryKey: ['exchangeRates', chainId],
 		enabled: browser,
-		staleTime: Infinity,
-		queryFn: async () => LOOKUP
+		staleTime: 60_000,
+		refetchOnWindowFocus: true,
+		queryFn: async () => {
+			const [apiTokens, wrapRatios] = await Promise.all([apiGetTokens(), apiGetWrapRatios()]);
+			warnWrapRatioErrors(wrapRatios);
+			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
+			return buildLookup(wrapRatios.data.map((row) => mapApiWrapRatio(row, tokens)));
+		}
 	});
 }
 
 export function createExchangeRateHistoryQuery(
 	wrappedTokenAddress: string | null | undefined,
-	options?: { page?: number; pageSize?: number }
+	options?: { page?: number; pageSize?: number },
+	chainId: number = BASE_CHAIN_ID
 ) {
 	return createQuery<ExchangeRateHistoryResponse>({
 		queryKey: [
 			'exchangeRateHistory',
+			chainId,
 			wrappedTokenAddress?.toLowerCase() ?? null,
 			options?.page ?? 1,
 			options?.pageSize ?? 50
 		],
 		enabled: browser && Boolean(wrappedTokenAddress),
-		staleTime: Infinity,
+		staleTime: 60_000,
+		retry: false,
 		queryFn: async () => {
 			if (!wrappedTokenAddress) {
 				throw new Error('wrappedTokenAddress is required');
 			}
-			const entry = FIXTURE.history[wrappedTokenAddress.toLowerCase()];
-			if (!entry) {
-				return {
-					share: { address: wrappedTokenAddress, symbol: '', decimals: 18 },
-					asset: { address: '', symbol: '', decimals: 18 },
-					events: [],
-					pagination: {
-						page: 1,
-						pageSize: options?.pageSize ?? 50,
-						totalEvents: 0,
-						totalPages: 0,
-						hasMore: false
-					}
-				};
-			}
-			return {
-				...entry,
-				pagination: {
-					page: 1,
-					pageSize: options?.pageSize ?? 50,
-					totalEvents: entry.events.length,
-					totalPages: 1,
-					hasMore: false
-				}
-			};
+			const [apiTokens, history] = await Promise.all([
+				apiGetTokens(),
+				apiGetWrapRatioHistory(wrappedTokenAddress, options)
+			]);
+			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
+			return mapApiWrapRatioHistory(history, tokens);
 		}
 	});
 }

@@ -1738,7 +1738,6 @@
 							assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
 							{currentRatio}
 							onLearnMore={openWrapExplainer}
-							txHrefBuilder={(tx) => `${$currentNetwork.blockExplorer}/tx/${tx}`}
 						/>
 					{:else if activeTokenTab === 'supply'}
 						<div>

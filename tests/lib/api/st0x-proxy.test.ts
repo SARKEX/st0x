@@ -100,13 +100,59 @@ describe('/api/st0x proxy', () => {
 		);
 	});
 
-	it('keeps wrap-ratio endpoints blocked until their API PRs land', async () => {
-		const fetchMock = vi.fn();
+	it('allows cached wrap-ratio endpoints', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify({ data: [], errors: [] }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
 		vi.stubGlobal('fetch', fetchMock);
 
 		const response = await GET(proxyEvent('GET', 'v1/tokens/wrap-ratio'));
 
-		expect(response.status).toBe(404);
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBe(
+			'public, s-maxage=60, stale-while-revalidate=300'
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.example.test/v1/tokens/wrap-ratio?page=1',
+			expect.objectContaining({ method: 'GET' })
+		);
+	});
+
+	it('allows cached wrap-ratio history endpoints', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					shareAddress: '0xShare',
+					assetAddress: '0xAsset',
+					events: [],
+					pagination: {
+						page: 1,
+						pageSize: 20,
+						totalEvents: 0,
+						totalPages: 0,
+						hasMore: false
+					}
+				}),
+				{
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(proxyEvent('GET', 'v1/tokens/wrap-ratio/0xShare/history'));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBe(
+			'public, s-maxage=60, stale-while-revalidate=300'
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.example.test/v1/tokens/wrap-ratio/0xShare/history?page=1',
+			expect.objectContaining({ method: 'GET' })
+		);
 	});
 });
