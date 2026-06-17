@@ -33,21 +33,20 @@
 				v.address?.toLowerCase() === id.toLowerCase() ||
 				(wrappedAddress && v.address?.toLowerCase() === wrappedAddress)
 		);
-		if (foundInSfts) {
-			currentToken.set(foundInSfts);
-		} else if ($query?.data) {
+		if ($query?.data) {
 			const token = getTokenByAnyAddress(id) ?? getTokenByAnyAddress($query.data.address);
 			currentToken.set({
+				...(foundInSfts ?? {}),
 				id: $query.data.address,
-				totalShares: '0',
+				totalShares: foundInSfts?.totalShares ?? '0',
 				address: $query.data.address as `0x${string}`,
-				deployer: '',
-				admin: '',
-				name: token?.name ?? token?.symbol ?? $query.data.address,
-				symbol: token?.symbol ?? '',
-				deployTimestamp: '',
-				receiptContractAddress: '',
-				tokenHolders: [],
+				deployer: foundInSfts?.deployer ?? '',
+				admin: foundInSfts?.admin ?? '',
+				name: foundInSfts?.name ?? token?.name ?? token?.symbol ?? $query.data.address,
+				symbol: foundInSfts?.symbol ?? token?.symbol ?? '',
+				deployTimestamp: foundInSfts?.deployTimestamp ?? '',
+				receiptContractAddress: foundInSfts?.receiptContractAddress ?? '',
+				tokenHolders: foundInSfts?.tokenHolders ?? [],
 				receiptVaultInformations: $query.data.schemas.map((schema) => ({
 					id: schema.id,
 					information: schema.information,
@@ -55,11 +54,13 @@
 					caller: { address: '' },
 					transaction: { blockNumber: '' }
 				})),
-				withdraws: [],
-				deposits: [],
-				shareTransfers: [],
+				withdraws: foundInSfts?.withdraws ?? [],
+				deposits: foundInSfts?.deposits ?? [],
+				shareTransfers: foundInSfts?.shareTransfers ?? [],
 				chainId: $currentNetwork?.chainId
 			});
+		} else if (foundInSfts) {
+			currentToken.set(foundInSfts);
 		}
 	}
 </script>

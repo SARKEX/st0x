@@ -170,6 +170,55 @@ export interface ApiTokenProofsResponse {
 }
 
 // ============================================================================
+// Token Detail Types
+// ============================================================================
+
+export interface ApiTokenDetailsError {
+	address: string;
+	message: string;
+}
+
+export interface ApiTokenDetailsSummary {
+	address: string;
+	receiptContractAddress?: string | null;
+	name: string;
+	symbol: string;
+	decimals: number;
+	totalSupply: string;
+	holderCount: number;
+	transferCount: number;
+	bridgedSupply: string;
+	depositVolume: string;
+	withdrawVolume: string;
+	activityVolume: string;
+}
+
+export interface ApiTokenDetailsActivityRow {
+	id: string;
+	txHash: string;
+	caller: string;
+	amount: string;
+	timestamp: number;
+	receiptId: string;
+}
+
+export interface ApiTokenDetails extends ApiTokenDetailsSummary {
+	sftVaultAddress: string;
+	deployTimestamp: number;
+	deployer: string;
+	admin: string;
+	activity: {
+		deposits: ApiTokenDetailsActivityRow[];
+		withdraws: ApiTokenDetailsActivityRow[];
+	};
+}
+
+export interface ApiTokenDetailsListResponse {
+	data: ApiTokenDetailsSummary[];
+	errors: ApiTokenDetailsError[];
+}
+
+// ============================================================================
 // Wrap Ratio Types
 // ============================================================================
 
@@ -275,6 +324,29 @@ export async function apiGetTokens(): Promise<ApiToken[]> {
 export async function apiGetTokenProofs(address: string): Promise<ApiTokenProofsResponse> {
 	assertBrowser('apiGetTokenProofs');
 	return fetchJson<ApiTokenProofsResponse>(apiUrl(`/v1/tokens/${address}/proofs`));
+}
+
+/**
+ * Fetch ST0x token detail summaries from the REST API.
+ */
+export async function apiGetTokenDetails(): Promise<ApiTokenDetailsListResponse> {
+	assertBrowser('apiGetTokenDetails');
+	return fetchJson<ApiTokenDetailsListResponse>(apiUrl('/v1/tokens/details'));
+}
+
+/**
+ * Fetch ST0x token details and recent activity for a single token.
+ */
+export async function apiGetTokenDetailsByAddress(
+	address: string,
+	options?: { activityLimit?: number }
+): Promise<ApiTokenDetails> {
+	assertBrowser('apiGetTokenDetailsByAddress');
+	return fetchJson<ApiTokenDetails>(
+		apiUrl(`/v1/tokens/${address}/details`, {
+			activityLimit: options?.activityLimit
+		})
+	);
 }
 
 /**

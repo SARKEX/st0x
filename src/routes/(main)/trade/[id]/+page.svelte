@@ -1749,11 +1749,11 @@
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Holders</span>
-									<span>{currentToken.tokenHolders.length}</span>
+									<span>{currentToken.holderCount ?? 0}</span>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Total Transfers</span>
-									<span>{currentToken.shareTransfers.length}</span>
+									<span>{currentToken.transferCount ?? 0}</span>
 								</div>
 							</div>
 						</div>

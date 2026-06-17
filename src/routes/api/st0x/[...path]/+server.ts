@@ -32,6 +32,16 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	{ method: 'GET', pattern: /^v1\/tokens$/ },
 	{
 		method: 'GET',
+		pattern: /^v1\/tokens\/details$/,
+		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+	},
+	{
+		method: 'GET',
+		pattern: /^v1\/tokens\/[^/]+\/details$/,
+		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+	},
+	{
+		method: 'GET',
 		pattern: /^v1\/tokens\/wrap-ratio$/,
 		cache: 'public, s-maxage=60, stale-while-revalidate=300'
 	},

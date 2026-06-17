@@ -16,6 +16,13 @@ export type MetaV1S = {
 export type OffchainAssetReceiptVault = {
 	id: string;
 	totalShares: string;
+	holderCount?: number;
+	transferCount?: number;
+	bridgedSupply?: string;
+	depositVolume?: string;
+	withdrawVolume?: string;
+	activityVolume?: string;
+	sftVaultAddress?: string;
 	address: Hex;
 	deployer: string;
 	admin: string;

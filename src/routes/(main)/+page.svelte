@@ -10,7 +10,6 @@
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
-	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import QuickTrade from '$lib/components/QuickTrade.svelte';
 	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
 	import Footer from '$lib/components/Footer.svelte';
@@ -106,7 +105,6 @@
 	};
 
 	let processedTokens: TokenRow[] = [];
-	let sftLookup = new Map<string, OffchainAssetReceiptVault>();
 	let isVaultLoading = false;
 	let vaultsError: string | null = null;
 	let hasVaults = false;
@@ -119,13 +117,6 @@
 			: !hasVaults && $vaultsQuery?.error
 				? String($vaultsQuery.error)
 				: null;
-	$: sftLookup = new Map<string, OffchainAssetReceiptVault>(
-		($sfts ?? []).map((vault: OffchainAssetReceiptVault) => [vault.id, vault])
-	);
-
-	function sumAmounts(entries?: Array<{ amount: string }>): bigint {
-		return (entries ?? []).reduce((sum: bigint, entry) => sum + BigInt(entry.amount), 0n);
-	}
 
 	const pioneerLogos = [
 		{ alt: 'Holo', src: '/images/pioneers/holo.svg', scale: 0.8 },
@@ -156,11 +147,9 @@
 					name: sft.name,
 					symbol: sft.symbol,
 					price,
-					totalHolders: sft.tokenHolders
-						.filter((holder: { balance: string }) => BigInt(holder.balance) > BigInt(0))
-						.length.toString(),
-					totalSupply: formatUnits(BigInt(sft.totalShares), 18),
-					totalTransfers: sft.shareTransfers.length.toString(),
+					totalHolders: String(sft.holderCount ?? 0),
+					totalSupply: formatUnits(BigInt(sft.bridgedSupply ?? sft.totalShares), 18),
+					totalTransfers: String(sft.transferCount ?? 0),
 					createdAt: sft.deployTimestamp,
 					isSft: true
 				});
@@ -397,16 +386,12 @@
 								</tr>
 							{:else}
 								{#each processedTokens as token (token.id)}
-									{@const sft = sftLookup.get(token.id)}
-									{@const deposits = sumAmounts(sft?.deposits)}
-									{@const withdraws = sumAmounts(sft?.withdraws)}
-									{@const circulating = deposits - withdraws}
-									{@const circulatingSupply = parseFloat(formatUnits(circulating, 18))}
+									{@const bridgedSupply = Number(token.totalSupply)}
 									{@const displayPrice =
 										typeof token.price === 'number' ? token.price : Number(token.price ?? NaN)}
 									{@const marketCap =
 										displayPrice != null && Number.isFinite(displayPrice)
-											? circulatingSupply * displayPrice
+											? bridgedSupply * displayPrice
 											: null}
 									<tr
 										class="cursor-pointer transition-all hover:bg-yellow-500/5"
@@ -446,9 +431,9 @@
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
 											<div class="text-sm text-gray-300">
-												{circulatingSupply >= 1000
-													? `${(circulatingSupply / 1000).toFixed(2)}K`
-													: circulatingSupply.toFixed(2)}
+												{bridgedSupply >= 1000
+													? `${(bridgedSupply / 1000).toFixed(2)}K`
+													: bridgedSupply.toFixed(2)}
 											</div>
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">

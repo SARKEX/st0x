@@ -6,10 +6,9 @@
 // ratio is stubbed from the REST API response shape so the test covers the
 // production data path without depending on staging data.
 //
-// Why SGOV: SGOV isn't in the SFT subgraph yet, so `getSftById` returns
-// null quickly — `singleTokenQuery` resolves fast, the page falls back to
-// tokens.ts metadata for header/symbols/wrap-ratio plumbing, and the chip
-// renders without waiting on subgraph hydration of trades/orders/etc.
+// Why SGOV: the token details response is stubbed so `singleTokenQuery`
+// resolves fast and the page renders the wrap-ratio surfaces without depending
+// on staging API/subgraph freshness.
 //
 // This spec deliberately does NOT use the `testClient` (anvil) fixture —
 // every assertion is UI-only.
@@ -46,6 +45,61 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (REST API)', () => {
 							}
 						}
 					])
+				});
+				return;
+			}
+			if (url.pathname === '/api/st0x/v1/tokens/details') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						data: [
+							{
+								address: WT_SGOV_ADDRESS,
+								receiptContractAddress: T_SGOV_ADDRESS,
+								name: 'Wrapped iShares 0-3 Month Treasury Bond ETF ST0x',
+								symbol: 'wtSGOV',
+								decimals: 18,
+								totalSupply: '0',
+								holderCount: 0,
+								transferCount: 0,
+								bridgedSupply: '0',
+								depositVolume: '0',
+								withdrawVolume: '0',
+								activityVolume: '0'
+							}
+						],
+						errors: []
+					})
+				});
+				return;
+			}
+			if (pathname === `/api/st0x/v1/tokens/${WT_SGOV_ADDRESS.toLowerCase()}/details`) {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						address: WT_SGOV_ADDRESS,
+						receiptContractAddress: T_SGOV_ADDRESS,
+						name: 'Wrapped iShares 0-3 Month Treasury Bond ETF ST0x',
+						symbol: 'wtSGOV',
+						decimals: 18,
+						totalSupply: '0',
+						holderCount: 0,
+						transferCount: 0,
+						bridgedSupply: '0',
+						depositVolume: '0',
+						withdrawVolume: '0',
+						activityVolume: '0',
+						sftVaultAddress: T_SGOV_ADDRESS,
+						deployTimestamp: 0,
+						deployer: '0x0000000000000000000000000000000000000000',
+						admin: '0x0000000000000000000000000000000000000000',
+						activity: {
+							deposits: [],
+							withdraws: []
+						}
+					})
 				});
 				return;
 			}
@@ -99,49 +153,6 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (REST API)', () => {
 							}
 						],
 						errors: []
-					})
-				});
-				return;
-			}
-			await route.fallback();
-		});
-
-		// Stub the SFT subgraph for the SGOV singleTokenQuery so it resolves fast
-		// and deterministically. SGOV's Goldsky entry is sparse / cold so the
-		// upstream request can rate-limit or hit the fixtures.ts retry loop
-		// (~25s of backoff), pushing `$singleTokenQuery.isPending` past the chip
-		// timeout. We return a minimal `OffchainAssetReceiptVault` matching what
-		// `getSftById` shapes the response into — the page then renders the chip
-		// from this stub + tokens.ts metadata.
-		await page.route(/api\.goldsky\.com\/.*\/sft-base\//, async (route) => {
-			const body = route.request().postData() ?? '';
-			if (body.toLowerCase().includes(WT_SGOV_ADDRESS.toLowerCase().slice(2))) {
-				await route.fulfill({
-					status: 200,
-					contentType: 'application/json',
-					headers: { 'access-control-allow-origin': '*' },
-					body: JSON.stringify({
-						data: {
-							offchainAssetReceiptVaults: [
-								{
-									id: T_SGOV_ADDRESS.toLowerCase(),
-									totalShares: '0',
-									address: T_SGOV_ADDRESS.toLowerCase(),
-									deployer: '0x0000000000000000000000000000000000000000',
-									admin: '0x0000000000000000000000000000000000000000',
-									name: 'Wrapped iShares 0-3 Month Treasury Bond ETF ST0x',
-									symbol: 'wtSGOV',
-									deployTimestamp: '0',
-									receiptContractAddress: '0x0000000000000000000000000000000000000000',
-									wrappedTokenContractAddress: WT_SGOV_ADDRESS.toLowerCase(),
-									tokenHolders: [],
-									receiptVaultInformations: [],
-									withdraws: [],
-									deposits: [],
-									shareTransfers: []
-								}
-							]
-						}
 					})
 				});
 				return;
