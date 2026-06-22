@@ -2,7 +2,22 @@
 	import '../app.css';
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/clients/queryClient';
+	import { page } from '$app/stores';
 	import { env as publicEnv } from '$env/dynamic/public';
+
+	// Site-wide SEO defaults. Pages override the title via their own <svelte:head>
+	// (Svelte keeps the last <title>), or by returning `title`/`description` from a
+	// load function. Without these, crawlers fall back to scraping visible body text
+	// (e.g. the footer risk warning).
+	const SITE_URL = 'https://www.st0x.io';
+	const DEFAULT_TITLE = 'ST0x — Trade & Earn on DeFi-Native Tokenized Assets';
+	const DEFAULT_DESCRIPTION =
+		'ST0x brings real-world assets on-chain as DeFi-first tokens. Trade tokenized stocks, ETFs & commodities 24/7, then earn yield with fully composable, on-chain assets.';
+	const OG_IMAGE = `${SITE_URL}/apple-touch-icon.png`;
+
+	$: metaTitle = ($page.data?.title as string | undefined) ?? DEFAULT_TITLE;
+	$: metaDescription = ($page.data?.description as string | undefined) ?? DEFAULT_DESCRIPTION;
+	$: canonicalUrl = `${SITE_URL}${$page.url.pathname}`;
 	import { onMount } from 'svelte';
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
 	import { injectSpeedInsights } from '@vercel/speed-insights/sveltekit';
@@ -124,6 +139,27 @@
 		};
 	});
 </script>
+
+<svelte:head>
+	<title>{metaTitle}</title>
+	<meta name="description" content={metaDescription} />
+	<link rel="canonical" href={canonicalUrl} />
+
+	<!-- Open Graph -->
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="ST0x" />
+	<meta property="og:url" content={canonicalUrl} />
+	<meta property="og:title" content={metaTitle} />
+	<meta property="og:description" content={metaDescription} />
+	<meta property="og:image" content={OG_IMAGE} />
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:site" content="@st0x_io" />
+	<meta name="twitter:title" content={metaTitle} />
+	<meta name="twitter:description" content={metaDescription} />
+	<meta name="twitter:image" content={OG_IMAGE} />
+</svelte:head>
 
 <QueryClientProvider client={queryClient}>
 	<!-- Dynamic SDK wrapper (invisible, handles auth state) -->

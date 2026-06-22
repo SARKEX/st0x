@@ -1,11 +1,3 @@
-<svelte:head>
-	<title>API Documentation | st0x</title>
-	<meta
-		name="description"
-		content="st0x Public API documentation for rewards, RocketBoost, and wallet data."
-	/>
-</svelte:head>
-
 <div class="api-docs-wrapper">
 	<iframe src="/scalar.html" title="API Documentation" class="api-docs-iframe"></iframe>
 </div>
