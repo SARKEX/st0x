@@ -10,7 +10,7 @@
 			? "This page doesn't exist."
 			: status >= 500
 				? 'Something went wrong on our end. Please try again in a moment.'
-				: ($page.error?.message ?? 'An unexpected error occurred.');
+				: $page.error?.message ?? 'An unexpected error occurred.';
 </script>
 
 <svelte:head>
@@ -18,7 +18,9 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="flex min-h-screen flex-col items-center justify-center bg-gray-900 px-6 text-center text-white">
+<div
+	class="flex min-h-screen flex-col items-center justify-center bg-gray-900 px-6 text-center text-white"
+>
 	<img src="/images/logo-sidebar.svg" alt="ST0x" class="mb-8 h-10 w-auto" />
 	<p class="mb-2 text-6xl font-bold text-yellow-400">{status}</p>
 	<p class="mb-8 max-w-md text-base text-gray-300">{message}</p>
