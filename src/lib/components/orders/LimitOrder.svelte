@@ -1,7 +1,7 @@
 <script lang="ts">
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { CategorizedToken } from '$lib/config/network';
-	import { createApiTokensQuery } from '$lib/queries/tokens';
+	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import { validateBaseline, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits, parseUnits } from 'viem';
@@ -91,9 +91,7 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
-			const match = ALL_TOKENS.find(
-				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
-			);
+			const match = findApiTokenByAnyAddress(ALL_TOKENS, settlementTokenConfig.address);
 			settlementToken = match || settlementToken;
 		} else {
 			settlementToken = ALL_TOKENS[0];
