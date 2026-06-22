@@ -8,9 +8,9 @@ import type { RequestHandler } from './$types';
 // Sitemap URL returning 404.
 const SITE = 'https://www.st0x.io';
 
-// Public, indexable routes. App/auth-gated routes (/dashboard, /trade,
-// /strategies, /platform-metrics) are intentionally excluded.
-const ROUTES = ['/', '/earn', '/faqs', '/docs', '/terms', '/privacy-policy'];
+// Public, indexable routes that exist on this branch. App/auth-gated routes
+// (/dashboard, /trade, /strategies, /platform-metrics) are intentionally excluded.
+const ROUTES = ['/', '/faqs', '/docs', '/terms', '/privacy-policy'];
 
 export const GET: RequestHandler = () => {
 	const urls = ROUTES.map(

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>st0x · Design Language</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style/tokens.css" />
+  <link rel="stylesheet" href="style/components.css" />
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" fill="#070b11"/>
+      <g transform="translate(50 48)">
+        <circle r="20" fill="none" stroke="#2de3a6" stroke-width="4"/>
+        <circle r="3.4" fill="#2de3a6"/>
+      </g>
+      <text x="50" y="86" text-anchor="middle" fill="#2de3a6" font-family="monospace" font-size="11" font-weight="700">st0x</text>
+    </svg>
+  </template>
+</head>
+<body>
+
+  <!-- ambient motion -->
+  <div id="ambient" aria-hidden="true">
+    <canvas id="flow"></canvas>
+    <div class="grid-veil"></div>
+  </div>
+
+  <!-- topbar -->
+  <header class="topbar">
+    <div class="row">
+      <a class="logo" href="#top" aria-label="st0x home">
+        <span class="t">st</span><span class="ring"></span><span class="t">x</span>
+      </a>
+
+      <nav class="nav">
+        <button class="navlink active">Trade</button>
+        <button class="earnpill">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M12 12c0-3 2.5-5 6-5 0 3-2.5 5-6 5z"/><path d="M12 13c0-2.5-2-4.5-5-4.5 0 2.5 2 4.5 5 4.5z"/></svg>
+          Earn
+          <span class="pct"><span class="live"><i></i><i></i></span>3.53%</span>
+        </button>
+        <button class="navlink">Strategies</button>
+        <button class="navlink">Portfolio</button>
+      </nav>
+
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="toggle" role="group" aria-label="Theme">
+          <button data-theme-btn="dark" title="Dark" aria-label="Dark mode">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+          </button>
+          <button data-theme-btn="light" title="Light" aria-label="Light mode">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+          </button>
+        </div>
+        <button class="btn btn-ghost" style="padding:9px 14px;">
+          <span class="live" style="--accent:var(--iris)"><i style="background:var(--iris)"></i><i style="background:var(--iris)"></i></span>
+          Base
+        </button>
+        <button class="btn btn-primary">My Wallet <span class="mono" style="font-weight:500;opacity:.7;font-size:12px;">·7f3a</span></button>
+      </div>
+    </div>
+  </header>
+
+  <a id="top"></a>
+
+  <!-- ===================== HERO ===================== -->
+  <section class="wrap" style="padding: 92px 24px 40px;">
+    <div style="max-width: 820px;">
+      <p class="eyebrow">Design language · v2 · June 2026</p>
+      <h1 class="display" style="font-weight:600; font-size: clamp(40px, 6.4vw, 78px); line-height:1.02; margin:0 0 22px; letter-spacing:-.035em;">
+        A trading surface<br>you can <span style="color:var(--accent);">trust</span>.
+      </h1>
+      <p style="font-size:clamp(17px,1.6vw,20px); color:var(--text-2); line-height:1.5; max-width:54ch; margin:0 0 30px;">
+        The refreshed st0x system — calm near-black depth, a single mint-emerald signature, and soft ambient motion. Modern, sleek, and built to feel safe with real money. <span style="color:var(--text);">Flip the theme up top — light mode is first-class too.</span>
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+        <button class="btn btn-primary" style="padding:14px 22px; font-size:15px;">Start trading
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <button class="btn btn-ghost" style="padding:14px 22px; font-size:15px;">View the system</button>
+        <span class="apy lg" style="margin-left:6px;"><span class="live"><i></i><i></i></span><span data-countup data-to="3.53" data-dec="2"></span>% APY · live</span>
+      </div>
+    </div>
+  </section>
+
+  <div id="sections"></div>
+
+  <script src="style/ambient.js"></script>
+  <script src="sections.js"></script>
+</body>
+</html>
