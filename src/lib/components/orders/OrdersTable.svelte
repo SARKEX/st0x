@@ -152,6 +152,12 @@
 
 		const normalizedInput = normalizeAddress(order.inputToken.address);
 		const normalizedOutput = normalizeAddress(order.outputToken.address);
+		// This predicate already matches across all TOKENS entries (chain- and ST0x-category-
+		// filtered) and returns the matched entry's own address; getTokenByAnyAddress would instead
+		// return the canonical wrapped address, which would flip the downstream isBuy comparison.
+		// DRIFT-01 remediation of this callsite (making asset/isBuy resolution variant-aware) is
+		// tracked separately.
+		// eslint-disable-next-line no-restricted-syntax -- justification: see comment above
 		const st0xToken = TOKENS.find((configuredToken) => {
 			if (
 				configuredToken.chainId !== $currentNetwork?.chainId ||
@@ -170,10 +176,10 @@
 		token: string | null
 	): DisplayOrder | null {
 		const orderData = decodeOrderData(order);
-		const inputIOIndex = findIoIndexByToken(orderData?.validInputs, order.inputToken.address);
-		const outputIOIndex = findIoIndexByToken(orderData?.validOutputs, order.outputToken.address);
-		const inputVault = inputIOIndex >= 0 ? orderData?.validInputs?.[inputIOIndex] : undefined;
-		const outputVault = outputIOIndex >= 0 ? orderData?.validOutputs?.[outputIOIndex] : undefined;
+		const inputIdx = findIoIndexByToken(orderData?.validInputs, order.inputToken.address);
+		const outputIdx = findIoIndexByToken(orderData?.validOutputs, order.outputToken.address);
+		const inputVault = inputIdx >= 0 ? orderData?.validInputs?.[inputIdx] : undefined;
+		const outputVault = outputIdx >= 0 ? orderData?.validOutputs?.[outputIdx] : undefined;
 		const inputVaultId = vaultIdToHex(inputVault?.vaultId);
 		const outputVaultId = vaultIdToHex(outputVault?.vaultId);
 
@@ -203,8 +209,8 @@
 			outputTokenSymbol: order.outputToken.symbol,
 			inputTokenAddress,
 			outputTokenAddress,
-			inputIOIndex: inputIOIndex >= 0 ? inputIOIndex : 0,
-			outputIOIndex: outputIOIndex >= 0 ? outputIOIndex : 0,
+			inputIOIndex: inputIdx >= 0 ? inputIdx : 0,
+			outputIOIndex: outputIdx >= 0 ? outputIdx : 0,
 			inputVaultId,
 			outputVaultId,
 			orderData,

@@ -2,7 +2,7 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { CategorizedToken } from '$lib/config/network';
-	import { createApiTokensQuery } from '$lib/queries/tokens';
+	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import type { PythToken } from '$lib/types';
 	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -61,9 +61,7 @@
 	$: if ($currentNetwork && ALL_TOKENS.length > 0) {
 		const settlementTokenConfig = $currentNetwork.defaultPaymentToken;
 		if (settlementTokenConfig) {
-			const match = ALL_TOKENS.find(
-				(token) => token.address.toLowerCase() === settlementTokenConfig.address.toLowerCase()
-			);
+			const match = findApiTokenByAnyAddress(ALL_TOKENS, settlementTokenConfig.address);
 			selectedOutputToken = match || selectedOutputToken;
 		} else {
 			selectedOutputToken = selectedOutputToken || ALL_TOKENS[0];

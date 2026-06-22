@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>st0x · Save &amp; Earn (SGOV)</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Roboto+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['DM Sans', 'system-ui', 'sans-serif'],
+            mono: ['Roboto Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            primary: '#4c77ba',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'DM Sans', system-ui, sans-serif; background: #04070d; color: #fff; -webkit-font-smoothing: antialiased; }
+    .font-mono { font-family: 'Roboto Mono', monospace; }
+    /* Custom range slider thumb (emerald) */
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #34d399; cursor: pointer; border: 3px solid #04241a; box-shadow: 0 0 0 1px rgba(52,211,153,.5); }
+    input[type=range]::-moz-range-thumb { height: 18px; width: 18px; border-radius: 50%; background: #34d399; cursor: pointer; border: 3px solid #04241a; }
+    /* Ambient live-price chart scroll (swap card) */
+    @keyframes chartscroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    @media (prefers-reduced-motion: reduce) { .chart-scroll { animation: none !important; } }
+    /* Scrollbar inside the product frame */
+    .overflow-y-auto::-webkit-scrollbar { width: 9px; }
+    .overflow-y-auto::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 999px; }
+    .overflow-y-auto::-webkit-scrollbar-track { background: transparent; }
+  </style>
+
+  <!-- Bundler thumbnail (splash + no-JS fallback) -->
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" fill="#04070d"/>
+      <g transform="translate(50 50)">
+        <circle r="22" fill="none" stroke="#34d399" stroke-width="3"/>
+        <path d="M-9 4 L-3 -4 L3 1 L10 -8" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <text x="50" y="88" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="9" font-weight="700">EARN 3.53%</text>
+    </svg>
+  </template>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="src/data.jsx"></script>
+  <script type="text/babel" src="src/atoms.jsx"></script>
+  <script type="text/babel" src="src/AppShell.jsx"></script>
+  <script type="text/babel" src="src/Home.jsx"></script>
+  <script type="text/babel" src="src/EarnParts.jsx"></script>
+  <script type="text/babel" src="src/Earn.jsx"></script>
+  <script type="text/babel" src="src/Portfolio.jsx"></script>
+  <script type="text/babel" src="src/Trade.jsx"></script>
+  <script type="text/babel" src="src/DepositModal.jsx"></script>
+  <script type="text/babel" src="src/Strategy.jsx"></script>
+  <script type="text/babel" src="src/App.jsx"></script>
+</body>
+</html>
