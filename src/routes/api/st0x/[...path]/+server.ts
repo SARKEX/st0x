@@ -9,6 +9,8 @@
 import { env } from '$env/dynamic/private';
 import type { RequestEvent, RequestHandler } from './$types';
 
+const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
+
 function getApiBase(): string {
 	const url = env.ST0X_API_URL;
 	if (!url) {
@@ -85,6 +87,21 @@ function matchProxyRoute(method: string, pathSuffix: string): { cache?: string }
 	return route ? { cache: route.cache } : null;
 }
 
+async function shouldCacheResponse(pathSuffix: string, response: Response): Promise<boolean> {
+	if (!response.ok) return false;
+
+	if (pathSuffix !== TOKEN_DETAILS_LIST_PATH) return true;
+
+	try {
+		const body = (await response.clone().json()) as { errors?: unknown };
+		return !Array.isArray(body.errors) || body.errors.length === 0;
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : 'Unknown parse error';
+		console.warn('[st0x-proxy] Skipping token details cache for unreadable response:', msg);
+		return false;
+	}
+}
+
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	let apiBase: string;
 	let authHeader: string;
@@ -137,7 +154,7 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
-	if (matched.cache && response.ok) {
+	if (matched.cache && (await shouldCacheResponse(pathSuffix, response))) {
 		responseHeaders.set('Cache-Control', matched.cache);
 	}
 
