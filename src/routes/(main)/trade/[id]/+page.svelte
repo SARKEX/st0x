@@ -50,6 +50,7 @@
 		normalizeAddress,
 		ratioToNumber,
 		toDecimal,
+		toBigInt,
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
 	import type { OracleQuote } from '$lib/queries/oracleQuotes';
@@ -611,6 +612,10 @@
 			minimumFractionDigits: value > 1 ? 2 : 4,
 			maximumFractionDigits: value > 1 ? 2 : 6
 		}).format(value);
+	}
+	function formatBaseUnitAmount(value: string | null | undefined): string {
+		const amount = toBigInt(value);
+		return amount === null ? '0' : formatUnits(amount, 18);
 	}
 	function formatResourceError(error: unknown, fallback: string): string {
 		if (!error) return fallback;
@@ -1745,7 +1750,11 @@
 							<div class="space-y-3 text-sm">
 								<div class="flex justify-between">
 									<span class="text-gray-400">Total Supply</span>
-									<span>{formatUnits(BigInt(currentToken.totalShares), 18)}</span>
+									<span
+										>{formatBaseUnitAmount(
+											currentToken.bridgedSupply ?? currentToken.totalShares
+										)}</span
+									>
 								</div>
 								<div class="flex justify-between">
 									<span class="text-gray-400">Holders</span>

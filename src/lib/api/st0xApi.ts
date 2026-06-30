@@ -180,6 +180,7 @@ export interface ApiTokenDetailsError {
 
 export interface ApiTokenDetailsSummary {
 	address: string;
+	deployTimestamp?: number;
 	receiptContractAddress?: string | null;
 	name: string;
 	symbol: string;

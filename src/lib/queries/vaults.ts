@@ -58,7 +58,12 @@ function tokenDetailsSummaryToVault(
 		admin: detail?.admin ?? '',
 		name: summary.name,
 		symbol: summary.symbol,
-		deployTimestamp: detail ? String(detail.deployTimestamp) : '',
+		deployTimestamp:
+			detail?.deployTimestamp !== undefined
+				? String(detail.deployTimestamp)
+				: summary.deployTimestamp !== undefined
+					? String(summary.deployTimestamp)
+					: '',
 		receiptContractAddress: summary.receiptContractAddress ?? '',
 		tokenHolders: [],
 		receiptVaultInformations: [],

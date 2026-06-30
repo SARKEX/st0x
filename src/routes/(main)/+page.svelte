@@ -15,6 +15,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { track, trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
+	import { toBigInt } from '$lib/utils/tokenMath';
 
 	function startTour() {
 		tutorialActive.set(true);
@@ -68,6 +69,11 @@
 	// Price feeds query — same source the sidebar uses for symbol-based price lookup
 	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
 	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+
+	function formatBaseUnitAmount(value: string | null | undefined): string {
+		const amount = toBigInt(value);
+		return amount === null ? '0' : formatUnits(amount, 18);
+	}
 
 	let cleanupScrollTracking: (() => void) | null = null;
 
@@ -148,7 +154,7 @@
 					symbol: sft.symbol,
 					price,
 					totalHolders: String(sft.holderCount ?? 0),
-					totalSupply: formatUnits(BigInt(sft.bridgedSupply ?? sft.totalShares), 18),
+					totalSupply: formatBaseUnitAmount(sft.bridgedSupply ?? sft.totalShares),
 					totalTransfers: String(sft.transferCount ?? 0),
 					createdAt: sft.deployTimestamp,
 					isSft: true
