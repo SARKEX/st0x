@@ -155,4 +155,95 @@ describe('/api/st0x proxy', () => {
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
+
+	it('allows cached token details list endpoint', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify({ data: [], errors: [] }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBe(
+			'public, s-maxage=60, stale-while-revalidate=300'
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.example.test/v1/tokens/details?page=1',
+			expect.objectContaining({ method: 'GET' })
+		);
+	});
+
+	it('does not cache partial token details list responses', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					data: [{ address: '0xGood' }],
+					errors: [{ address: '0xMissing', message: 'subgraph returned error status' }]
+				}),
+				{
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(await response.json()).toEqual({
+			data: [{ address: '0xGood' }],
+			errors: [{ address: '0xMissing', message: 'subgraph returned error status' }]
+		});
+	});
+
+	it('does not cache unreadable token details list responses', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response('not json', {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(await response.text()).toBe('not json');
+		expect(warn).toHaveBeenCalledWith(
+			'[st0x-proxy] Skipping token details cache for unreadable response:',
+			expect.any(String)
+		);
+	});
+
+	it('allows cached token details by address endpoint', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({ address: '0xToken', activity: { deposits: [], withdraws: [] } }),
+				{
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBe(
+			'public, s-maxage=60, stale-while-revalidate=300'
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.example.test/v1/tokens/0xToken/details?page=1',
+			expect.objectContaining({ method: 'GET' })
+		);
+	});
 });

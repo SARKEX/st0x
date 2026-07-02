@@ -32,16 +32,7 @@
 	$: sortedAssets = $sfts
 		? [...$sfts]
 				.map<AssetWithMetrics>((sft) => {
-					// Calculate total on-chain volume (deposits + withdrawals)
-					const depositVolume = sft.deposits.reduce(
-						(sum: bigint, d: { amount: string }) => sum + BigInt(d.amount),
-						BigInt(0)
-					);
-					const withdrawVolume = sft.withdraws.reduce(
-						(sum: bigint, w: { amount: string }) => sum + BigInt(w.amount),
-						BigInt(0)
-					);
-					const totalVolume = depositVolume + withdrawVolume;
+					const totalVolume = BigInt(sft.activityVolume ?? '0');
 					// Use token config symbol for price lookup so legacy symbols (e.g. tSTOX) resolve to the wrapped token's price feed (wtSTOX / AMEX:SPLG)
 					const tokenInfo = findApiTokenByAnyAddress(apiTokens, sft.address);
 					const symbolForPrice = tokenInfo?.symbol ?? sft.symbol;

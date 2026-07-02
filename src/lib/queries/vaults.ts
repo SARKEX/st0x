@@ -6,7 +6,13 @@ import {
 } from '@tanstack/svelte-query';
 import { browser } from '$app/environment';
 import type { Network } from '$lib/config/network';
-import { getSfts, getSftById } from '$lib/api/subgraph';
+import {
+	apiGetTokenDetails,
+	apiGetTokenDetailsByAddress,
+	type ApiTokenDetails,
+	type ApiTokenDetailsActivityRow,
+	type ApiTokenDetailsSummary
+} from '$lib/api/st0xApi';
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import { queryClient } from '$lib/clients/queryClient';
 import { createRaindexClient } from '$lib/clients/raindex';
@@ -16,13 +22,73 @@ import type { RaindexVault, SgVault } from '@rainlanguage/orderbook';
 // SFT/Token Queries (OffchainAssetReceiptVault - the tokenized assets)
 // =============================================================================
 
+function toReceiptActivity(row: ApiTokenDetailsActivityRow) {
+	return {
+		id: row.id,
+		transaction: { id: row.txHash },
+		emitter: { address: row.caller },
+		receipt: {
+			id: row.receiptId,
+			receiptId: row.receiptId,
+			receiptInformations: []
+		},
+		amount: row.amount,
+		caller: { address: row.caller },
+		timestamp: String(row.timestamp)
+	};
+}
+
+function tokenDetailsSummaryToVault(
+	summary: ApiTokenDetailsSummary,
+	detail?: ApiTokenDetails,
+	chainId?: number
+): OffchainAssetReceiptVault {
+	return {
+		id: summary.address,
+		totalShares: summary.totalSupply,
+		holderCount: summary.holderCount,
+		transferCount: summary.transferCount,
+		bridgedSupply: summary.bridgedSupply,
+		depositVolume: summary.depositVolume,
+		withdrawVolume: summary.withdrawVolume,
+		activityVolume: summary.activityVolume,
+		sftVaultAddress: detail?.sftVaultAddress,
+		address: summary.address as `0x${string}`,
+		deployer: detail?.deployer ?? '',
+		admin: detail?.admin ?? '',
+		name: summary.name,
+		symbol: summary.symbol,
+		deployTimestamp:
+			detail?.deployTimestamp !== undefined
+				? String(detail.deployTimestamp)
+				: summary.deployTimestamp !== undefined
+					? String(summary.deployTimestamp)
+					: '',
+		receiptContractAddress: summary.receiptContractAddress ?? '',
+		tokenHolders: [],
+		receiptVaultInformations: [],
+		withdraws: detail?.activity.withdraws.map(toReceiptActivity) ?? [],
+		deposits: detail?.activity.deposits.map(toReceiptActivity) ?? [],
+		shareTransfers: [],
+		chainId
+	};
+}
+
 export function createSftsQuery(network: Network | null) {
 	return createQuery<OffchainAssetReceiptVault[]>({
 		queryKey: ['sfts', network?.id],
-		enabled: Boolean(browser && network?.subgraph_url),
+		enabled: Boolean(browser && network),
 		staleTime: Infinity,
 		refetchInterval: false,
-		queryFn: () => getSfts(network as Network)
+		queryFn: async () => {
+			const response = await apiGetTokenDetails();
+			if (response.errors.length) {
+				console.warn('Some token details failed to load', response.errors);
+			}
+			return response.data.map((summary) =>
+				tokenDetailsSummaryToVault(summary, undefined, network?.chainId)
+			);
+		}
 	});
 }
 
@@ -60,7 +126,7 @@ export function createSingleSftQuery(
 
 	return createQuery<OffchainAssetReceiptVault | null>({
 		queryKey: ['sft', network?.id, tokenId],
-		enabled: Boolean(network?.subgraph_url && tokenId),
+		enabled: Boolean(browser && network && tokenId),
 		staleTime: 30_000,
 		refetchInterval: false,
 		refetchOnWindowFocus: true, // Only refetch on focus if stale
@@ -68,7 +134,8 @@ export function createSingleSftQuery(
 		initialDataUpdatedAt: getCachedTimestamp(),
 		queryFn: async () => {
 			if (!network || !tokenId) return null;
-			return getSftById(tokenId, network);
+			const detail = await apiGetTokenDetailsByAddress(tokenId, { activityLimit: 5 });
+			return tokenDetailsSummaryToVault(detail, detail, network.chainId);
 		}
 	});
 }

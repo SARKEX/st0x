@@ -9,6 +9,8 @@
 import { env } from '$env/dynamic/private';
 import type { RequestEvent, RequestHandler } from './$types';
 
+const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
+
 function getApiBase(): string {
 	const url = env.ST0X_API_URL;
 	if (!url) {
@@ -30,6 +32,16 @@ function getAuthHeader(): string {
 const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
 	{ method: 'GET', pattern: /^health$/ },
 	{ method: 'GET', pattern: /^v1\/tokens$/ },
+	{
+		method: 'GET',
+		pattern: /^v1\/tokens\/details$/,
+		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+	},
+	{
+		method: 'GET',
+		pattern: /^v1\/tokens\/[^/]+\/details$/,
+		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/wrap-ratio$/,
@@ -73,6 +85,21 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 function matchProxyRoute(method: string, pathSuffix: string): { cache?: string } | null {
 	const route = ALLOWED_PROXY_ROUTES.find((r) => r.method === method && r.pattern.test(pathSuffix));
 	return route ? { cache: route.cache } : null;
+}
+
+async function shouldCacheResponse(pathSuffix: string, response: Response): Promise<boolean> {
+	if (!response.ok) return false;
+
+	if (pathSuffix !== TOKEN_DETAILS_LIST_PATH) return true;
+
+	try {
+		const body = (await response.clone().json()) as { errors?: unknown };
+		return !Array.isArray(body.errors) || body.errors.length === 0;
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : 'Unknown parse error';
+		console.warn('[st0x-proxy] Skipping token details cache for unreadable response:', msg);
+		return false;
+	}
 }
 
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
@@ -127,7 +154,7 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
-	if (matched.cache && response.ok) {
+	if (matched.cache && (await shouldCacheResponse(pathSuffix, response))) {
 		responseHeaders.set('Cache-Control', matched.cache);
 	}
 

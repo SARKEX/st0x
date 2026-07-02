@@ -343,7 +343,7 @@
 	// User Vaults Query - no polling, invalidated after order deployment
 	$: vaultsListQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
-	// Query user's wallet holdings from SFTs - fetches balances via multicall (single RPC request)
+	// Query user's wallet holdings from REST token details - fetches balances via multicall (single RPC request)
 	// We query balances on wrapped token addresses from the REST API token list since those are traded.
 	const walletHoldingsQuery = createQuery(
 		derived(
@@ -363,10 +363,9 @@
 				staleTime: QUERY_STALE_TIME_MS,
 				queryFn: async () => {
 					if (!$sfts || !$walletAddress || !$wagmiConfig) return [];
-					const normalizedWalletAddress = $walletAddress.toLowerCase();
 
-					// Map subgraph SFTs to their wrapped token addresses from the API token list.
-					// The subgraph returns unwrapped addresses, but we need to query wrapped token balances
+					// Token details already normalize to wrapped addresses, but token lookup keeps
+					// legacy/unwrapped variants safe for older cached rows.
 					const sftsWithWrappedAddresses = $sfts.map((sft) => {
 						const tokenConfig = findApiTokenByAnyAddress(ALL_TOKENS, sft.address);
 						return {
@@ -393,13 +392,6 @@
 
 							if (result.status === 'success') {
 								walletBalance = result.result as bigint;
-							} else {
-								// Fall back to subgraph data if multicall fails for this token
-								const userHolder = sft.tokenHolders.find(
-									(holder: { address: string }) =>
-										holder.address.toLowerCase() === normalizedWalletAddress
-								);
-								walletBalance = userHolder ? BigInt(userHolder.balance) : 0n;
 							}
 
 							const tokenConfig = findApiTokenByAnyAddress(ALL_TOKENS, sft.address);
@@ -415,19 +407,14 @@
 						});
 					} catch (error) {
 						console.error('Multicall failed for wallet holdings:', error);
-						// Fall back to subgraph data for all tokens
 						return $sfts.map((sft) => {
-							const userHolder = sft.tokenHolders.find(
-								(holder: { address: string }) =>
-									holder.address.toLowerCase() === normalizedWalletAddress
-							);
 							const tokenConfig = findApiTokenByAnyAddress(ALL_TOKENS, sft.address);
 							return {
 								id: sft.id,
 								address: tokenConfig?.address ?? sft.address,
 								name: tokenConfig?.name ?? sft.name,
 								symbol: tokenConfig?.symbol ?? sft.symbol,
-								walletBalance: userHolder ? BigInt(userHolder.balance) : 0n,
+								walletBalance: 0n,
 								decimals: 18
 							};
 						});
