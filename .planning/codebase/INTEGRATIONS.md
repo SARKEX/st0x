@@ -103,7 +103,7 @@
 - Crypto reference tokens (CRYPTO_TOKENS) on Arbitrum + Base: WBTC, WETH, ARB, USDC
 
 **Subgraphs (Goldsky):**
-- SFT subgraph (Base): `https://api.goldsky.com/api/public/project_cmjr2df7svg6t01tl2ic706ao/subgraphs/sft-base/1.0.10/gn`
+- SFT subgraph (Base): `https://api.goldsky.com/api/public/project_cmjr2df7svg6t01tl2ic706ao/subgraphs/sft-base/1.0.12/gn`
 - Metadata subgraph (Base): `https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn`
 - Orderbook v4 subgraph (Base, active): `https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2026-02-05-c4ef/gn`
 - Orderbook v4 subgraph (Base, inactive/historical): `…/ob4-base/2025-10-11-a62b/gn`
