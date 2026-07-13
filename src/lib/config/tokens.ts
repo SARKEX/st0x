@@ -322,6 +322,51 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:SPCX',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x3aF952888Cd89DAD3e8AF67cf4b7E740B36829C3',
+		unwrappedAddress: '0x9a5D3cAeC90b0332b18C0B93fEF42F3F8C918289',
+		symbol: 'wtCEG',
+		decimals: 18,
+		name: 'Wrapped Constellation Energy Corporation ST0x',
+		logoUrl: '/images/CEG.png',
+		priceFeedId: '0xa541bc5c4b69961442e45e9198c7cce151ff9c2a1003f620c6d4a9785c77a4d9',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:CEG',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x1A91Df4a970EBaB1bB4AF32Eb6d10509028eE4b8',
+		unwrappedAddress: '0x96DE077262609298CD891E4Ab21bd34837dE33aB',
+		symbol: 'wtDRAM',
+		decimals: 18,
+		name: 'Wrapped Roundhill Memory ETF ST0x',
+		logoUrl: '/images/roundhill.png',
+		priceFeedId: '',
+		// priceFeedId removed — Pyth no longer supports this feed ID.
+		// Using a hardcoded fallback until a replacement feed is wired up.
+		fallbackPrice: 50,
+		category: 'ST0x',
+		tradingViewSymbol: 'CBOE:DRAM',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x71C66449d2528E23514A9c197BFD55Ae9DB3B714',
+		unwrappedAddress: '0x7001e2974F775f0Fd73a3D2e5914e591f3EC3fBB',
+		symbol: 'wtTSM',
+		decimals: 18,
+		name: 'Wrapped Taiwan Semiconductor Manufacturing Company ST0x',
+		logoUrl: '/images/TSM.png',
+		priceFeedId: '0xe722560a66e4ab00522ef20a38fa2ba5d1b41f1c5404723ed895d202a7af7cc4',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:TSM',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
