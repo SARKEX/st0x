@@ -5,8 +5,10 @@ import { readContract, sendTransaction, waitForTransactionReceipt, estimateGas }
 import {
 	TOKENS,
 	DEFAULT_PAYMENT_TOKENS,
-	getDefaultPaymentTokenForNetwork
+	getDefaultPaymentTokenForNetwork,
+	replaceTokenCatalog
 } from '$lib/config/network';
+import { TEST_ST0X_TOKENS } from '../fixtures/st0xTokenCatalog';
 import { rainlangConfirmationModal, currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
 
 const STOXs = TOKENS;
@@ -204,6 +206,7 @@ describe('transactionStore tests', () => {
 	let mockGetAddOrdersForTransaction: ReturnType<typeof vi.fn>;
 
 	beforeEach(async () => {
+		replaceTokenCatalog(TEST_ST0X_TOKENS);
 		vi.clearAllMocks();
 		transactionStore.reset();
 

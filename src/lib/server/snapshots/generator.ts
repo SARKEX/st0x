@@ -11,6 +11,7 @@ import { networks } from '$lib/config/networks';
 import { TOKENS, getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
 import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
 import { withRetry } from '$lib/utils/retry';
+import { ensureServerTokenCatalog } from '$lib/server/tokenCatalog';
 
 const RPC_URLS = [networks[0].rpcUrl, ...networks[0].fallbackRpcUrls];
 
@@ -190,6 +191,7 @@ export async function generateTokenSnapshot(
 	tokenAddress: string,
 	blockNumber: number
 ): Promise<BlockSnapshot> {
+	await ensureServerTokenCatalog();
 	const normalizedToken = tokenAddress.toLowerCase();
 
 	// Find the parent token config to get all address variants
@@ -236,6 +238,7 @@ export async function generateTokenSnapshot(
  * wrapped, unwrapped, and legacy addresses.
  */
 export async function generateAllTokenSnapshots(blockNumber: number): Promise<BlockSnapshot[]> {
+	await ensureServerTokenCatalog();
 	// Get block timestamp first (needed for Pyth price lookup)
 	const timestamp = await getBlockTimestamp(blockNumber);
 

@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { describe, it, expect } from 'vitest';
+import { replaceTokenCatalog } from '$lib/config/tokens';
+import { TEST_ST0X_TOKENS } from '../fixtures/st0xTokenCatalog';
 import {
 	getNetworkById,
 	getNetworkByChainId,
@@ -15,6 +17,8 @@ import {
 	TOKENS,
 	CRYPTO_TOKENS
 } from '$lib/config/network';
+
+replaceTokenCatalog(TEST_ST0X_TOKENS);
 
 describe('network', () => {
 	describe('getNetworkById', () => {

@@ -2,7 +2,7 @@
 // Used to attribute orderbook holdings to vault owners
 
 import { networks } from '$lib/config/networks';
-import { TOKENS } from '$lib/config/tokens';
+import { onTokenCatalogChange } from '$lib/config/tokens';
 import { parseFloatHex } from '$lib/utils/tokenMath';
 
 const BATCH_SIZE = 1000;
@@ -14,7 +14,15 @@ const ORDERBOOK_SUBGRAPH_URLS = [
 ].filter(Boolean);
 
 // Get token addresses for filtering
-const TOKEN_ADDRESSES = TOKENS.map((t) => t.address.toLowerCase());
+const TOKEN_ADDRESSES: string[] = [];
+
+onTokenCatalogChange((tokens) => {
+	TOKEN_ADDRESSES.splice(
+		0,
+		TOKEN_ADDRESSES.length,
+		...tokens.map((token) => token.address.toLowerCase())
+	);
+});
 
 interface SubgraphVault {
 	id: string;

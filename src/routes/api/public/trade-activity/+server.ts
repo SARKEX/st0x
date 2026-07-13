@@ -12,6 +12,7 @@ import { withConditionalCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { networks, TOKENS, CRYPTO_TOKENS } from '$lib/config/network';
 import type { Network } from '$lib/config/network';
 import { normalizeAddress } from '$lib/utils/tokenMath';
+import { ensureServerTokenCatalog } from '$lib/server/tokenCatalog';
 import { bucketTimestamp, TRADE_WINDOW_BUCKET_SECONDS } from '$lib/utils/timeWindow';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
 import type { ApiTradeByAddress, ApiTradesByAddressResponse } from '$lib/api/st0xApi';
@@ -298,6 +299,7 @@ async function computeTradeActivity(): Promise<PublicTradeActivityResponse> {
 }
 
 export const GET: RequestHandler = async ({ request }) => {
+	await ensureServerTokenCatalog();
 	const clientIp = getClientIp(request);
 	const rateLimit = await rateLimiters.publicApi(`public-api:${clientIp}`);
 

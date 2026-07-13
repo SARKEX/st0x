@@ -76,6 +76,33 @@ describe('normalizeApiTokensForNetwork', () => {
 		expect(tokens[0].legacyAddress).toBeUndefined();
 	});
 
+	it('normalizes remote pricing and historical metadata', () => {
+		const tokens = normalizeApiTokensForNetwork(
+			[
+				apiToken({
+					symbol: 'wtSPYM',
+					isin: 'US78464A8541',
+					extensions: {
+						category: 'ST0x',
+						priceFeedId: '0xfeed',
+						fallbackPrice: 82.5,
+						previousSymbols: ['wtSPLG', 'tSPLG'],
+						receiptAddress: '0x0000000000000000000000000000000000000002'
+					}
+				})
+			],
+			8453
+		);
+
+		expect(tokens[0]).toMatchObject({
+			priceFeedId: '0xfeed',
+			fallbackPrice: 82.5,
+			previousSymbols: ['wtSPLG', 'tSPLG'],
+			receiptAddress: '0x0000000000000000000000000000000000000002',
+			isin: 'US78464A8541'
+		});
+	});
+
 	it('deduplicates API tokens by address', () => {
 		const tokens = normalizeApiTokensForNetwork(
 			[

@@ -2,7 +2,7 @@
 // Modeled after albion.rewards/src/processor.ts
 
 import { networks } from '$lib/config/networks';
-import { TOKENS, getAllTokenAddressesFlat } from '$lib/config/tokens';
+import { getTokenAddressVariants, onTokenCatalogChange } from '$lib/config/tokens';
 import type { Transfer, SubgraphTransfer, SubgraphWrappedTokenTransfer } from './types';
 
 const BATCH_SIZE = 1000;
@@ -12,10 +12,23 @@ const SFT_SUBGRAPH_URL = networks[0].subgraph_url;
 const SFT_SUBGRAPH_URLS_LEGACY = networks[0].subgraph_urls_legacy ?? [];
 
 // Get all token addresses from config (lowercase)
-export const TOKEN_ADDRESSES = TOKENS.map((t) => t.address.toLowerCase());
+export const TOKEN_ADDRESSES: string[] = [];
 
 // All token addresses including unwrapped and legacy (for expanded snapshots)
-export const ALL_TOKEN_ADDRESSES = getAllTokenAddressesFlat();
+export const ALL_TOKEN_ADDRESSES: string[] = [];
+
+onTokenCatalogChange((tokens) => {
+	TOKEN_ADDRESSES.splice(
+		0,
+		TOKEN_ADDRESSES.length,
+		...tokens.map((token) => token.address.toLowerCase())
+	);
+	ALL_TOKEN_ADDRESSES.splice(
+		0,
+		ALL_TOKEN_ADDRESSES.length,
+		...tokens.flatMap((token) => getTokenAddressVariants(token))
+	);
+});
 
 /**
  * Fetch transfers from a specific SFT subgraph up to a specific block

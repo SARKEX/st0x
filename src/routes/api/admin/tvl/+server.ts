@@ -13,15 +13,14 @@ import {
 } from '$lib/server/kv';
 import { list } from '@vercel/blob';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
-import { TOKENS } from '$lib/config/tokens';
+import { PREVIOUS_SYMBOLS_BY_TOKEN, TOKEN_SYMBOLS } from '$lib/config/tokens';
 import { env } from '$env/dynamic/private';
 import { requireAdmin } from '$lib/server/adminAuth';
+import { ensureServerTokenCatalog } from '$lib/server/tokenCatalog';
 
 // Build token symbol map with fallback names for renamed tokens
-const tokenSymbols = TOKENS.map((t) => t.symbol);
-const previousSymbolsByToken = new Map<string, string[]>(
-	TOKENS.filter((t) => t.previousSymbols?.length).map((t) => [t.symbol, t.previousSymbols!])
-);
+const tokenSymbols = TOKEN_SYMBOLS;
+const previousSymbolsByToken = PREVIOUS_SYMBOLS_BY_TOKEN;
 
 interface WalletTvlEntry {
 	address: string;
@@ -374,6 +373,7 @@ async function calculateSimpleTvlAtBlock(
 export const GET: RequestHandler = async ({ url, cookies, request }) => {
 	const guardResponse = await requireAdmin(request, cookies, 'admin-tvl');
 	if (guardResponse) return guardResponse;
+	await ensureServerTokenCatalog();
 
 	try {
 		const limitParam = url.searchParams.get('limit');

@@ -47,6 +47,10 @@ vi.mock('$lib/server/kv', () => ({
 	getRewardsExcludedWalletsSet: vi.fn(async () => new Set<string>())
 }));
 
+vi.mock('$lib/server/tokenCatalog', () => ({
+	ensureServerTokenCatalog: vi.fn(async () => undefined)
+}));
+
 vi.mock('./scraper', () => ({
 	fetchAllTransfers: vi.fn(async () => []),
 	ALL_TOKEN_ADDRESSES: []

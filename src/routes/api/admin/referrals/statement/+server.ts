@@ -5,15 +5,14 @@ import { requireAdmin } from '$lib/server/adminAuth';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { getWalletsByCode } from '$lib/server/accessCodes';
 import { list } from '@vercel/blob';
-import { TOKENS } from '$lib/config/tokens';
+import { PREVIOUS_SYMBOLS_BY_TOKEN, TOKEN_SYMBOLS } from '$lib/config/tokens';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
 import { env } from '$env/dynamic/private';
+import { ensureServerTokenCatalog } from '$lib/server/tokenCatalog';
 
 const POINTS_PER_DOLLAR = 100;
-const tokenSymbols = TOKENS.map((t) => t.symbol);
-const previousSymbolsByToken = new Map<string, string[]>(
-	TOKENS.filter((t) => t.previousSymbols?.length).map((t) => [t.symbol, t.previousSymbols!])
-);
+const tokenSymbols = TOKEN_SYMBOLS;
+const previousSymbolsByToken = PREVIOUS_SYMBOLS_BY_TOKEN;
 
 async function fetchSnapshot(
 	tokenSymbol: string,
@@ -72,6 +71,7 @@ interface SnapshotData {
 export const GET: RequestHandler = async ({ url, cookies, request }) => {
 	const guardResponse = await requireAdmin(request, cookies, 'admin-referrals-statement');
 	if (guardResponse) return guardResponse;
+	await ensureServerTokenCatalog();
 
 	const code = url.searchParams.get('code');
 	const month = url.searchParams.get('month');

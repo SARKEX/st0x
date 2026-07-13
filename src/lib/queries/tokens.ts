@@ -1,13 +1,17 @@
 import { browser } from '$app/environment';
 import { createQuery } from '@tanstack/svelte-query';
 import { apiGetTokens, type ApiToken } from '$lib/api/st0xApi';
-import type { CategorizedToken, TokenCategory } from '$lib/config/tokens';
+import { replaceTokenCatalog, type CategorizedToken, type TokenCategory } from '$lib/config/tokens';
 
 type ApiTokenExtensions = {
 	category?: unknown;
 	unwrappedAddress?: unknown;
 	legacyAddress?: unknown;
 	legacySymbol?: unknown;
+	previousSymbols?: unknown;
+	receiptAddress?: unknown;
+	priceFeedId?: unknown;
+	fallbackPrice?: unknown;
 	tradingViewSymbol?: unknown;
 	tradingViewMarket?: unknown;
 };
@@ -18,6 +22,15 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asString(value: unknown): string | undefined {
 	return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+	return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function asStringArray(value: unknown): string[] | undefined {
+	if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) return undefined;
+	return value;
 }
 
 function getApiChainId(token: ApiToken): number | null {
@@ -58,13 +71,17 @@ function normalizeApiToken(token: ApiToken): CategorizedToken | null {
 		decimals: token.decimals,
 		name: token.name ?? token.label ?? token.symbol,
 		logoUrl: asString(token['logo-uri']),
-		priceFeedId: '',
+		priceFeedId: asString(extensions.priceFeedId) ?? '',
+		fallbackPrice: asNumber(extensions.fallbackPrice),
 		category,
 		tradingViewSymbol: asString(extensions.tradingViewSymbol),
 		tradingViewMarket: asString(extensions.tradingViewMarket),
 		unwrappedAddress: asString(extensions.unwrappedAddress),
 		legacyAddress: asString(extensions.legacyAddress),
 		legacySymbol: asString(extensions.legacySymbol),
+		previousSymbols: asStringArray(extensions.previousSymbols),
+		receiptAddress: asString(extensions.receiptAddress),
+		isin: asString(token.isin) ?? asString(asRecord(token.extensions)?.isin),
 		limitOrders: []
 	};
 }
@@ -73,14 +90,18 @@ export function normalizeApiTokensForNetwork(
 	apiTokens: ApiToken[],
 	chainId: number
 ): CategorizedToken[] {
+	return normalizeApiTokens(apiTokens).filter((token) => token.chainId === chainId);
+}
+
+export function normalizeApiTokens(apiTokens: ApiToken[]): CategorizedToken[] {
 	const seen = new Set<string>();
 	const result: CategorizedToken[] = [];
 
 	for (const apiToken of apiTokens) {
 		const normalized = normalizeApiToken(apiToken);
-		if (!normalized || normalized.chainId !== chainId) continue;
+		if (!normalized) continue;
 
-		const addressKey = normalized.address.toLowerCase();
+		const addressKey = `${normalized.chainId}:${normalized.address.toLowerCase()}`;
 		if (seen.has(addressKey)) continue;
 		seen.add(addressKey);
 		result.push(normalized);
@@ -115,6 +136,10 @@ export function createApiTokensQuery(chainId: number | null | undefined) {
 		retry: 2,
 		refetchOnMount: 'always',
 		refetchOnWindowFocus: true,
-		queryFn: async () => normalizeApiTokensForNetwork(await apiGetTokens(), chainId as number)
+		queryFn: async () => {
+			const tokens = normalizeApiTokensForNetwork(await apiGetTokens(), chainId as number);
+			replaceTokenCatalog(tokens.filter((token) => token.category === 'ST0x'));
+			return tokens;
+		}
 	});
 }

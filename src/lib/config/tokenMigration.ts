@@ -4,10 +4,10 @@
  * This file contains the mapping of old (legacy) tokens to their new wrapped equivalents.
  * The site now trades wrapped tStock tokens (wt[ticker]), so all tokens are named "Wrapped [tStock name]".
  *
- * NOTE: All address data is derived from TOKENS in tokens.ts (single source of truth)
+ * NOTE: All address data is derived from the API-backed runtime token catalog.
  */
 
-import { TOKENS, getTokenByLegacyAddress } from './tokens';
+import { getTokenByLegacyAddress, onTokenCatalogChange, type CategorizedToken } from './tokens';
 
 export interface TokenMigrationMapping {
 	oldToken: {
@@ -51,7 +51,7 @@ export const SWAP_ORDER_HASHES: Record<string, string> = {
  * Derive old/legacy symbol from token
  * Uses legacySymbol if explicitly set (e.g., tSPLG -> wtSPYM), otherwise derives from wrapped symbol
  */
-function getLegacySymbol(token: (typeof TOKENS)[0]): string {
+function getLegacySymbol(token: CategorizedToken): string {
 	if (token.legacySymbol) {
 		return token.legacySymbol;
 	}
@@ -73,28 +73,9 @@ function getLegacyName(wrappedName: string): string {
 }
 
 /**
- * Complete token migration mappings - derived from TOKENS (single source of truth)
+ * Complete token migration mappings, rebuilt when the remote catalog changes.
  */
-export const TOKEN_MIGRATION_MAPPINGS: TokenMigrationMapping[] = TOKENS.filter(
-	(t) => t.legacyAddress && t.category === 'ST0x'
-).map((t) => {
-	const legacySymbol = getLegacySymbol(t);
-	return {
-		oldToken: {
-			address: t.legacyAddress!,
-			symbol: legacySymbol,
-			name: getLegacyName(t.name),
-			decimals: t.decimals
-		},
-		newToken: {
-			address: t.address,
-			symbol: t.symbol,
-			name: t.name,
-			decimals: t.decimals
-		},
-		swapOrderHash: SWAP_ORDER_HASHES[legacySymbol] ?? ''
-	};
-});
+export const TOKEN_MIGRATION_MAPPINGS: TokenMigrationMapping[] = [];
 
 // Create lookup maps for efficient access
 const oldTokenAddressSet = new Set(
@@ -114,6 +95,45 @@ const newTokenAddressSet = new Set(
 const mappingByNewAddress = new Map(
 	TOKEN_MIGRATION_MAPPINGS.map((m) => [m.newToken.address.toLowerCase(), m])
 );
+
+onTokenCatalogChange((tokens) => {
+	const mappings = tokens
+		.filter((token) => token.legacyAddress && token.category === 'ST0x')
+		.map((token) => {
+			const legacySymbol = getLegacySymbol(token);
+			return {
+				oldToken: {
+					address: token.legacyAddress!,
+					symbol: legacySymbol,
+					name: getLegacyName(token.name),
+					decimals: token.decimals
+				},
+				newToken: {
+					address: token.address,
+					symbol: token.symbol,
+					name: token.name,
+					decimals: token.decimals
+				},
+				swapOrderHash: SWAP_ORDER_HASHES[legacySymbol] ?? ''
+			};
+		});
+
+	TOKEN_MIGRATION_MAPPINGS.splice(0, TOKEN_MIGRATION_MAPPINGS.length, ...mappings);
+	oldTokenAddressSet.clear();
+	mappingByOldAddress.clear();
+	mappingByOldSymbol.clear();
+	newTokenAddressSet.clear();
+	mappingByNewAddress.clear();
+	for (const mapping of mappings) {
+		const oldAddress = mapping.oldToken.address.toLowerCase();
+		const newAddress = mapping.newToken.address.toLowerCase();
+		oldTokenAddressSet.add(oldAddress);
+		mappingByOldAddress.set(oldAddress, mapping);
+		mappingByOldSymbol.set(mapping.oldToken.symbol, mapping);
+		newTokenAddressSet.add(newAddress);
+		mappingByNewAddress.set(newAddress, mapping);
+	}
+});
 
 /**
  * Check if an address is an old (legacy) token that needs migration
