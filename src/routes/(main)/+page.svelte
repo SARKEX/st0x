@@ -10,7 +10,10 @@
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import QuickTrade from '$lib/components/QuickTrade.svelte';
+	import SaveEarnCard from '$lib/components/earn/SaveEarnCard.svelte';
+	import ApyChip from '$lib/components/earn/ApyChip.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import { isSgov } from '$lib/config/earn';
 	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
 	import Footer from '$lib/components/Footer.svelte';
 	import { track, trackPageView } from '$lib/services/analytics';
@@ -157,6 +160,8 @@
 					isSft: true
 				});
 			}
+			// Pin SGOV (the Save & Earn product) to the top of the asset list.
+			rows.sort((a, b) => (isSgov(b.address) ? 1 : 0) - (isSgov(a.address) ? 1 : 0));
 			processedTokens = rows;
 		} else {
 			processedTokens = [];
@@ -194,10 +199,13 @@
 
 			<!-- Rewards APY Banner - temporarily hidden -->
 
+			<!-- Product pair: QuickTrade + Save & Earn, stacked as equal-width peers -->
 			<div
 				class="mx-auto flex w-full max-w-md flex-col items-stretch gap-5 px-2 text-left sm:px-0 md:max-w-none"
 			>
 				<QuickTrade />
+				<!-- Save & Earn (SGOV) — peer product below the swap card -->
+				<SaveEarnCard />
 			</div>
 
 			<div class="mt-4 flex justify-center">
@@ -347,14 +355,16 @@
 											? bridgedSupply * displayPrice
 											: null}
 									<tr
-										class="icon-trigger cursor-pointer transition-all hover:bg-surface-2"
+										class="icon-trigger cursor-pointer transition-all {isSgov(token.address)
+											? 'bg-emerald-400/[0.04] hover:bg-emerald-400/[0.08]'
+											: 'hover:bg-surface-2'}"
 										on:click={() => {
 											track('token_clicked', {
 												token_symbol: token.symbol,
 												token_id: token.id,
 												source: 'landing_page_table'
 											});
-											goto(`/trade/${token.id}`);
+											goto(isSgov(token.address) ? '/earn' : `/trade/${token.id}`);
 										}}
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
@@ -364,6 +374,7 @@
 													symbol={token.symbol}
 													showName={false}
 												/>
+												{#if isSgov(token.address)}<ApyChip />{/if}
 											</div>
 										</td>
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
@@ -405,7 +416,16 @@
 											</td>
 										{/if}
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
-											<Icon name="arrowRight" className="icon-slide h-4 w-4 text-text-muted" />
+											{#if isSgov(token.address)}
+												<span
+													class="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-accent"
+												>
+													Earn
+													<Icon name="arrowRight" className="icon-slide h-4 w-4" />
+												</span>
+											{:else}
+												<Icon name="arrowRight" className="icon-slide h-4 w-4 text-text-muted" />
+											{/if}
 										</td>
 									</tr>
 								{/each}

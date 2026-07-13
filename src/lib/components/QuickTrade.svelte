@@ -21,7 +21,8 @@
 	import { selectVisibleTradeError, toTradeFailureAnalytics } from './trade/tradeErrorUi';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
-	import QuickTradeChart from './QuickTradeChart.svelte';
+	import { isSgov } from '$lib/config/earn';
+	import QuickTradeChart from './earn/QuickTradeChart.svelte';
 	import Icon from './ui/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { resolveMarketOrderAnchor } from '$lib/utils/marketOrderInput';
@@ -60,7 +61,10 @@
 	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
 	$: midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 	$: apiTokens = $apiTokensQuery.data ?? [];
-	$: tradableTokens = apiTokens.filter((t) => t.category === 'ST0x');
+	// Pin SGOV (the Save & Earn product) to the top of the tradable list.
+	$: tradableTokens = apiTokens
+		.filter((t) => t.category === 'ST0x')
+		.sort((a, b) => (isSgov(b.address) ? 1 : 0) - (isSgov(a.address) ? 1 : 0));
 
 	let selectedTokenAddress: string | null = null;
 	let isDropdownOpen = false;

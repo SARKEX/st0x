@@ -1,7 +1,8 @@
 <script lang="ts" context="module">
 	// Deterministic brand-ish gradient discs for asset rows, ported from the v2
-	// handoff (`src2/atoms.jsx` → AssetDisc). USDC gets blue + "$". Everything else
-	// derives a two-stop gradient from a per-ticker table (falling back to neutral).
+	// handoff (`src2/atoms.jsx` → AssetDisc). The Savings token (SGOV) gets the
+	// mint gradient + bank glyph; USDC gets blue + "$". Everything else derives a
+	// two-stop gradient from a per-ticker table (falling back to neutral).
 	const ASSET_COLORS: Record<string, [string, string]> = {
 		tNVDA: ['#9aa6ff', '#4d3bd8'],
 		tTSLA: ['#ff8d8d', '#d83b3b'],
@@ -24,14 +25,19 @@
 </script>
 
 <script lang="ts">
+	import Icon from './Icon.svelte';
+
 	/** Token symbol, with or without a `w`/`t` prefix (e.g. `wtNVDA`, `tNVDA`, `USDC`). */
 	export let sym: string;
 	export let size = 32;
 	export let ring = false;
 
 	$: normalized = sym.replace(/^w/, '');
+	$: isEarn = ['wtSGOV', 'tSGOV', 'SGOV'].includes(sym) || normalized === 'tSGOV';
 	$: isUsdc = sym === 'USDC';
-	$: colors = ASSET_COLORS[normalized] ?? ['#9aa9bb', '#5c6a7c'];
+	$: colors = isEarn
+		? (['#4af0bb', '#15c78c'] as [string, string])
+		: ASSET_COLORS[normalized] ?? ['#9aa9bb', '#5c6a7c'];
 	$: letters = isUsdc ? '$' : normalized.replace(/^t/, '').slice(0, 2).toUpperCase();
 	$: boxShadow = ring ? '0 0 0 3px rgba(45,227,166,.18)' : 'inset 0 1px 0 rgba(255,255,255,.25)';
 </script>
@@ -41,5 +47,9 @@
 	style="width:{size}px;height:{size}px;font-size:{size *
 		0.36}px;background:radial-gradient(circle at 30% 25%, {colors[0]}, {colors[1]});box-shadow:{boxShadow};"
 >
-	{letters}
+	{#if isEarn}
+		<Icon name="bank" className="h-1/2 w-1/2" stroke={1.9} />
+	{:else}
+		{letters}
+	{/if}
 </div>

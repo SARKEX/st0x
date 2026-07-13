@@ -1,31 +1,9 @@
 <script lang="ts" context="module">
+	import type { EarnIconName } from '$lib/config/earn';
 	// Canonical app-wide line-icon set, ported verbatim from the v2 design handoff
 	// (`src2/atoms.jsx` → Icon). viewBox 0 0 24 24, currentColor, round caps. Use
 	// this everywhere instead of mixed icon libraries so glyphs match the mock.
-	export type IconName =
-		| 'unlock'
-		| 'bank'
-		| 'bolt'
-		| 'shield'
-		| 'sprout'
-		| 'check'
-		| 'close'
-		| 'info'
-		| 'plus'
-		| 'minus'
-		| 'clock'
-		| 'arrowRight'
-		| 'arrowUpRight'
-		| 'arrowDown'
-		| 'chevronDown'
-		| 'trendUp'
-		| 'wallet'
-		| 'blocks'
-		| 'coins'
-		| 'chart'
-		| 'lock'
-		| 'swap'
-		| 'home';
+	export type IconName = EarnIconName;
 </script>
 
 <script lang="ts">
