@@ -38,8 +38,11 @@ vi.mock('$lib/config/networks', () => ({
 }));
 
 vi.mock('$lib/config/tokens', () => ({
-	TOKENS: [{ address: '0xVAULT' }],
-	getAllTokenAddressesFlat: () => ['0xvault']
+	getTokenAddressVariants: (token: { address: string }) => [token.address.toLowerCase()],
+	onTokenCatalogChange: (listener: (tokens: { address: string }[]) => void) => {
+		listener([{ address: '0xVAULT' }]);
+		return () => undefined;
+	}
 }));
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {

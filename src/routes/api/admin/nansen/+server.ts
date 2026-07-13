@@ -6,14 +6,15 @@ import type { RequestHandler } from './$types';
 import { requireAdmin } from '$lib/server/adminAuth';
 import { listAccessCodes, getWalletsByCode } from '$lib/server/accessCodes';
 import { networks } from '$lib/config/networks';
-import { TOKENS, getPaymentTokensForNetwork } from '$lib/config/tokens';
+import { TOKEN_WRAPPED_ADDRESS_SET, getPaymentTokensForNetwork } from '$lib/config/tokens';
 import { toDecimal, isPaymentToken } from '$lib/utils/tokenMath';
 import { getWalletTiers, type NansenTier } from '$lib/server/nansenTiers';
 import { cacheGet, cacheSet, CACHE_TTL } from '$lib/server/cache';
+import { ensureServerTokenCatalog } from '$lib/server/tokenCatalog';
 
 const paymentTokens = getPaymentTokensForNetwork(8453);
 const usdc = paymentTokens[0];
-const validTokenAddresses = new Set(TOKENS.map((t) => t.address.toLowerCase()));
+const validTokenAddresses = TOKEN_WRAPPED_ADDRESS_SET;
 
 interface Trade {
 	id: string;
@@ -203,6 +204,7 @@ function processTrades(
 export const GET: RequestHandler = async ({ cookies, request }) => {
 	const guardResponse = await requireAdmin(request, cookies, 'admin-nansen');
 	if (guardResponse) return guardResponse;
+	await ensureServerTokenCatalog();
 
 	try {
 		// STEP 1: Get Nansen wallets FIRST (fast KV lookup)

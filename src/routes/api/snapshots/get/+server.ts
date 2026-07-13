@@ -3,42 +3,47 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
 import { env } from '$env/dynamic/private';
-import { TOKENS } from '$lib/config/tokens';
+import { TOKENS, onTokenCatalogChange } from '$lib/config/tokens';
 import { TOKEN_MIGRATION_MAPPINGS } from '$lib/config/tokenMigration';
+import { ensureServerTokenCatalog } from '$lib/server/tokenCatalog';
 
-const LEGACY_BY_WRAPPED = new Map(
-	TOKEN_MIGRATION_MAPPINGS.map((m) => [m.newToken.symbol.toLowerCase(), m.oldToken.symbol])
-);
-const WRAPPED_BY_LEGACY = new Map(
-	TOKEN_MIGRATION_MAPPINGS.map((m) => [m.oldToken.symbol.toLowerCase(), m.newToken.symbol])
-);
-const LEGACY_SYMBOLS = new Set([
-	...TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.symbol.toLowerCase()),
-	...TOKENS.flatMap((t) => t.previousSymbols ?? []).map((s) => s.toLowerCase())
-]);
+const LEGACY_BY_WRAPPED = new Map<string, string>();
+const WRAPPED_BY_LEGACY = new Map<string, string>();
+const LEGACY_SYMBOLS = new Set<string>();
 
 // Build a map from current/legacy symbols to their historical (previous) symbols
 // e.g., 'wtspym' -> ['wtSPLG', 'tSPLG']
 const PREVIOUS_SYMBOLS_BY_CURRENT = new Map<string, string[]>();
-for (const t of TOKENS) {
-	if (t.previousSymbols?.length) {
-		PREVIOUS_SYMBOLS_BY_CURRENT.set(t.symbol.toLowerCase(), t.previousSymbols);
-		// Also map the legacy symbol to previous symbols
-		if (t.legacySymbol) {
-			PREVIOUS_SYMBOLS_BY_CURRENT.set(t.legacySymbol.toLowerCase(), t.previousSymbols);
-		}
-	}
-}
 
 // Reverse map: previous symbol -> canonical (current wrapped) symbol
 const CANONICAL_BY_PREVIOUS = new Map<string, string>();
-for (const t of TOKENS) {
-	if (t.previousSymbols?.length) {
-		for (const prev of t.previousSymbols) {
-			CANONICAL_BY_PREVIOUS.set(prev.toLowerCase(), t.symbol);
+
+onTokenCatalogChange((tokens) => {
+	LEGACY_BY_WRAPPED.clear();
+	WRAPPED_BY_LEGACY.clear();
+	LEGACY_SYMBOLS.clear();
+	PREVIOUS_SYMBOLS_BY_CURRENT.clear();
+	CANONICAL_BY_PREVIOUS.clear();
+
+	for (const mapping of TOKEN_MIGRATION_MAPPINGS) {
+		LEGACY_BY_WRAPPED.set(mapping.newToken.symbol.toLowerCase(), mapping.oldToken.symbol);
+		WRAPPED_BY_LEGACY.set(mapping.oldToken.symbol.toLowerCase(), mapping.newToken.symbol);
+		LEGACY_SYMBOLS.add(mapping.oldToken.symbol.toLowerCase());
+	}
+
+	for (const token of tokens) {
+		for (const previousSymbol of token.previousSymbols ?? []) {
+			LEGACY_SYMBOLS.add(previousSymbol.toLowerCase());
+			CANONICAL_BY_PREVIOUS.set(previousSymbol.toLowerCase(), token.symbol);
+		}
+		if (token.previousSymbols?.length) {
+			PREVIOUS_SYMBOLS_BY_CURRENT.set(token.symbol.toLowerCase(), token.previousSymbols);
+			if (token.legacySymbol) {
+				PREVIOUS_SYMBOLS_BY_CURRENT.set(token.legacySymbol.toLowerCase(), token.previousSymbols);
+			}
 		}
 	}
-}
+});
 
 function uniqueSymbols(symbols: string[]): string[] {
 	const seen = new Set<string>();
@@ -92,6 +97,7 @@ function getAllSnapshotTokenSymbols(): string[] {
 }
 
 export const GET: RequestHandler = async ({ url }) => {
+	await ensureServerTokenCatalog();
 	// Check if Blob token is available (required for Vercel Blob storage)
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return json(

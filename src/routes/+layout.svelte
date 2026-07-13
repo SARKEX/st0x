@@ -4,6 +4,21 @@
 	import { queryClient } from '$lib/clients/queryClient';
 	import { page } from '$app/stores';
 	import { env as publicEnv } from '$env/dynamic/public';
+	import { replaceTokenCatalog, type CategorizedToken } from '$lib/config/tokens';
+
+	export let data: { tokenCatalog?: CategorizedToken[] };
+
+	function hydrateTokenCatalog(tokens: CategorizedToken[]): void {
+		replaceTokenCatalog(tokens.filter((token) => token.category === 'ST0x'));
+		for (const chainId of new Set(tokens.map((token) => token.chainId))) {
+			queryClient.setQueryData(
+				['st0xApiTokens', chainId],
+				tokens.filter((token) => token.chainId === chainId)
+			);
+		}
+	}
+
+	$: hydrateTokenCatalog(data.tokenCatalog ?? []);
 
 	// Site-wide SEO defaults. Pages override the title via their own <svelte:head>
 	// (Svelte keeps the last <title>), or by returning `title`/`description` from a

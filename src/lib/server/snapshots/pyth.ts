@@ -211,7 +211,8 @@ export async function fetchPythPricesAtTimestamp(
 		}
 
 		for (const { address, token } of fallbackTokenAddresses) {
-			const price = monitorPrice ?? token.fallbackPrice!;
+			const price =
+				token.symbol === 'wtSPYM' ? monitorPrice ?? token.fallbackPrice! : token.fallbackPrice!;
 			results.set(address.toLowerCase(), {
 				tokenAddress: address.toLowerCase(),
 				tokenSymbol: token.symbol,

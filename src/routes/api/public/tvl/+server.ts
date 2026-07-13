@@ -6,13 +6,12 @@ import { withConditionalCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { list } from '@vercel/blob';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
-import { TOKENS } from '$lib/config/tokens';
+import { PREVIOUS_SYMBOLS_BY_TOKEN, TOKEN_SYMBOLS } from '$lib/config/tokens';
 import { env } from '$env/dynamic/private';
+import { ensureServerTokenCatalog } from '$lib/server/tokenCatalog';
 
-const tokenSymbols = TOKENS.map((t) => t.symbol);
-const previousSymbolsByToken = new Map<string, string[]>(
-	TOKENS.filter((t) => t.previousSymbols?.length).map((t) => [t.symbol, t.previousSymbols!])
-);
+const tokenSymbols = TOKEN_SYMBOLS;
+const previousSymbolsByToken = PREVIOUS_SYMBOLS_BY_TOKEN;
 
 interface PublicTvlResponse {
 	success: boolean;
@@ -99,6 +98,7 @@ async function computeAggregateTvl(): Promise<PublicTvlResponse> {
 }
 
 export const GET: RequestHandler = async ({ request }) => {
+	await ensureServerTokenCatalog();
 	const clientIp = getClientIp(request);
 	const rateLimit = await rateLimiters.publicApi(`public-api:${clientIp}`);
 

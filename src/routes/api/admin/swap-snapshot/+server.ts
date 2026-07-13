@@ -3,6 +3,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAdmin } from '$lib/server/adminAuth';
 import { SWAP_ORDER_HASHES, TOKEN_MIGRATION_MAPPINGS } from '$lib/config/tokenMigration';
+import { ensureServerTokenCatalog } from '$lib/server/tokenCatalog';
 import { networks } from '$lib/config/networks';
 import { ORDERBOOK_ADDRESS, SYSTEM_EXCLUDED_ADDRESSES } from '$lib/config/snapshots';
 import { getTeamWalletsSet } from '$lib/server/kv';
@@ -316,6 +317,7 @@ async function fetchLegacyHolders(legacyAddresses: string[]): Promise<LegacyBala
 export const GET: RequestHandler = async ({ cookies, request }) => {
 	const guardResponse = await requireAdmin(request, cookies, 'admin-swap-snapshot');
 	if (guardResponse) return guardResponse;
+	await ensureServerTokenCatalog();
 
 	try {
 		// Get all swap order hashes
