@@ -322,6 +322,81 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:SPCX',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x3aF952888Cd89DAD3e8AF67cf4b7E740B36829C3',
+		unwrappedAddress: '0x9a5D3cAeC90b0332b18C0B93fEF42F3F8C918289',
+		symbol: 'wtCEG',
+		decimals: 18,
+		name: 'Wrapped Constellation Energy Corporation ST0x',
+		logoUrl: '/images/CEG.png',
+		priceFeedId: '0xa541bc5c4b69961442e45e9198c7cce151ff9c2a1003f620c6d4a9785c77a4d9',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:CEG',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x1A91Df4a970EBaB1bB4AF32Eb6d10509028eE4b8',
+		unwrappedAddress: '0x96DE077262609298CD891E4Ab21bd34837dE33aB',
+		symbol: 'wtDRAM',
+		decimals: 18,
+		name: 'Wrapped Roundhill Memory ETF ST0x',
+		logoUrl: '/images/roundhill.png',
+		priceFeedId: '',
+		// priceFeedId removed — Pyth no longer supports this feed ID.
+		// Using a hardcoded fallback until a replacement feed is wired up.
+		fallbackPrice: 50,
+		category: 'ST0x',
+		tradingViewSymbol: 'CBOE:DRAM',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x71C66449d2528E23514A9c197BFD55Ae9DB3B714',
+		unwrappedAddress: '0x7001e2974F775f0Fd73a3D2e5914e591f3EC3fBB',
+		symbol: 'wtTSM',
+		decimals: 18,
+		name: 'Wrapped Taiwan Semiconductor Manufacturing Company ST0x',
+		logoUrl: '/images/TSM.png',
+		priceFeedId: '0xe722560a66e4ab00522ef20a38fa2ba5d1b41f1c5404723ed895d202a7af7cc4',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:TSM',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x8200c6d9AB9E02A25D7F2099244C476d99a085ef',
+		unwrappedAddress: '0x722Cb373f1871A176fb5DC3953046f2EAE22F619',
+		symbol: 'wtASML',
+		decimals: 18,
+		name: 'Wrapped ASML Holding N.V. ST0x',
+		logoUrl: '/images/ASML.png',
+		priceFeedId: '0x1a6e324589a0e355919fb1c0389edc3fdf4c46034626bd82aad4e47714cfa94f',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:ASML',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0xFcD17aC4c4BF6a72c93018096F3fC09e66573Ff9',
+		unwrappedAddress: '0x4DBA41f0feb390F208a85e96168fF5d8aC2b6F5c',
+		symbol: 'wtSKHY',
+		decimals: 18,
+		name: 'Wrapped SK hynix Inc. ADR ST0x',
+		logoUrl: '/images/SKHY.png',
+		priceFeedId: '',
+		// Pyth does not yet publish an SKHY feed. Use the $149 IPO price until one is available.
+		fallbackPrice: 149,
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:SKHY',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
