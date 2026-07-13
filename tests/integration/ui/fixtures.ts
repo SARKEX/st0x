@@ -147,7 +147,7 @@ export const TOKENS = {
 		donor: ORDERBOOK_DONOR,
 		id: '0x31C2C14134e6E3B7ef9478297F199331133Fc2d8'
 	},
-	// wtSGOV: tokenized iShares 0-3M Treasury ETF — the Save & Earn product.
+	// wtSGOV: tokenized iShares 0-3M Treasury ETF.
 	// Reads a regular on-chain Pyth feed (priceFeedId in src/lib/config/tokens.ts),
 	// NOT the off-chain st0x oracle, so it behaves like wtCOIN under the fork.
 	// Funded by impersonating the Rain Orderbook donor (same strategy as the

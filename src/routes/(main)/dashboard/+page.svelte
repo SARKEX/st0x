@@ -1178,10 +1178,10 @@
 								href={basescanUrl}
 								target="_blank"
 								rel="noopener noreferrer"
-								class="rounded p-1 text-text-3 hover:bg-surface-2 hover:text-text-2"
+								class="icon-trigger rounded p-1 text-text-3 hover:bg-surface-2 hover:text-text-2"
 								title="View on Basescan"
 							>
-								<Icon name="arrowUpRight" className="h-3.5 w-3.5" />
+								<Icon name="arrowUpRight" className="icon-slide-up h-3.5 w-3.5" />
 							</a>
 						</div>
 					</div>

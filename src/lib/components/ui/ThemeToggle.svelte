@@ -12,12 +12,18 @@
 		aria-label="Light theme"
 		aria-pressed={$theme === 'light'}
 		on:click={() => setTheme('light')}
-		class="flex h-7 w-[34px] items-center justify-center rounded-full transition-all duration-200 {$theme ===
+		class="icon-trigger flex h-7 w-[34px] items-center justify-center rounded-full transition-all duration-200 {$theme ===
 		'light'
 			? 'bg-surface-1 text-accent shadow-sm'
 			: 'text-text-3 hover:text-text-2'}"
 	>
-		<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6">
+		<svg
+			viewBox="0 0 24 24"
+			class="icon-spin-hover h-4 w-4"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.6"
+		>
 			<circle cx="12" cy="12" r="4.2" />
 			<path
 				stroke-linecap="round"
@@ -30,12 +36,18 @@
 		aria-label="Dark theme"
 		aria-pressed={$theme === 'dark'}
 		on:click={() => setTheme('dark')}
-		class="flex h-7 w-[34px] items-center justify-center rounded-full transition-all duration-200 {$theme ===
+		class="icon-trigger flex h-7 w-[34px] items-center justify-center rounded-full transition-all duration-200 {$theme ===
 		'dark'
 			? 'bg-surface-1 text-accent shadow-sm'
 			: 'text-text-3 hover:text-text-2'}"
 	>
-		<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6">
+		<svg
+			viewBox="0 0 24 24"
+			class="icon-spin-hover h-4 w-4"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.6"
+		>
 			<path
 				stroke-linecap="round"
 				stroke-linejoin="round"

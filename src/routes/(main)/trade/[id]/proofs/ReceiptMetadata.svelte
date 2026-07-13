@@ -39,7 +39,5 @@
 			)}</pre>
 	</Section>
 {:else}
-	<div class="rounded border border-down bg-down-soft p-3 text-sm text-down">
-		No Metadata Found
-	</div>
+	<div class="rounded border border-down bg-down-soft p-3 text-sm text-down">No Metadata Found</div>
 {/if}

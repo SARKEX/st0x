@@ -1255,12 +1255,12 @@
 						<Button
 							variant="secondary"
 							size="md"
-							className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-overlay-1 px-3 py-1.5 text-[12px] font-semibold text-text transition hover:bg-overlay-hover"
+							className="icon-trigger inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-overlay-1 px-3 py-1.5 text-[12px] font-semibold text-text transition hover:bg-overlay-hover"
 							aria-label="Open terminal view"
 							on:click={(event) => openChartModal(event)}
 						>
 							Advanced Chart
-							<Icon name="arrowUpRight" className="h-3.5 w-3.5" />
+							<Icon name="arrowUpRight" className="icon-slide-up h-3.5 w-3.5" />
 						</Button>
 					</div>
 				</div>

@@ -207,11 +207,13 @@
 				</h2>
 				<div class="mt-10 grid gap-8 sm:grid-cols-3">
 					<!-- Decentralised -->
-					<div class="flex flex-col items-center text-center">
-						<div
-							class="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
-						>
-							<Icon name="blocks" className="h-7 w-7" />
+					<div class="icon-trigger flex flex-col items-center text-center">
+						<div class="pillar-float">
+							<div
+								class="pillar-tile flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
+							>
+								<Icon name="blocks" className="h-7 w-7" />
+							</div>
 						</div>
 						<h3 class="mt-4 text-base font-semibold text-text">Decentralised</h3>
 						<p class="mt-2 max-w-[17rem] text-[13.5px] leading-relaxed text-text-2">
@@ -220,11 +222,13 @@
 					</div>
 
 					<!-- Liquid -->
-					<div class="flex flex-col items-center text-center">
-						<div
-							class="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
-						>
-							<Icon name="swap" className="h-7 w-7" />
+					<div class="icon-trigger flex flex-col items-center text-center">
+						<div class="pillar-float" style="animation-delay: -2.3s">
+							<div
+								class="pillar-tile flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
+							>
+								<Icon name="swap" className="h-7 w-7" />
+							</div>
 						</div>
 						<h3 class="mt-4 text-base font-semibold text-text">Liquid</h3>
 						<p class="mt-2 max-w-[17rem] text-[13.5px] leading-relaxed text-text-2">
@@ -233,11 +237,13 @@
 					</div>
 
 					<!-- 1:1 Collateralised -->
-					<div class="flex flex-col items-center text-center">
-						<div
-							class="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
-						>
-							<Icon name="shield" className="h-7 w-7" />
+					<div class="icon-trigger flex flex-col items-center text-center">
+						<div class="pillar-float" style="animation-delay: -4.6s">
+							<div
+								class="pillar-tile flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
+							>
+								<Icon name="shield" className="h-7 w-7" />
+							</div>
 						</div>
 						<h3 class="mt-4 text-base font-semibold text-text">1:1 Collateralised</h3>
 						<p class="mt-2 max-w-[17rem] text-[13.5px] leading-relaxed text-text-2">
@@ -324,7 +330,7 @@
 											? bridgedSupply * displayPrice
 											: null}
 									<tr
-										class="cursor-pointer transition-all hover:bg-surface-2"
+										class="icon-trigger cursor-pointer transition-all hover:bg-surface-2"
 										on:click={() => {
 											track('token_clicked', {
 												token_symbol: token.symbol,
@@ -372,7 +378,7 @@
 											<div class="font-mono text-sm text-text-2">{token.totalHolders}</div>
 										</td>
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
-											<Icon name="arrowRight" className="h-4 w-4 text-text-muted" />
+											<Icon name="arrowRight" className="icon-slide h-4 w-4 text-text-muted" />
 										</td>
 									</tr>
 								{/each}

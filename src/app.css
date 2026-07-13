@@ -157,16 +157,163 @@ input[type='range']::-moz-range-thumb {
 	}
 }
 
+/* ---------- micro-interactions (v2 design language) ----------
+   Small, hover-driven life for icons and cards. Pattern: put `icon-trigger`
+   on the hoverable container; inner elements opt in via `icon-slide`,
+   `icon-spin-hover`, or per-glyph rules keyed off the Icon component's
+   `icon-<name>` class. All of it is disabled under prefers-reduced-motion. */
+
+@keyframes pillar-float {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-5px);
+	}
+}
+@keyframes glyph-pop {
+	0% {
+		transform: scale(0.55);
+		opacity: 0.25;
+	}
+	60% {
+		transform: scale(1.15);
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+@keyframes glyph-nudge-right {
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+	45% {
+		transform: translateX(2.5px);
+	}
+}
+@keyframes glyph-nudge-left {
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+	45% {
+		transform: translateX(-2.5px);
+	}
+}
+@keyframes glyph-draw {
+	from {
+		stroke-dashoffset: 72;
+	}
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+
+/* Ambient float for the home trust pillars — stagger with animation-delay. */
+.pillar-float {
+	animation: pillar-float 7s ease-in-out infinite;
+}
+.pillar-tile {
+	transition:
+		transform 0.3s ease,
+		box-shadow 0.3s ease,
+		background-color 0.3s ease;
+}
+.icon-trigger:hover .pillar-tile {
+	transform: translateY(-3px) scale(1.05);
+	background-color: var(--accent-soft);
+	box-shadow: 0 12px 32px -10px var(--accent-glow);
+}
+
+/* Glyph choreography on hover: blocks reassemble, swap arrows flow, shield redraws. */
+.icon-trigger:hover .icon-blocks rect {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: glyph-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.icon-trigger:hover .icon-blocks rect:nth-of-type(2) {
+	animation-delay: 0.07s;
+}
+.icon-trigger:hover .icon-blocks rect:nth-of-type(3) {
+	animation-delay: 0.14s;
+}
+.icon-trigger:hover .icon-blocks rect:nth-of-type(4) {
+	animation-delay: 0.21s;
+}
+.icon-trigger:hover .icon-swap path:first-of-type {
+	animation: glyph-nudge-right 0.55s ease both;
+}
+.icon-trigger:hover .icon-swap path:last-of-type {
+	animation: glyph-nudge-left 0.55s ease both;
+}
+.icon-trigger:hover .icon-shield path {
+	stroke-dasharray: 72;
+	animation: glyph-draw 0.7s ease both;
+}
+
+/* Generic hover sprinkles. */
+.icon-slide {
+	transition: transform 0.2s ease;
+}
+.icon-trigger:hover .icon-slide {
+	transform: translateX(3px);
+}
+.icon-slide-up {
+	transition: transform 0.2s ease;
+}
+.icon-trigger:hover .icon-slide-up {
+	transform: translate(2px, -2px);
+}
+.icon-spin-hover {
+	transition: transform 0.4s ease;
+}
+.icon-trigger:hover .icon-spin-hover {
+	transform: rotate(15deg) scale(1.08);
+}
+.hover-lift {
+	transition:
+		transform 0.25s ease,
+		box-shadow 0.25s ease,
+		border-color 0.25s ease;
+}
+.hover-lift:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 14px 34px -14px var(--accent-glow);
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.chart-scroll,
 	[class*='animate-'] {
 		animation: none !important;
 	}
+	.pillar-float,
+	.icon-trigger:hover .icon-blocks rect,
+	.icon-trigger:hover .icon-swap path,
+	.icon-trigger:hover .icon-shield path {
+		animation: none !important;
+	}
+	.pillar-tile,
+	.icon-slide,
+	.icon-slide-up,
+	.icon-spin-hover,
+	.hover-lift {
+		transition: none;
+	}
+	.icon-trigger:hover .pillar-tile,
+	.icon-trigger:hover .icon-slide,
+	.icon-trigger:hover .icon-slide-up,
+	.icon-trigger:hover .icon-spin-hover,
+	.hover-lift:hover {
+		transform: none;
+	}
 }
 
-/* Wallet "Connect" flow can surface from inside an in-app modal (e.g. the
-   Save & Earn modal at z-[2200]). Two different overlays can render the wallet
-   picker depending on auth path, and both default to a z-index below our modals:
+/* Wallet "Connect" flow can surface from inside an in-app modal. Two
+   different overlays can render the wallet picker depending on auth path,
+   and both default to a z-index below our modals:
    - Dynamic Labs' embedded-wallet flow renders inside a `.dynamic-shadow-dom` host.
    - WalletConnect / Web3Modal renders an `<w3m-modal>` (default z-index 999).
    Lift both above every in-app modal so the wallet flow is never hidden behind. */

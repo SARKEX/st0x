@@ -196,7 +196,7 @@
 
 					<!-- Stats Summary -->
 					<div
-						class="mt-4 flex items-center justify-between rounded-lg bg-surface-2/30 px-4 py-3 text-sm"
+						class="bg-surface-2/30 mt-4 flex items-center justify-between rounded-lg px-4 py-3 text-sm"
 					>
 						<span class="text-text-2">Total participants</span>
 						<span class="font-medium text-text">{$referralTotalParticipants}</span>

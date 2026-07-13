@@ -13,7 +13,7 @@
 	export let subtitle: string = '';
 </script>
 
-<Card className={cardClass} {showGradient} {paddingClass}>
+<Card className={'hover-lift ' + cardClass} {showGradient} {paddingClass}>
 	<div class="mb-2 text-xs font-medium uppercase tracking-wide text-text-2">{label}</div>
 	<div class="mb-2">
 		<span class={'block ' + valueClass}>{value}</span>

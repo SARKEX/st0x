@@ -36,7 +36,7 @@
 
 <svg
 	viewBox="0 0 24 24"
-	class={className}
+	class="icon-{name} {className}"
 	fill="none"
 	stroke="currentColor"
 	stroke-width={stroke}
@@ -97,7 +97,9 @@
 		<rect x="3" y="6" width="18" height="13" rx="2" />
 		<path d="M3 10h18M16 14h2" />
 	{:else if name === 'swap'}
-		<path d="M7 8h11l-3-3M17 16H6l3 3" />
+		<!-- Two separate paths so the arrows can animate independently on hover. -->
+		<path d="M7 8h11l-3-3" />
+		<path d="M17 16H6l3 3" />
 	{:else if name === 'arrowRight'}
 		<path d="M5 12h14M13 6l6 6-6 6" />
 	{:else if name === 'arrowUpRight'}
