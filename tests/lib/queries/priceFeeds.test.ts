@@ -32,6 +32,17 @@ describe('price feed sources', () => {
 		);
 	});
 
+	it('uses the refreshed configured fallback prices', () => {
+		const base = networks.find((network) => network.chainId === 8453) ?? null;
+		const fallbackPrices = Object.fromEntries(
+			tokensWithPriceSource(base)
+				.filter((token) => ['wtDRAM', 'wtSKHY', 'wtSPCX'].includes(token.symbol))
+				.map((token) => [token.symbol, token.fallbackPrice])
+		);
+
+		expect(fallbackPrices).toEqual({ wtDRAM: 63.04, wtSKHY: 149, wtSPCX: 145.3 });
+	});
+
 	it('replaces the SPYM fallback with the live monitor quote', () => {
 		const quotes = replaceQuoteBySymbol(
 			[quote('NASDAQ:NVDA', 200), quote('AMEX:SPYM', 82.5)],

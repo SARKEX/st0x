@@ -306,9 +306,8 @@ export const TOKENS: CategorizedToken[] = [
 	{
 		// wtSPCX — Space Exploration Technologies Corp (SpaceX). Deployed on Base
 		// 2026-06-10 ahead of the 2026-06-12 Nasdaq IPO (ticker SPCX, ISIN
-		// US84615Q1031). Newly listed, so Pyth has no feed yet — using a hardcoded
-		// fallbackPrice at the $135 IPO price until a real feed is wired up
-		// (mirrors the wtSPYM pattern above).
+		// US84615Q1031). Pyth has no feed yet, so use TradingView's latest close
+		// observed on 2026-07-13 until a real feed is wired up.
 		chainId: base.id,
 		address: '0x19F89aaEf8a93f38A974beca9776f09aB844887F',
 		unwrappedAddress: '0xc585AeB8B76c5F5e4215470A7625258e86ED7746',
@@ -317,7 +316,7 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'Wrapped Space Exploration Technologies Corp. ST0x',
 		logoUrl: '/images/SPCX.svg',
 		priceFeedId: '',
-		fallbackPrice: 135,
+		fallbackPrice: 145.3,
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:SPCX',
 		tradingViewMarket: 'america',
@@ -346,9 +345,9 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'Wrapped Roundhill Memory ETF ST0x',
 		logoUrl: '/images/roundhill.png',
 		priceFeedId: '',
-		// priceFeedId removed — Pyth no longer supports this feed ID.
-		// Using a hardcoded fallback until a replacement feed is wired up.
-		fallbackPrice: 50,
+		// Pyth does not publish a DRAM feed. Use TradingView's latest close observed
+		// on 2026-07-13 until a replacement feed is wired up.
+		fallbackPrice: 63.04,
 		category: 'ST0x',
 		tradingViewSymbol: 'CBOE:DRAM',
 		tradingViewMarket: 'america',
