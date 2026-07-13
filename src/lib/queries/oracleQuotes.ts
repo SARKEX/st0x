@@ -12,10 +12,14 @@ export interface OracleQuote {
 	publishTime: number | null;
 }
 
-export function tokensWithPriceFeed(network: Network | null) {
+export function tokensWithPriceSource(network: Network | null) {
 	if (!network) return [];
 	const all = [...TOKENS, ...CRYPTO_TOKENS];
-	return all.filter((token) => token.chainId === network.chainId && token.priceFeedId);
+	return all.filter(
+		(token) =>
+			token.chainId === network.chainId &&
+			(token.priceFeedId || typeof token.fallbackPrice === 'number')
+	);
 }
 
 /** Fetch SPYM price from the liquidity-monitor proxy endpoint. */
@@ -40,7 +44,7 @@ export function createOracleQuotesQuery(network: Network | null) {
 		refetchInterval: 15_000,
 		queryFn: async () => {
 			if (!network) return {};
-			const tokens = tokensWithPriceFeed(network);
+			const tokens = tokensWithPriceSource(network);
 			const [snapshots, spymPrice] = await Promise.all([
 				tokens.length ? getNetworkOracleSnapshots(tokens, network) : ([] as OracleSnapshot[]),
 				fetchSpymPrice()

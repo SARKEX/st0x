@@ -28,6 +28,7 @@ type PricePoint = {
 
 type TokenWithMarket = PythToken & {
 	tradingViewSymbol?: string;
+	fallbackPrice?: number;
 };
 
 const logReference = (tag: string, payload?: unknown) => {
@@ -142,21 +143,24 @@ export async function getPythQuotes(
 	tokens: TokenWithMarket[],
 	network?: Network
 ): Promise<TradingViewQuote[]> {
-	const tokensWithFeed = tokens.filter((token) => token.priceFeedId);
-	if (!tokensWithFeed.length) return [];
+	const tokensWithPriceSource = tokens.filter(
+		(token) => token.priceFeedId || typeof token.fallbackPrice === 'number'
+	);
+	if (!tokensWithPriceSource.length) return [];
 
 	const snapshots = await (network
-		? resolveNetworkSnapshots(tokensWithFeed, network.id)
-		: getOracleSnapshots(tokensWithFeed));
+		? resolveNetworkSnapshots(tokensWithPriceSource, network.id)
+		: getOracleSnapshots(tokensWithPriceSource));
 	logReference('pyth-prices-fetched', { count: snapshots.length });
 
 	const snapshotMap = new Map(
 		snapshots.map((snapshot) => [normaliseFeedId(snapshot.feedId), snapshot])
 	);
 
-	const results = tokensWithFeed.map((token) => {
-		const feedId = normaliseFeedId(token.priceFeedId);
-		const latest = snapshotMap.get(feedId);
+	const results = tokensWithPriceSource.map((token) => {
+		const feedId = token.priceFeedId ? normaliseFeedId(token.priceFeedId) : '';
+		const latest = feedId ? snapshotMap.get(feedId) : undefined;
+		const fallbackPrice = typeof token.fallbackPrice === 'number' ? token.fallbackPrice : null;
 		if (latest?.publishTime === null) {
 			logReference('latest-missing-publish-time', { feedId, latestPrice: latest?.price });
 		}
@@ -165,7 +169,7 @@ export async function getPythQuotes(
 		}
 		return {
 			symbol: token.tradingViewSymbol ?? token.symbol ?? null,
-			close: latest?.price ?? null,
+			close: latest?.price ?? fallbackPrice,
 			open: null,
 			high: null,
 			low: null,
@@ -193,23 +197,38 @@ export interface OracleSnapshot {
 
 export async function getOracleSnapshots(tokens: TokenWithMarket[]): Promise<OracleSnapshot[]> {
 	const tokensWithFeed = tokens.filter((token) => token.priceFeedId);
-	if (!tokensWithFeed.length) return [];
-
 	const feedIds = tokensWithFeed.map((token) => token.priceFeedId);
-	const latestPrices = await fetchLatestBatch(feedIds);
+	const latestPrices = feedIds.length
+		? await fetchLatestBatch(feedIds)
+		: new Map<string, PricePoint>();
 
-	return tokensWithFeed.map((token) => {
+	return tokens.flatMap((token) => {
+		if (!token.priceFeedId && typeof token.fallbackPrice === 'number') {
+			return [
+				{
+					feedId: '',
+					price: token.fallbackPrice,
+					confidence: 0,
+					publishTime: null,
+					token
+				}
+			];
+		}
+		if (!token.priceFeedId) return [];
+
 		const feedId = normaliseFeedId(token.priceFeedId);
 		const latest =
 			latestPrices.get(feedId) ??
 			({ price: null, confidence: null, publishTime: null } satisfies PricePoint);
-		return {
-			feedId,
-			price: latest.price,
-			confidence: latest.confidence,
-			publishTime: latest.publishTime,
-			token
-		};
+		return [
+			{
+				feedId,
+				price: latest.price,
+				confidence: latest.confidence,
+				publishTime: latest.publishTime,
+				token
+			}
+		];
 	});
 }
 

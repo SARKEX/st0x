@@ -4,7 +4,15 @@ import type { Network } from '$lib/config/network';
 import { TOKENS } from '$lib/config/network';
 import { getPythQuotes } from '$lib/api/pyth';
 import type { TradingViewQuote } from '$lib/api/tradingview';
-import { tokensWithPriceFeed } from '$lib/queries/oracleQuotes';
+import { tokensWithPriceSource } from '$lib/queries/oracleQuotes';
+
+export function replaceQuoteBySymbol(
+	quotes: TradingViewQuote[],
+	replacement: TradingViewQuote | null
+): TradingViewQuote[] {
+	if (!replacement) return quotes;
+	return [...quotes.filter((quote) => quote.symbol !== replacement.symbol), replacement];
+}
 
 /** Fetch SPYM price from the liquidity-monitor proxy (no Pyth feed available). */
 async function fetchSpymQuote(network: Network): Promise<TradingViewQuote | null> {
@@ -45,11 +53,10 @@ export function createPriceFeedsQuery(network: Network | null) {
 		queryFn: async () => {
 			const net = network as Network;
 			const [pythQuotes, spymQuote] = await Promise.all([
-				getPythQuotes(tokensWithPriceFeed(network), net),
+				getPythQuotes(tokensWithPriceSource(network), net),
 				fetchSpymQuote(net)
 			]);
-			if (spymQuote) pythQuotes.push(spymQuote);
-			return pythQuotes;
+			return replaceQuoteBySymbol(pythQuotes, spymQuote);
 		}
 	});
 }
