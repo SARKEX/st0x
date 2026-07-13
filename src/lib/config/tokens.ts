@@ -367,6 +367,36 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NYSE:TSM',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x8200c6d9AB9E02A25D7F2099244C476d99a085ef',
+		unwrappedAddress: '0x722Cb373f1871A176fb5DC3953046f2EAE22F619',
+		symbol: 'wtASML',
+		decimals: 18,
+		name: 'Wrapped ASML Holding N.V. ST0x',
+		logoUrl: '/images/ASML.png',
+		priceFeedId: '0x1a6e324589a0e355919fb1c0389edc3fdf4c46034626bd82aad4e47714cfa94f',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:ASML',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0xFcD17aC4c4BF6a72c93018096F3fC09e66573Ff9',
+		unwrappedAddress: '0x4DBA41f0feb390F208a85e96168fF5d8aC2b6F5c',
+		symbol: 'wtSKHY',
+		decimals: 18,
+		name: 'Wrapped SK hynix Inc. ADR ST0x',
+		logoUrl: '/images/SKHY.png',
+		priceFeedId: '',
+		// Pyth does not yet publish an SKHY feed. Use the $149 IPO price until one is available.
+		fallbackPrice: 149,
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:SKHY',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
