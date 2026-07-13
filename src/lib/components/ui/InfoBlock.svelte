@@ -8,14 +8,14 @@
 		info: {
 			borderClass: 'border-blue-500/30',
 			bgClass: 'bg-blue-500/10',
-			iconClass: 'text-blue-400',
-			titleClass: 'text-blue-400'
+			iconClass: 'text-blue-600 dark:text-blue-400',
+			titleClass: 'text-blue-600 dark:text-blue-400'
 		},
 		warning: {
-			borderClass: 'border-yellow-500/30',
-			bgClass: 'bg-yellow-500/10',
-			iconClass: 'text-yellow-400',
-			titleClass: 'text-yellow-400'
+			borderClass: 'border-amber-500/30',
+			bgClass: 'bg-amber-500/10',
+			iconClass: 'text-amber-300',
+			titleClass: 'text-amber-300'
 		},
 		success: {
 			borderClass: 'border-green-500/30',
@@ -104,11 +104,11 @@
 		{/if}
 
 		{#if description}
-			<div class={'text-sm text-gray-300 ' + (title ? 'mt-1' : '')}>
+			<div class={'text-sm text-text-2 ' + (title ? 'mt-1' : '')}>
 				{description}
 			</div>
 		{:else}
-			<div class={'text-sm text-gray-300 ' + (title ? 'mt-1' : '')}>
+			<div class={'text-sm text-text-2 ' + (title ? 'mt-1' : '')}>
 				<slot />
 			</div>
 		{/if}

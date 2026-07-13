@@ -28,10 +28,10 @@
 
 <Modal show={$showAuthModal} title="Sign In" maxWidthClass="max-w-md" onClose={handleClose}>
 	<div class="space-y-6">
-		<p class="text-center text-gray-300">Choose how you'd like to access the platform</p>
+		<p class="text-center text-text-2">Choose how you'd like to access the platform</p>
 
 		<!-- Dynamic Login (Email or Social) -->
-		<div class="rounded-lg border border-gray-700 bg-gray-800/50 p-4">
+		<div class="rounded-lg border border-line bg-surface-2 p-4">
 			<div class="mb-3 flex items-center gap-3">
 				<div class="rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-600/20 p-2">
 					<svg
@@ -49,8 +49,8 @@
 					</svg>
 				</div>
 				<div>
-					<h3 class="font-semibold text-white">Email or Social</h3>
-					<p class="text-xs text-gray-400">We'll create a wallet for you</p>
+					<h3 class="font-semibold text-text">Email or Social</h3>
+					<p class="text-xs text-text-2">We'll create a wallet for you</p>
 				</div>
 			</div>
 
@@ -85,7 +85,7 @@
 				{/if}
 			</Button>
 
-			<div class="mt-3 flex items-center justify-center gap-3 text-xs text-gray-500">
+			<div class="mt-3 flex items-center justify-center gap-3 text-xs text-text-3">
 				<!-- Email icon -->
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
@@ -119,16 +119,21 @@
 
 		<!-- Divider -->
 		<div class="flex items-center gap-4">
-			<div class="h-px flex-1 bg-gray-700"></div>
-			<span class="text-xs text-gray-500">OR</span>
-			<div class="h-px flex-1 bg-gray-700"></div>
+			<div class="h-px flex-1 bg-surface-3"></div>
+			<span class="text-xs text-text-3">OR</span>
+			<div class="h-px flex-1 bg-surface-3"></div>
 		</div>
 
 		<!-- Direct Wallet Connect -->
-		<div class="rounded-lg border border-gray-700 bg-gray-800/50 p-4">
+		<div class="rounded-lg border border-line bg-surface-2 p-4">
 			<div class="mb-3 flex items-center gap-3">
 				<div class="rounded-full bg-gradient-to-br from-blue-500/20 to-cyan-600/20 p-2">
-					<svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg
+						class="h-5 w-5 text-blue-600 dark:text-blue-400"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
@@ -138,8 +143,8 @@
 					</svg>
 				</div>
 				<div>
-					<h3 class="font-semibold text-white">Connect Wallet</h3>
-					<p class="text-xs text-gray-400">Use your existing wallet</p>
+					<h3 class="font-semibold text-text">Connect Wallet</h3>
+					<p class="text-xs text-text-2">Use your existing wallet</p>
 				</div>
 			</div>
 
@@ -149,8 +154,6 @@
 		</div>
 
 		<!-- Footer note -->
-		<p class="text-center text-xs text-gray-500">
-			By continuing, you agree to our Terms of Service
-		</p>
+		<p class="text-center text-xs text-text-3">By continuing, you agree to our Terms of Service</p>
 	</div>
 </Modal>

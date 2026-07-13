@@ -1,22 +1,22 @@
 <!-- Compact Footer -->
-<footer class="border-t border-white/5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+<footer class="border-t border-line px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
 	<div class="mx-auto max-w-5xl">
 		<!-- Links Row -->
 		<div
-			class="mb-6 flex flex-wrap items-center justify-center gap-4 text-xs text-gray-400 sm:gap-6 sm:text-sm"
+			class="mb-6 flex flex-wrap items-center justify-center gap-4 text-xs text-text-2 sm:gap-6 sm:text-sm"
 		>
-			<a href="/markets" class="transition-colors hover:text-yellow-500">Markets</a>
-			<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
-			<a href="/faqs" class="transition-colors hover:text-yellow-500">FAQs</a>
-			<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
-			<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
+			<a href="/markets" class="transition-colors hover:text-accent">Markets</a>
+			<a href="/docs" class="transition-colors hover:text-accent">Docs</a>
+			<a href="/faqs" class="transition-colors hover:text-accent">FAQs</a>
+			<a href="/terms" class="transition-colors hover:text-accent">Terms</a>
+			<a href="/privacy-policy" class="transition-colors hover:text-accent">Privacy</a>
 		</div>
 
 		<!-- Social Links -->
 		<div class="mb-6 flex items-center justify-center gap-4">
 			<a
 				href="mailto:toby@st0x.io"
-				class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+				class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-text-3 transition-all hover:bg-accent-soft hover:text-accent"
 				aria-label="Email"
 			>
 				<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"
@@ -29,7 +29,7 @@
 				href="https://x.com/st0x_io"
 				target="_blank"
 				rel="noopener noreferrer"
-				class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+				class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-text-3 transition-all hover:bg-accent-soft hover:text-accent"
 				aria-label="X"
 			>
 				<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
@@ -42,7 +42,7 @@
 				href="https://t.me/ST0xCommunity"
 				target="_blank"
 				rel="noopener noreferrer"
-				class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+				class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-text-3 transition-all hover:bg-accent-soft hover:text-accent"
 				aria-label="Telegram"
 			>
 				<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
@@ -55,7 +55,7 @@
 				href="https://www.linkedin.com/company/st0x"
 				target="_blank"
 				rel="noopener noreferrer"
-				class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+				class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-text-3 transition-all hover:bg-accent-soft hover:text-accent"
 				aria-label="LinkedIn"
 			>
 				<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
@@ -68,11 +68,11 @@
 
 		<!-- Copyright and Risk Warning -->
 		<div class="text-center">
-			<p class="mb-4 text-xs text-gray-500">
+			<p class="mb-4 text-xs text-text-3">
 				© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
 			</p>
-			<p class="text-[10px] leading-relaxed text-gray-600 sm:text-xs">
-				<span class="text-yellow-600">Risk Warning:</span> Trading tokenized assets involves substantial
+			<p class="text-[10px] leading-relaxed text-text-muted sm:text-xs">
+				<span class="text-accent">Risk Warning:</span> Trading tokenized assets involves substantial
 				risk. Past performance does not guarantee future results.
 			</p>
 		</div>

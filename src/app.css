@@ -1,40 +1,180 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@100;200;300;400;500;600;700;800;900&display=swap');
-@import '@fontsource/ia-writer-mono';
+@import './lib/styles/tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-	font-family: 'DM Sans', sans-serif;
-	color: #ffffff;
-	background-color: #030712;
+	font-family: var(--font-sans);
+	color: var(--text);
+	background-color: var(--bg);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	transition:
+		background-color 0.5s var(--ease),
+		color 0.5s var(--ease);
+}
+
+/* Display font on real headings — the design-language signature */
+h1,
+h2,
+h3,
+h4 {
+	font-family: var(--font-display);
+	letter-spacing: -0.02em;
+}
+
+.font-display {
+	font-family: var(--font-display);
+	letter-spacing: -0.02em;
+}
+
+.font-mono {
+	font-variant-numeric: tabular-nums;
+	font-feature-settings:
+		'tnum' 1,
+		'zero' 1;
+}
+
+::selection {
+	background: var(--accent-soft);
+	color: var(--text);
 }
 
 *:focus {
 	outline: none;
 }
 
-.tab {
-	@apply flex h-full w-32 items-center justify-center gap-2 self-start border-4 border-white px-4 py-2 font-bold text-white;
-	border-style: outset;
+/* ---- range slider (mint) ---- */
+input[type='range'] {
+	-webkit-appearance: none;
+	appearance: none;
+	height: 6px;
+	border-radius: 999px;
+	background: var(--surface-3);
+}
+input[type='range']::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	height: 18px;
+	width: 18px;
+	border-radius: 50%;
+	background: var(--accent);
+	cursor: pointer;
+	border: 3px solid var(--accent-ink);
+	box-shadow: 0 0 0 1px var(--accent-line);
+}
+input[type='range']::-moz-range-thumb {
+	height: 18px;
+	width: 18px;
+	border-radius: 50%;
+	background: var(--accent);
+	cursor: pointer;
+	border: 3px solid var(--accent-ink);
 }
 
-.inset {
-	border-style: inset;
+/* ---- scrollbars ---- */
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar {
+	width: 9px;
+	height: 9px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb,
+.overflow-x-auto::-webkit-scrollbar-thumb {
+	background: var(--line-strong);
+	border-radius: 999px;
+}
+.overflow-y-auto::-webkit-scrollbar-track,
+.overflow-x-auto::-webkit-scrollbar-track {
+	background: transparent;
+}
+.no-bar::-webkit-scrollbar {
+	display: none;
+}
+.no-bar {
+	scrollbar-width: none;
 }
 
-.outset {
-	border-style: outset;
+/* ---- v2 motion keyframes (used by product screens + ambient) ---- */
+@keyframes chartscroll {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
 }
-
-@layer utilities {
-	.border-outset {
-		border-style: outset;
+@keyframes tickertape {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+@keyframes glowFloat1 {
+	0%,
+	100% {
+		transform: translate(-50%, 0) scale(1);
+	}
+	50% {
+		transform: translate(-42%, 6%) scale(1.12);
+	}
+}
+@keyframes glowFloat2 {
+	0%,
+	100% {
+		transform: translate(50%, 0) scale(1.05);
+	}
+	50% {
+		transform: translate(44%, -7%) scale(0.94);
+	}
+}
+@keyframes auraDrift1 {
+	0%,
+	100% {
+		transform: translate(0, 0) scale(1);
+	}
+	50% {
+		transform: translate(6vw, 5vh) scale(1.14);
+	}
+}
+@keyframes auraDrift2 {
+	0%,
+	100% {
+		transform: translate(0, 0) scale(1.05);
+	}
+	50% {
+		transform: translate(-5vw, 4vh) scale(0.92);
+	}
+}
+@keyframes auraDrift3 {
+	0%,
+	100% {
+		transform: translate(0, 0) scale(1);
+	}
+	50% {
+		transform: translate(4vw, -5vh) scale(1.1);
 	}
 }
 
-.card {
-	@apply border-outset flex  flex-col items-center gap-6 rounded-none border-4 border-white p-4 shadow-md;
-	border-style: outset;
+@media (prefers-reduced-motion: reduce) {
+	.chart-scroll,
+	[class*='animate-'] {
+		animation: none !important;
+	}
+}
+
+/* Wallet "Connect" flow can surface from inside an in-app modal (e.g. the
+   Save & Earn modal at z-[2200]). Two different overlays can render the wallet
+   picker depending on auth path, and both default to a z-index below our modals:
+   - Dynamic Labs' embedded-wallet flow renders inside a `.dynamic-shadow-dom` host.
+   - WalletConnect / Web3Modal renders an `<w3m-modal>` (default z-index 999).
+   Lift both above every in-app modal so the wallet flow is never hidden behind. */
+:root {
+	/* Official Web3Modal/AppKit override; the modal reads var(--w3m-z-index). */
+	--w3m-z-index: 2147483000;
+}
+.dynamic-shadow-dom {
+	position: relative !important;
+	z-index: 2147483646 !important;
 }

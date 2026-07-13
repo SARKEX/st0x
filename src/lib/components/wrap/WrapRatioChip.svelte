@@ -18,11 +18,11 @@
 {#if showChip}
 	<div class="flex items-center gap-2" data-testid="wrap-ratio-chip">
 		<span
-			class="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/35 bg-yellow-400/10 px-2 py-0.5 text-[11px] leading-tight text-yellow-200"
+			class="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/35 bg-yellow-400/10 px-2 py-0.5 text-[11px] leading-tight text-accent"
 			title="Wrap ratio"
 		>
 			<span class="font-mono tabular-nums">1 {wrappedSymbol}</span>
-			<span class="text-yellow-300/70">=</span>
+			<span class="text-accent">=</span>
 			<span class="font-mono tabular-nums">{ratioLabel} {assetSymbol}</span>
 		</span>
 		{#if onLearnMore}
@@ -30,7 +30,7 @@
 				type="button"
 				on:click={onLearnMore}
 				data-testid="wrap-explainer-trigger"
-				class="inline-flex items-center gap-1 text-[11px] text-gray-400 transition hover:text-yellow-200 sm:text-xs"
+				class="inline-flex items-center gap-1 text-[11px] text-text-2 transition hover:text-accent sm:text-xs"
 			>
 				<svg
 					viewBox="0 0 24 24"

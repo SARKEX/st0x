@@ -25,7 +25,7 @@
 
 <div class="vault-id-input text-left">
 	<input
-		class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors [appearance:textfield] focus:border-yellow-500/50 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+		class="w-full rounded-lg border border-line bg-surface-3 px-4 py-3 text-text transition-colors [appearance:textfield] focus:border-accent-line focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
 		type="text"
 		bind:value={vaultId}
 		{placeholder}

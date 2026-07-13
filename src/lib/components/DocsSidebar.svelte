@@ -32,7 +32,7 @@
 
 <!-- Sidebar -->
 <div
-	class="fixed left-0 top-0 z-[10000] flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-white/10 bg-gray-800/95 backdrop-blur-lg transition-transform duration-300 ease-in-out"
+	class="fixed left-0 top-0 z-[10000] flex h-full w-64 max-w-[80vw] transform flex-col border-b border-r border-line bg-surface-2 backdrop-blur-lg transition-transform duration-300 ease-in-out"
 	class:translate-x-0={visible || desktop}
 	class:-translate-x-full={!visible && !desktop}
 >
@@ -66,12 +66,12 @@
 					}}
 					class="flex items-center gap-3 rounded-lg px-4 py-3 font-medium transition-all {activePath ===
 					`/docs/${slug}`
-						? 'border border-yellow-500/30 bg-yellow-500/20 text-yellow-500'
-						: 'text-gray-400 hover:bg-white/5 hover:text-white'}"
+						? 'border border-accent-line bg-accent-soft text-accent'
+						: 'text-text-2 hover:bg-surface-2 hover:text-text'}"
 				>
 					<span>{title}</span>
 					{#if activePath === `/docs/${slug}`}
-						<div class="ml-auto h-2 w-2 rounded-full bg-yellow-500" />
+						<div class="ml-auto h-2 w-2 rounded-full bg-accent" />
 					{/if}
 				</a>
 			{/each}
@@ -79,24 +79,24 @@
 	</div>
 
 	<!-- Bottom Info -->
-	<div class="border-t border-white/10 bg-gray-800/95 p-4">
+	<div class="border-t border-line bg-surface-2 p-4">
 		<div class="flex w-full flex-col gap-3">
-			<div class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+			<div class="w-full rounded-lg border border-line bg-surface-2 px-4 py-3">
 				<div class="flex w-full flex-col sm:flex-row sm:items-center sm:justify-between">
-					<div class="text-sm font-semibold text-yellow-500">{$currentNetwork.name}</div>
+					<div class="text-sm font-semibold text-accent">{$currentNetwork.name}</div>
 					{#if $isAuthenticated && $walletAddress}
-						<div class="text-xs text-gray-400 sm:ml-2">
+						<div class="text-xs text-text-2 sm:ml-2">
 							<span class="sm:hidden">…{$walletAddress?.slice(-6)}</span>
 							<span class="hidden sm:inline">{truncateAddress($walletAddress || '')}</span>
 						</div>
 					{:else}
-						<div class="text-xs text-gray-400 sm:ml-2">Not Connected</div>
+						<div class="text-xs text-text-2 sm:ml-2">Not Connected</div>
 					{/if}
 				</div>
 			</div>
 			<a
 				href="/"
-				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+				class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
 			>
 				<ExternalLinkIcon class="h-5 w-5" />
 				<span>Back to App</span>
@@ -104,7 +104,7 @@
 			<ExternalLink
 				href="https://t.me/toby_meller"
 				label="Telegram"
-				className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+				className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-base font-normal text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
 			/>
 		</div>
 	</div>

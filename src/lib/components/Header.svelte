@@ -1,8 +1,10 @@
 <script lang="ts">
 	import NetworkSelector from './NetworkSelector.svelte';
 	import ReferralButton from './referrals/ReferralButton.svelte';
+	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
 	import { onMount } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import { wrongNetwork, sfts, tradePanelOpen } from '$lib/stores';
@@ -10,22 +12,14 @@
 	// Unified auth
 	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
 	import { openAuthModal, logoutDynamic, dynamicSession } from '$lib/stores/dynamicStore';
+	import { navCollapsed } from '$lib/stores/uiStore';
 
 	export let title: string;
 	export let isSidebarCollapsed = false;
 	export let isLandingPage = false;
 
-	let mobileNavOpen = false;
 	let accountMenuOpen = false;
 	let windowWidth = 0;
-
-	function toggleMobileNav() {
-		mobileNavOpen = !mobileNavOpen;
-	}
-
-	function closeMobileNav() {
-		mobileNavOpen = false;
-	}
 
 	function toggleAccountMenu() {
 		accountMenuOpen = !accountMenuOpen;
@@ -50,10 +44,13 @@
 	$: NAV_ITEMS = [
 		{ name: 'Trade', href: tradeHref, isActive: isOnTradePage, showAlpha: false },
 		{ name: 'Strategies', href: '/strategies', isActive: false, showAlpha: true },
-		{ name: 'Platform Metrics', href: '/platform-metrics', isActive: false, showAlpha: false }
+		{
+			name: 'Platform Metrics',
+			href: '/platform-metrics',
+			isActive: false,
+			showAlpha: false
+		}
 	];
-
-	const DESKTOP_NAV_WIDTH = 'w-28 xl:w-40';
 
 	// Calculate effective breakpoint based on what's taking up space
 	// Base: 1350px for the nav content itself
@@ -61,9 +58,15 @@
 	// +352px when trade panel is open
 	$: sidebarOffset = !isLandingPage && !isSidebarCollapsed ? 256 : 0;
 	$: tradePanelOffset = $tradePanelOpen ? 352 : 0;
-	$: effectiveBreakpoint = 1350 + sidebarOffset + tradePanelOffset;
+	// Base = the width the full nav cluster actually needs (~1100px of content +
+	// margin). The sidebar/trade-panel offsets account for horizontal space those
+	// take away from the header, so a full-size laptop keeps the inline nav and only
+	// collapses to the hamburger when the sidebar + order panel are both open.
+	$: effectiveBreakpoint = 1180 + sidebarOffset + tradePanelOffset;
 	$: isHamburgerMode = windowWidth < effectiveBreakpoint;
-	$: if (!isHamburgerMode) mobileNavOpen = false;
+	// Share the collapse signal so the bottom MobileTabBar shows exactly when the
+	// inline header nav hides — no width band is left without navigation.
+	$: navCollapsed.set(isHamburgerMode);
 
 	onMount(() => {
 		windowWidth = window.innerWidth;
@@ -102,12 +105,18 @@
 	}
 </script>
 
-<div class="sticky top-0 z-[100] bg-transparent transition-all duration-300">
-	<div class="px-3 py-3 sm:px-6 sm:py-5">
-		<div class="flex items-center justify-between gap-2 sm:gap-3 lg:gap-4">
-			<div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4">
+<div
+	class="bg-bg/80 sticky top-0 z-[100] border-b border-line backdrop-blur-xl transition-all duration-300"
+>
+	<div class="px-4 py-3 sm:px-6">
+		<div class="flex items-center justify-between gap-3">
+			<div class="flex items-center gap-5">
 				<a href="/" aria-label="Go to home" class="shrink-0">
-					<img src="/images/logo-sidebar.svg" alt="ST0x Logo" class="h-7 w-auto sm:h-8 lg:h-10" />
+					<img
+						src="/images/logo-sidebar.svg"
+						alt="ST0x Logo"
+						class="logo-img h-7 w-auto sm:h-8 lg:h-10"
+					/>
 				</a>
 				{#if title}
 					<div class="ml-2 hidden lg:block">
@@ -116,22 +125,21 @@
 				{/if}
 			</div>
 
-			<div class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2 xl:gap-3">
+			<div class="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2">
 				{#if !isHamburgerMode}
-					<div class="flex flex-nowrap items-center gap-2 xl:gap-3">
+					<div class="flex flex-nowrap items-center gap-1">
 						{#each NAV_ITEMS as item}
 							<a
 								href={item.href}
-								class={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors ${DESKTOP_NAV_WIDTH} ${
-									item.isActive || activePath === item.href
-										? 'bg-yellow-500/20 text-yellow-500'
-										: 'text-gray-300 hover:bg-white/5 hover:text-white'
-								}`}
+								class="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors {item.isActive ||
+								activePath === item.href
+									? 'bg-white/10 text-text'
+									: 'text-text-2 hover:bg-white/5 hover:text-text'}"
 							>
 								{item.name}
 								{#if item.showAlpha}
 									<span
-										class="rounded-full bg-yellow-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-yellow-400"
+										class="rounded-full bg-iris-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-iris-300"
 										>Alpha</span
 									>
 								{/if}
@@ -140,6 +148,7 @@
 					</div>
 				{/if}
 
+				<ThemeToggle />
 				<NetworkSelector />
 
 				<!-- Hide on mobile, show in hamburger menu instead -->
@@ -151,51 +160,40 @@
 					<!-- Dynamic authenticated user -->
 					<div class="account-menu-container relative">
 						<button
-							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-yellow-400"
+							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-gradient-to-b from-emerald-300 to-emerald-400 px-2.5 py-2 text-sm font-semibold text-[#053124] shadow-[0_10px_30px_-10px_rgba(45,227,166,0.45)] transition hover:brightness-105 sm:px-3.5"
 							on:click={toggleAccountMenu}
 						>
-							<span>My Dashboard</span>
-							<span class="text-[11px] font-normal text-yellow-800/70">
-								{$dynamicSession.email
-									? truncateEmail($dynamicSession.email)
-									: `...${$dynamicSession.walletAddress.slice(-4)}`}
-							</span>
-							<svg
-								class="h-4 w-4 transition-transform"
-								class:rotate-180={accountMenuOpen}
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M19 9l-7 7-7-7"
-								/>
-							</svg>
+							{#if isHamburgerMode}
+								<Icon name="wallet" className="h-4 w-4" />
+							{:else}
+								<span>My Dashboard</span>
+								<span class="font-mono text-[11px] font-medium text-emerald-900/70">
+									{$dynamicSession.email
+										? truncateEmail($dynamicSession.email)
+										: `·${$dynamicSession.walletAddress.slice(-4)}`}
+								</span>
+							{/if}
+							<Icon
+								name="chevronDown"
+								className="h-4 w-4 text-emerald-900/60 transition-transform {accountMenuOpen
+									? 'rotate-180'
+									: ''}"
+							/>
 						</button>
 						{#if accountMenuOpen}
 							<div
-								class="absolute right-0 top-full z-[110] mt-1 w-48 rounded-lg border border-white/10 bg-gray-800 py-1 shadow-xl"
+								class="absolute right-0 top-full z-[110] mt-1 w-48 rounded-lg border border-line bg-surface-1 py-1 shadow-xl"
 							>
 								<a
 									href="/dashboard"
-									class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
+									class="flex items-center gap-2 px-4 py-2.5 text-sm text-text-2 transition-colors hover:bg-surface-2"
 									on:click={closeAccountMenu}
 								>
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-										/>
-									</svg>
+									<Icon name="blocks" className="h-4 w-4" />
 									Dashboard
 								</a>
 								<button
-									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
+									class="hover:bg-down/10 flex w-full items-center gap-2 px-4 py-2.5 text-sm text-down transition-colors"
 									on:click={() => {
 										closeAccountMenu();
 										handleDisconnect();
@@ -218,49 +216,38 @@
 					<!-- Wallet user (fully registered) -->
 					<div class="account-menu-container relative">
 						<button
-							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-yellow-400"
+							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-gradient-to-b from-emerald-300 to-emerald-400 px-2.5 py-2 text-sm font-semibold text-[#053124] shadow-[0_10px_30px_-10px_rgba(45,227,166,0.45)] transition hover:brightness-105 sm:px-3.5"
 							on:click={toggleAccountMenu}
 						>
-							<span>My Dashboard</span>
-							<span class="text-[11px] font-normal text-yellow-800/70">
-								...{$walletAddress?.slice(-4)}
-							</span>
-							<svg
-								class="h-4 w-4 transition-transform"
-								class:rotate-180={accountMenuOpen}
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M19 9l-7 7-7-7"
-								/>
-							</svg>
+							{#if isHamburgerMode}
+								<Icon name="wallet" className="h-4 w-4" />
+							{:else}
+								<span>My Dashboard</span>
+								<span class="font-mono text-[11px] font-medium text-emerald-900/70">
+									·{$walletAddress?.slice(-4)}
+								</span>
+							{/if}
+							<Icon
+								name="chevronDown"
+								className="h-4 w-4 text-emerald-900/60 transition-transform {accountMenuOpen
+									? 'rotate-180'
+									: ''}"
+							/>
 						</button>
 						{#if accountMenuOpen}
 							<div
-								class="absolute right-0 top-full z-[110] mt-1 w-48 rounded-lg border border-white/10 bg-gray-800 py-1 shadow-xl"
+								class="absolute right-0 top-full z-[110] mt-1 w-48 rounded-lg border border-line bg-surface-1 py-1 shadow-xl"
 							>
 								<a
 									href="/dashboard"
-									class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
+									class="flex items-center gap-2 px-4 py-2.5 text-sm text-text-2 transition-colors hover:bg-surface-2"
 									on:click={closeAccountMenu}
 								>
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-										/>
-									</svg>
+									<Icon name="blocks" className="h-4 w-4" />
 									Dashboard
 								</a>
 								<button
-									class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-white/10"
+									class="hover:bg-down/10 flex w-full items-center gap-2 px-4 py-2.5 text-sm text-down transition-colors"
 									on:click={() => {
 										closeAccountMenu();
 										handleDisconnect();
@@ -290,88 +277,15 @@
 						Connect or Log In
 					</Button>
 				{/if}
-
-				{#if isHamburgerMode}
-					<Button
-						variant="ghost"
-						size="sm"
-						className="p-2"
-						aria-label="Toggle navigation"
-						on:click={toggleMobileNav}
-					>
-						<svg
-							class="h-5 w-5"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-							xmlns="http://www.w3.org/2000/svg"
-						>
-							{#if mobileNavOpen}
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M6 18L18 6M6 6l12 12"
-								></path>
-							{:else}
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M4 6h16M4 12h16M4 18h16"
-								></path>
-							{/if}
-						</svg>
-					</Button>
-				{/if}
 			</div>
 		</div>
 	</div>
 </div>
 
-<!-- Mobile/Tablet Navigation Dropdown -->
-
-{#if mobileNavOpen && isHamburgerMode}
-	<div
-		class="fixed inset-0 z-[99] bg-black/50 backdrop-blur-sm"
-		role="button"
-		tabindex="0"
-		on:click={closeMobileNav}
-		on:keydown={(e) => {
-			if (e.key === 'Enter' || e.key === ' ') closeMobileNav();
-		}}
-	/>
-	<div
-		class="fixed left-0 right-0 top-[60px] z-[99] border-b border-white/10 bg-gray-800/95 backdrop-blur-lg"
-	>
-		<div class="flex flex-col gap-4 p-4">
-			<!-- Referrals in mobile menu -->
-			<div class="flex flex-wrap gap-2 border-b border-white/10 pb-4">
-				<ReferralButton />
-			</div>
-
-			<nav class="flex flex-col gap-2">
-				{#each NAV_ITEMS as item}
-					<a
-						href={item.href}
-						on:click={closeMobileNav}
-						class="rounded-lg px-4 py-3 text-base font-medium transition-colors {item.isActive ||
-						activePath === item.href
-							? 'bg-yellow-500/20 text-yellow-500'
-							: 'text-gray-300 hover:bg-white/5 hover:text-white'}"
-					>
-						<span class="flex items-center gap-2">
-							{item.name}
-							{#if item.showAlpha}
-								<span
-									class="rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yellow-400"
-									>Alpha</span
-								>
-							{/if}
-						</span>
-					</a>
-				{/each}
-			</nav>
-		</div>
-	</div>
-{/if}
+<style>
+	/* The wordmark SVG is white/cream (drawn for dark backgrounds). In light mode
+	   darken it to a near-black silhouette so it stays legible on the light shell. */
+	:global([data-theme='light']) .logo-img {
+		filter: brightness(0);
+	}
+</style>

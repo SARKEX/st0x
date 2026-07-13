@@ -8,7 +8,7 @@
 	export let head: number = 6;
 	export let tail: number = 4;
 	export let className: string =
-		'flex items-center gap-1 font-mono text-xs text-blue-400 hover:text-blue-300';
+		'flex items-center gap-1 font-mono text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300';
 	export let dataTestId: string | undefined = undefined;
 
 	function truncate(value: string, h = head, t = tail) {

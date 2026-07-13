@@ -467,7 +467,7 @@
 
 						<!-- Info Box -->
 						<div
-							class="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-200"
+							class="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-600 dark:text-blue-200"
 						>
 							<p>
 								Your rewards are equal to 50% of the rewards received by wallets that sign up using

@@ -137,7 +137,7 @@
 	<div class="fixed inset-0 z-[201] flex items-center justify-center p-4">
 		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 		<div
-			class="w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-800 shadow-2xl"
+			class="w-full max-w-md overflow-hidden rounded-xl border border-line-strong bg-surface-1 shadow-2xl"
 			on:click|stopPropagation
 			on:keydown|stopPropagation
 			role="dialog"
@@ -145,13 +145,13 @@
 			aria-labelledby="join-modal-title"
 		>
 			<!-- Header -->
-			<div class="flex items-center justify-between border-b border-gray-700 px-6 py-4">
-				<h2 id="join-modal-title" class="text-lg font-semibold text-white">
+			<div class="flex items-center justify-between border-b border-line-strong px-6 py-4">
+				<h2 id="join-modal-title" class="text-lg font-semibold text-text">
 					{success ? 'Welcome to the Referral Programme!' : 'Join Referral Programme'}
 				</h2>
 				<button
 					on:click={closeModal}
-					class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+					class="rounded-lg p-1 text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
@@ -170,14 +170,9 @@
 					<!-- Success state -->
 					<div class="space-y-4 text-center">
 						<div
-							class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20"
+							class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent-soft"
 						>
-							<svg
-								class="h-8 w-8 text-green-400"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
+							<svg class="h-8 w-8 text-up" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
@@ -188,14 +183,14 @@
 						</div>
 
 						<div>
-							<p class="text-gray-300">Your referral code is:</p>
+							<p class="text-text-2">Your referral code is:</p>
 							<div class="mt-2 flex items-center justify-center gap-2">
-								<code class="rounded-lg bg-gray-700 px-4 py-2 font-mono text-lg text-yellow-400">
+								<code class="rounded-lg bg-surface-2 px-4 py-2 font-mono text-lg text-accent">
 									{generatedCode}
 								</code>
 								<button
 									on:click={copyCode}
-									class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+									class="rounded-lg p-2 text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
 									title="Copy code"
 								>
 									<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,7 +205,7 @@
 							</div>
 						</div>
 
-						<p class="text-sm text-gray-400">
+						<p class="text-sm text-text-2">
 							Share this code with friends. You'll earn 50% of the projected rewards from wallets
 							that sign up using your code.
 						</p>
@@ -220,21 +215,19 @@
 				{:else}
 					<!-- Join form -->
 					<div class="space-y-4">
-						<p class="text-sm text-gray-300">
+						<p class="text-sm text-text-2">
 							Join our referral programme to earn rewards when others sign up using your code.
 						</p>
 
 						{#if error}
-							<div
-								class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300"
-							>
+							<div class="rounded-md border border-down bg-down-soft p-3 text-sm text-down">
 								{error}
 							</div>
 						{/if}
 
 						<!-- Telegram handle input -->
 						<div class="space-y-2">
-							<label for="telegram-handle" class="text-sm font-medium text-gray-300">
+							<label for="telegram-handle" class="text-sm font-medium text-text-2">
 								Telegram Handle
 							</label>
 							<input
@@ -243,20 +236,18 @@
 								bind:value={telegramHandle}
 								disabled={submitting}
 								placeholder="@username"
-								class="w-full rounded-lg border px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {telegramValid
-									? 'border-gray-700 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
-									: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
+								class="w-full rounded-lg border px-3 py-2 text-text placeholder-text-3 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {telegramValid
+									? 'border-line-strong bg-surface-1 focus:border-accent focus:ring-accent'
+									: 'border-down bg-surface-1 focus:border-down focus:ring-down'}"
 							/>
 							{#if !telegramValid}
-								<p class="text-xs text-red-400">
-									Invalid format. Must start with @ (e.g., @username)
-								</p>
+								<p class="text-xs text-down">Invalid format. Must start with @ (e.g., @username)</p>
 							{/if}
 						</div>
 
 						<!-- Nickname input -->
 						<div class="space-y-2">
-							<label for="nickname" class="text-sm font-medium text-gray-300">
+							<label for="nickname" class="text-sm font-medium text-text-2">
 								Leaderboard Nickname
 							</label>
 							<input
@@ -265,16 +256,16 @@
 								bind:value={nickname}
 								disabled={submitting}
 								placeholder="Your display name"
-								class="w-full rounded-lg border px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {nicknameValid
-									? 'border-gray-700 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
-									: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
+								class="w-full rounded-lg border px-3 py-2 text-text placeholder-text-3 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {nicknameValid
+									? 'border-line-strong bg-surface-1 focus:border-accent focus:ring-accent'
+									: 'border-down bg-surface-1 focus:border-down focus:ring-down'}"
 							/>
 							{#if !nicknameValid}
-								<p class="text-xs text-red-400">
+								<p class="text-xs text-down">
 									3-20 characters, letters, numbers, and underscores only
 								</p>
 							{:else}
-								<p class="text-xs text-gray-500">
+								<p class="text-xs text-text-3">
 									This will be displayed publicly on the leaderboard
 								</p>
 							{/if}
@@ -298,7 +289,7 @@
 							{/if}
 						</Button>
 
-						<p class="text-center text-xs text-gray-500">
+						<p class="text-center text-xs text-text-3">
 							You'll sign a message to verify wallet ownership
 						</p>
 					</div>

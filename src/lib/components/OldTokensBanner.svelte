@@ -75,7 +75,7 @@
 </script>
 
 {#if showBanner}
-	<div class="relative z-40 bg-yellow-600 px-4 py-2.5 text-center text-sm text-white">
+	<div class="relative z-40 bg-amber-600 px-4 py-2.5 text-center text-sm text-white">
 		<div class="mx-auto flex max-w-4xl items-center justify-center gap-2">
 			<svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path
@@ -94,7 +94,7 @@
 			<button
 				type="button"
 				on:click={handleSwapClick}
-				class="ml-1 font-semibold underline underline-offset-2 transition hover:text-yellow-100"
+				class="ml-1 font-semibold underline underline-offset-2 transition hover:text-amber-100"
 			>
 				Click here to swap
 			</button>

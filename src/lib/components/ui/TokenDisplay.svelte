@@ -39,12 +39,12 @@
 		<img
 			src={logoUrl}
 			alt={symbol}
-			class={sizeConfig.image + ' rounded-full bg-gray-700 object-cover'}
+			class={sizeConfig.image + ' rounded-full bg-surface-3 object-cover'}
 			loading="lazy"
 		/>
 	{:else}
 		<div
-			class={'flex items-center justify-center rounded-full bg-gray-700 font-bold ' +
+			class={'flex items-center justify-center rounded-full bg-surface-3 font-bold ' +
 				sizeConfig.placeholder}
 		>
 			{symbol?.charAt(0) || '?'}
@@ -57,7 +57,7 @@
 		</div>
 		{#if showName && name}
 			<div
-				class={'truncate text-gray-400 ' +
+				class={'truncate text-text-2 ' +
 					sizeConfig.nameText +
 					(hideNameOnMobile ? ' hidden sm:block' : '')}
 			>

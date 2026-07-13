@@ -83,7 +83,7 @@
 	<div class="fixed inset-0 z-[201] flex items-center justify-center p-4">
 		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 		<div
-			class="w-full max-w-md overflow-hidden rounded-xl border border-gray-700 bg-gray-800 shadow-2xl"
+			class="w-full max-w-md overflow-hidden rounded-xl border border-line-strong bg-surface-1 shadow-2xl"
 			on:click|stopPropagation
 			on:keydown|stopPropagation
 			role="dialog"
@@ -91,13 +91,11 @@
 			aria-labelledby="leaderboard-title"
 		>
 			<!-- Header -->
-			<div class="flex items-center justify-between border-b border-gray-700 px-6 py-4">
-				<h2 id="leaderboard-title" class="text-lg font-semibold text-white">
-					Referral Leaderboard
-				</h2>
+			<div class="flex items-center justify-between border-b border-line-strong px-6 py-4">
+				<h2 id="leaderboard-title" class="text-lg font-semibold text-text">Referral Leaderboard</h2>
 				<button
 					on:click={closeModal}
-					class="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
+					class="rounded-lg p-1 text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
 					aria-label="Close"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,12 +114,12 @@
 				{#if $referralLeaderboardLoading}
 					<div class="flex items-center justify-center py-12">
 						<div
-							class="h-8 w-8 animate-spin rounded-full border-2 border-gray-600 border-t-yellow-400"
+							class="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-accent"
 						></div>
 					</div>
 				{:else if hasData}
 					<!-- Table Header -->
-					<div class="mb-2 grid grid-cols-12 gap-2 px-4 text-xs font-medium text-gray-400">
+					<div class="mb-2 grid grid-cols-12 gap-2 px-4 text-xs font-medium text-text-2">
 						<div class="col-span-1">#</div>
 						<div class="col-span-4">Nickname</div>
 						<div class="col-span-2 text-right">Refs</div>
@@ -137,8 +135,8 @@
 								: $referralProfile && entry.nickname === $referralProfile.nickname}
 							<div
 								class="grid grid-cols-12 items-center gap-2 rounded-lg px-4 py-3 {isUser
-									? 'border border-yellow-500/50 bg-yellow-500/10'
-									: 'bg-gray-700/50'}"
+									? 'border border-accent-line bg-accent-soft'
+									: 'bg-surface-2/50'}"
 							>
 								<!-- Rank -->
 								<div class="col-span-1">
@@ -146,43 +144,41 @@
 										<span
 											class="flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold
 											{entry.rank === 1
-												? 'bg-yellow-500 text-gray-900'
+												? 'bg-accent text-text'
 												: entry.rank === 2
-													? 'bg-gray-300 text-gray-900'
-													: 'bg-amber-600 text-white'}"
+													? 'bg-surface-3 text-text'
+													: 'bg-accent text-text'}"
 										>
 											{getMedal(entry.rank)}
 										</span>
 									{:else}
-										<span class="text-sm text-gray-400">#{entry.rank}</span>
+										<span class="text-sm text-text-2">#{entry.rank}</span>
 									{/if}
 								</div>
 
 								<!-- Nickname -->
 								<div class="col-span-4">
-									<p
-										class="truncate text-sm font-medium {isUser ? 'text-yellow-400' : 'text-white'}"
-									>
+									<p class="truncate text-sm font-medium {isUser ? 'text-accent' : 'text-text'}">
 										{entry.nickname}
 									</p>
 									{#if isUser}
-										<p class="text-xs text-yellow-400/70">You</p>
+										<p class="text-xs text-accent">You</p>
 									{/if}
 								</div>
 
 								<!-- Wallets Referred -->
 								<div class="col-span-2 text-right">
-									<span class="text-sm text-gray-300">{entry.walletsReferred}</span>
+									<span class="text-sm text-text-2">{entry.walletsReferred}</span>
 								</div>
 
 								<!-- Points -->
 								<div class="col-span-3 text-right">
 									<span
 										class="text-sm font-medium {isUser
-											? 'text-yellow-400'
+											? 'text-accent'
 											: entry.rank <= 3
-												? 'text-yellow-400'
-												: 'text-white'}"
+												? 'text-accent'
+												: 'text-text'}"
 									>
 										{formatPoints(entry.totalPoints)}
 									</span>
@@ -190,7 +186,7 @@
 
 								<!-- Projected Rewards -->
 								<div class="col-span-2 text-right">
-									<span class="text-sm text-green-400">
+									<span class="text-sm text-up">
 										{formatUsd(entry.projectedRewards)}
 									</span>
 								</div>
@@ -200,15 +196,15 @@
 
 					<!-- Stats Summary -->
 					<div
-						class="mt-4 flex items-center justify-between rounded-lg bg-gray-700/30 px-4 py-3 text-sm"
+						class="mt-4 flex items-center justify-between rounded-lg bg-surface-2/30 px-4 py-3 text-sm"
 					>
-						<span class="text-gray-400">Total participants</span>
-						<span class="font-medium text-white">{$referralTotalParticipants}</span>
+						<span class="text-text-2">Total participants</span>
+						<span class="font-medium text-text">{$referralTotalParticipants}</span>
 					</div>
 				{:else}
 					<div class="py-12 text-center">
 						<svg
-							class="mx-auto h-12 w-12 text-gray-600"
+							class="mx-auto h-12 w-12 text-text-muted"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -220,8 +216,8 @@
 								d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
 							/>
 						</svg>
-						<p class="mt-4 text-gray-400">No referrers yet.</p>
-						<p class="text-sm text-gray-500">Be the first to join the referral programme!</p>
+						<p class="mt-4 text-text-2">No referrers yet.</p>
+						<p class="text-sm text-text-3">Be the first to join the referral programme!</p>
 					</div>
 				{/if}
 			</div>

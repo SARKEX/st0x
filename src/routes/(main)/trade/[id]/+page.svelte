@@ -2,6 +2,7 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
+	import { setSheetOpen } from '$lib/stores/uiStore';
 	import { formatUnits } from 'viem';
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -13,8 +14,10 @@
 	// PERF-01: TradingViewChart is lazy-loaded — it only renders inside the
 	// chart-modal (showChartModal) which is closed on first paint.
 	import TradingViewWidget from '$lib/components/charts/TradingViewWidget.svelte';
+	import { theme } from '$lib/stores/themeStore';
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import TabNav from '$lib/components/ui/TabNav.svelte';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import { onMount } from 'svelte';
@@ -35,6 +38,7 @@
 		VolumeBucket,
 		OHLCBucket
 	} from '$lib/components/charts/token-chart-types';
+	import { tradesToOHLCBuckets, tradesToVolumeBuckets } from '$lib/utils/ohlc';
 	import MarketOrder from '$lib/components/orders/MarketOrder.svelte';
 	import WrapRatioChip from '$lib/components/wrap/WrapRatioChip.svelte';
 	import WrapRatioCard from '$lib/components/wrap/WrapRatioCard.svelte';
@@ -402,6 +406,9 @@
 
 	// Sync trade panel state with store (for layout squishing on lg screens)
 	$: tradePanelOpen.set(showTradePanel);
+	// On mobile the order panel is a full-screen overlay; hide the bottom tab bar
+	// while it's open so the bar never covers the panel's submit button.
+	$: setSheetOpen('tradePanel', showTradePanel);
 
 	// Track if the trade panel was opened by the tutorial
 	let panelOpenedByTutorial = false;
@@ -510,55 +517,7 @@
 		if (!Number.isFinite(tokens) || !Number.isFinite(quote) || !Number.isFinite(price)) return null;
 		return { timestamp, price, tokens, quote, side };
 	};
-	// Convert trade points to OHLC candles
-	const tradesToOHLCBuckets = (
-		trades: TradeHistoryPoint[],
-		bucketSeconds: number
-	): OHLCBucket[] => {
-		if (trades.length === 0) return [];
-		const buckets = new Map<number, TradeHistoryPoint[]>();
-		for (const trade of trades) {
-			const bucketTime = Math.floor(trade.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
-			if (!buckets.has(bucketTime)) {
-				buckets.set(bucketTime, []);
-			}
-			buckets.get(bucketTime)!.push(trade);
-		}
-		const ohlcData: OHLCBucket[] = [];
-		const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
-		for (const [time, bucketTrades] of sortedBuckets) {
-			if (bucketTrades.length === 0) continue;
-			// Sort trades within bucket by timestamp
-			const sortedTrades = bucketTrades
-				.filter((t) => Number.isFinite(t.price))
-				.sort((a, b) => a.timestamp - b.timestamp);
-			if (sortedTrades.length === 0) continue;
-			const prices = sortedTrades.map((t) => t.price);
-			ohlcData.push({
-				x: time,
-				o: sortedTrades[0].price, // first trade = open
-				h: Math.max(...prices), // highest price
-				l: Math.min(...prices), // lowest price
-				c: sortedTrades[sortedTrades.length - 1].price // last trade = close
-			});
-		}
-		return ohlcData;
-	};
-	// Aggregate volume by candlestick bucket size for proper alignment
-	const tradesToVolumeBuckets = (
-		trades: TradeHistoryPoint[],
-		bucketSeconds: number
-	): VolumeBucket[] => {
-		if (trades.length === 0) return [];
-		const bucketMap = new Map<number, number>();
-		for (const trade of trades) {
-			const bucketTime = Math.floor(trade.timestamp / 1000 / bucketSeconds) * bucketSeconds * 1000;
-			bucketMap.set(bucketTime, (bucketMap.get(bucketTime) ?? 0) + trade.tokens);
-		}
-		return Array.from(bucketMap.entries())
-			.sort((a, b) => a[0] - b[0])
-			.map(([start, tokens]) => ({ start, tokens }));
-	};
+	// tradesToOHLCBuckets / tradesToVolumeBuckets are imported from $lib/utils/ohlc.
 	let historyRange: HistoryRangeKey = '7D';
 	let historyRangeStartMs = 0;
 	let historyRangeEndMs = 0;
@@ -708,6 +667,8 @@
 		}
 	}
 	let showChartModal = false;
+	// Full-screen terminal/chart view on mobile — hide the bottom tab bar under it.
+	$: setSheetOpen('chartModal', showChartModal);
 	function openChartModal(event?: Event) {
 		event?.stopPropagation?.();
 		showChartModal = true;
@@ -1008,7 +969,7 @@
 	<div class="flex h-screen items-center justify-center">
 		<div class="text-center">
 			<p class="text-lg text-red-400">Failed to load token data</p>
-			<p class="mt-2 text-sm text-gray-400">
+			<p class="mt-2 text-sm text-text-2">
 				{$singleTokenQuery.error?.message || 'Unknown error'}
 			</p>
 		</div>
@@ -1016,8 +977,8 @@
 {:else if !currentToken}
 	<div class="flex h-screen items-center justify-center">
 		<div class="text-center">
-			<p class="text-lg text-gray-400">Token not found</p>
-			<p class="mt-2 text-sm text-gray-500">ID: {tokenId}</p>
+			<p class="text-lg text-text-2">Token not found</p>
+			<p class="mt-2 text-sm text-text-3">ID: {tokenId}</p>
 		</div>
 	</div>
 {:else}
@@ -1027,16 +988,16 @@
 				 non-parity wrapper, otherwise it's noise. -->
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div class="min-w-0 leading-tight">
-					<h1 class="text-xl font-semibold leading-tight text-white sm:text-2xl">
+					<h1 class="text-xl font-semibold leading-tight text-text sm:text-2xl">
 						{tokenDisplayName}
 					</h1>
 					<div
-						class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-400 sm:text-sm"
+						class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-text-2 sm:text-sm"
 					>
 						<span class="font-mono tabular-nums"
 							>{currentPythToken?.symbol ?? currentToken.symbol}</span
 						>
-						<span class="text-gray-600">·</span>
+						<span class="text-text-muted">·</span>
 						<span>Wrapped tStock on {$currentNetwork.displayName}</span>
 					</div>
 				</div>
@@ -1054,21 +1015,24 @@
 				<!-- Left: Symbol info -->
 				<div class="space-y-3 sm:space-y-4 xl:col-span-2">
 					<div
-						class="overflow-hidden rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm"
+						class="relative overflow-hidden rounded-2xl border border-line bg-overlay-1 backdrop-blur"
 						data-tutorial="symbol-overview"
 					>
-						<div class="border-b border-white/10 px-3 py-2 sm:px-4 sm:py-3">
+						<div
+							class="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full bg-emerald-400/15 blur-3xl"
+						></div>
+						<div class="relative border-b border-line px-3 py-2 sm:px-4 sm:py-3">
 							<div class="flex items-start justify-between gap-4">
 								<div>
-									<p class="text-[10px] uppercase tracking-wide text-gray-400 sm:text-xs">
+									<p class="text-[10px] uppercase tracking-wide text-text-2 sm:text-xs">
 										Off-chain Reference
 									</p>
-									<p class="mt-0.5 text-sm font-semibold text-gray-200 sm:mt-1 sm:text-base">
+									<p class="mt-0.5 text-sm font-semibold text-text-2 sm:mt-1 sm:text-base">
 										{tokenDisplayName}
 									</p>
 								</div>
 								{#if tradingViewSymbol}
-									<span class="text-xs text-gray-400 sm:text-sm">{tradingViewSymbol}</span>
+									<span class="text-xs text-text-2 sm:text-sm">{tradingViewSymbol}</span>
 								{/if}
 							</div>
 						</div>
@@ -1091,19 +1055,19 @@
 							</div>
 						{:else}
 							<div
-								class="flex h-32 items-center justify-center px-4 py-6 text-sm text-gray-400 sm:h-48"
+								class="flex h-32 items-center justify-center px-4 py-6 text-sm text-text-2 sm:h-48"
 							>
 								TradingView data unavailable for this token.
 							</div>
 						{/if}
 					</div>
-					<div class="rounded-lg border border-white/5 bg-gray-800/80 p-3 backdrop-blur-sm sm:p-4">
+					<div class="rounded-2xl border border-line bg-overlay-1 p-4 backdrop-blur sm:p-5">
 						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:gap-x-6 sm:gap-y-3 sm:text-sm">
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+								<dt class="text-[10px] uppercase tracking-wider text-text-3 sm:text-xs">
 									Oracle Price
 								</dt>
-								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
+								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
 									{#if oracleLoading}
 										Loading...
 									{:else if oraclePriceData}
@@ -1114,10 +1078,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+								<dt class="text-[10px] uppercase tracking-wider text-text-3 sm:text-xs">
 									Confidence
 								</dt>
-								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
+								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
 									{#if oracleLoading}
 										Loading...
 									{:else if oraclePriceData}
@@ -1128,10 +1092,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+								<dt class="text-[10px] uppercase tracking-wider text-text-3 sm:text-xs">
 									Bid Price
 								</dt>
-								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
+								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if buyPrice !== null}
@@ -1144,11 +1108,11 @@
 											<div class="leading-tight">
 												<div>
 													${formatNumeric(buyPrice / currentRatio)}
-													<span class="text-[10px] font-normal text-gray-500">/ {assetSym}</span>
+													<span class="text-[10px] font-normal text-text-3">/ {assetSym}</span>
 												</div>
-												<div class="mt-0.5 text-[11px] font-normal text-gray-400 sm:text-xs">
+												<div class="mt-0.5 text-[11px] font-normal text-text-2 sm:text-xs">
 													${formatNumeric(buyPrice)}
-													<span class="text-[10px] text-gray-500">/ {wrappedSym}</span>
+													<span class="text-[10px] text-text-3">/ {wrappedSym}</span>
 												</div>
 											</div>
 										{:else}
@@ -1160,10 +1124,10 @@
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">
+								<dt class="text-[10px] uppercase tracking-wider text-text-3 sm:text-xs">
 									Offer Price
 								</dt>
-								<dd class="mt-0.5 font-medium text-gray-100 sm:mt-1">
+								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
 									{#if orderbookQuoteUiState.loadingWithoutData}
 										Loading...
 									{:else if sellPrice !== null}
@@ -1176,11 +1140,11 @@
 											<div class="leading-tight">
 												<div>
 													${formatNumeric(sellPrice / currentRatio)}
-													<span class="text-[10px] font-normal text-gray-500">/ {assetSym}</span>
+													<span class="text-[10px] font-normal text-text-3">/ {assetSym}</span>
 												</div>
-												<div class="mt-0.5 text-[11px] font-normal text-gray-400 sm:text-xs">
+												<div class="mt-0.5 text-[11px] font-normal text-text-2 sm:text-xs">
 													${formatNumeric(sellPrice)}
-													<span class="text-[10px] text-gray-500">/ {wrappedSym}</span>
+													<span class="text-[10px] text-text-3">/ {wrappedSym}</span>
 												</div>
 											</div>
 										{:else}
@@ -1202,7 +1166,7 @@
 							)}
 							{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
 							<div
-								class="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-white/5 pt-2 text-[11px] text-gray-400 sm:text-xs"
+								class="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-2 text-[11px] text-text-2 sm:text-xs"
 							>
 								<span class="font-mono tabular-nums">
 									1 {wrappedSym} = {Number.isInteger(currentRatio)
@@ -1216,7 +1180,7 @@
 									type="button"
 									on:click={openWrapExplainer}
 									data-testid="wrap-explainer-trigger"
-									class="inline-flex items-center gap-1 text-blue-300 transition hover:text-blue-200 hover:underline"
+									class="inline-flex items-center gap-1 text-blue-600 transition hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
 								>
 									What's this?
 								</button>
@@ -1231,7 +1195,7 @@
 							type="button"
 							data-testid="open-trade"
 							data-side="buy"
-							class="rounded-xl bg-green-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
+							class="rounded-xl bg-emerald-500 px-3 py-3.5 text-sm font-bold text-[#05231a] transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:ring-offset-2 focus:ring-offset-surface-1 sm:px-4 sm:text-base"
 							on:click={() => openTradePanel('Buy')}
 						>
 							Buy
@@ -1240,7 +1204,7 @@
 							type="button"
 							data-testid="open-trade"
 							data-side="sell"
-							class="rounded-xl bg-red-500 px-3 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:px-4 sm:py-3 sm:text-base"
+							class="rounded-xl bg-red-500 px-3 py-3.5 text-sm font-bold text-[#2a0808] transition hover:bg-red-400 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-surface-1 sm:px-4 sm:text-base"
 							on:click={() => openTradePanel('Sell')}
 						>
 							Sell
@@ -1251,7 +1215,7 @@
 				<div class="flex h-full flex-col gap-3 sm:gap-4 xl:col-span-3" data-tutorial="tradingview">
 					{#if tradingViewSymbol}
 						<div
-							class="flex-1 overflow-hidden rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm"
+							class="flex-1 overflow-hidden rounded-2xl border border-line bg-overlay-1 backdrop-blur"
 						>
 							<div class="hidden sm:block">
 								<TradingViewWidget
@@ -1279,9 +1243,9 @@
 							</div>
 						</div>
 					{:else}
-						<div class="flex-1 rounded-lg border border-white/5 bg-gray-800/80 backdrop-blur-sm">
+						<div class="flex-1 rounded-2xl border border-line bg-overlay-1 backdrop-blur">
 							<div
-								class="flex h-[280px] items-center justify-center text-sm text-gray-400 sm:h-[495px]"
+								class="flex h-[280px] items-center justify-center text-sm text-text-2 sm:h-[495px]"
 							>
 								TradingView data unavailable for this token.
 							</div>
@@ -1291,25 +1255,26 @@
 						<Button
 							variant="secondary"
 							size="md"
-							className="w-full rounded-xl border border-yellow-400/40 bg-yellow-500/20 px-4 py-2.5 text-sm font-semibold text-yellow-300 shadow-lg shadow-yellow-500/30 transition hover:border-yellow-300 hover:bg-yellow-500/30 hover:text-white sm:w-auto sm:py-3 sm:text-base"
+							className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-overlay-1 px-3 py-1.5 text-[12px] font-semibold text-text transition hover:bg-overlay-hover"
 							aria-label="Open terminal view"
 							on:click={(event) => openChartModal(event)}
 						>
 							Advanced Chart
+							<Icon name="arrowUpRight" className="h-3.5 w-3.5" />
 						</Button>
 					</div>
 				</div>
 			</div>
 		</div>
-		<div class="space-y-4 sm:space-y-6">
+		<div class="space-y-4 border-t border-line pt-6 sm:space-y-6">
 			<div data-tutorial="dex-activity">
 				<div class="mb-4 sm:mb-6">
 					<div
 						class="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 					>
 						<div>
-							<h2 class="text-base font-semibold sm:text-lg">On-chain Market</h2>
-							<p class="hidden text-xs text-gray-400 sm:block sm:text-sm">
+							<h2 class="text-xl font-bold tracking-tight text-text">On-chain Market</h2>
+							<p class="hidden text-[13px] text-text-3 sm:block">
 								View on-chain trades, liquidity, orders, and vaults
 							</p>
 						</div>
@@ -1335,42 +1300,12 @@
 											decimals: 18,
 											image: currentPythToken?.logoUrl
 										})}
-									class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
+									class="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-xs font-medium text-text-2 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-700 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm dark:hover:text-blue-300"
 								>
 									<!-- Wallet icon (mobile only) -->
-									<svg
-										class="h-4 w-4 sm:hidden"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path
-											d="M21 12V7H5a2 2 0 0 1 0-4h14v4"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-										<path
-											d="M3 5v14a2 2 0 0 0 2 2h16v-5"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-										<path
-											d="M18 12a2 2 0 0 0 0 4h4v-4Z"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
+									<Icon name="wallet" className="h-4 w-4 sm:hidden" />
 									<!-- Plus icon -->
-									<svg
-										class="h-3 w-3 sm:h-4 sm:w-4"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
-									</svg>
+									<Icon name="plus" className="h-3 w-3 sm:h-4 sm:w-4" />
 									<span class="sm:hidden">Track</span>
 									<span class="hidden sm:inline">Track in Wallet</span>
 								</button>
@@ -1410,7 +1345,7 @@
 								historyRangeOptions={HISTORY_RANGE_OPTIONS}
 								on:rangeChange={(e) => (historyRange = e.detail.key)}
 							/>
-							<div class="mt-2 hidden text-xs text-gray-400 sm:block">
+							<div class="mt-2 hidden text-xs text-text-2 sm:block">
 								All times are displayed in your local timezone{#if hasRatio}
 									· prices in USD per {tableDenom === 'unwrapped'
 										? (currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't') +
@@ -1439,7 +1374,7 @@
 						<div class="mt-4">
 							{#if !$isAuthenticated}
 								<div class="flex flex-col items-center justify-center gap-4 py-12">
-									<p class="text-sm text-gray-400">Connect your wallet to view your position</p>
+									<p class="text-sm text-text-2">Connect your wallet to view your position</p>
 									<Button variant="primary" size="md" on:click={() => promptWalletConnection()}>
 										Connect Wallet
 									</Button>
@@ -1475,7 +1410,7 @@
 									vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
 
 								{#if vaults.length === 0 && walletBalance === 0n}
-									<div class="py-8 text-center text-sm text-gray-400">
+									<div class="py-8 text-center text-sm text-text-2">
 										No position found for this token
 									</div>
 								{:else}
@@ -1502,20 +1437,20 @@
 															vault.id
 														)}
 														<div
-															class="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-2 text-sm"
+															class="flex items-center justify-between rounded-xl border border-line bg-overlay-1 p-2 text-sm"
 														>
-															<div class="flex items-center gap-2 text-xs text-gray-400">
+															<div class="flex items-center gap-2 text-xs text-text-2">
 																<a
 																	href={raindexUrl}
 																	target="_blank"
 																	rel="noopener noreferrer"
-																	class="text-blue-400 hover:text-blue-300 hover:underline"
+																	class="text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
 																	title="View on Raindex"
 																>
 																	{vaultIdHex.slice(0, 8)}...
 																</a>
 																<span>•</span>
-																<span
+																<span class="font-mono tabular-nums"
 																	>{Number(formatUnits(balance, vault.token.decimals)).toFixed(3)}
 																	{vault.token.symbol}</span
 																>
@@ -1539,8 +1474,8 @@
 																type="button"
 																class={`h-8 w-8 rounded-md text-sm font-medium transition ${
 																	pageNum === currentVaultsPage
-																		? 'bg-blue-500 text-white'
-																		: 'bg-white/5 text-gray-400 hover:bg-white/10'
+																		? 'bg-blue-500 text-text'
+																		: 'bg-surface-2 text-text-2 hover:bg-surface-2'
 																}`}
 																on:click={() => {
 																	currentVaultsPage = pageNum;
@@ -1552,35 +1487,35 @@
 													</div>
 												{/if}
 											{:else}
-												<div class="py-8 text-center text-sm text-gray-400">
+												<div class="py-8 text-center text-sm text-text-2">
 													No vaults with balance found
 												</div>
 											{/if}
 										</div>
 
 										<!-- Right: Summary table -->
-										<div class="rounded-lg border border-white/10 bg-white/5 p-4">
-											<h3 class="mb-4 text-sm font-semibold text-gray-100">Summary</h3>
+										<div class="rounded-2xl border border-line bg-overlay-1 p-4">
+											<h3 class="mb-4 text-sm font-semibold text-text-2">Summary</h3>
 											<div class="space-y-3 text-sm">
-												<div class="flex justify-between text-gray-400">
+												<div class="flex justify-between text-text-2">
 													<span>Vaults Subtotal:</span>
-													<span
+													<span class="font-mono tabular-nums"
 														>{Number(formatUnits(totalVaultBalance, tokenDecimals)).toFixed(3)}
 														{currentToken?.symbol}</span
 													>
 												</div>
-												<div class="flex justify-between text-gray-400">
+												<div class="flex justify-between text-text-2">
 													<span>Wallet Balance:</span>
-													<span
+													<span class="font-mono tabular-nums"
 														>{Number(formatUnits(walletBalance, tokenDecimals)).toFixed(3)}
 														{currentToken?.symbol}</span
 													>
 												</div>
 												<div
-													class="flex justify-between border-t border-white/10 pt-3 font-semibold text-gray-100"
+													class="flex justify-between border-t border-line pt-3 font-semibold text-text-2"
 												>
 													<span>Total:</span>
-													<span
+													<span class="font-mono tabular-nums"
 														>{Number(formatUnits(totalBalance, tokenDecimals)).toFixed(3)}
 														{currentToken?.symbol}</span
 													>
@@ -1596,32 +1531,24 @@
 			</div>
 		</div>
 		<!-- About Section - Collapsible on mobile -->
-		<div class="space-y-4 overflow-x-hidden sm:space-y-6">
+		<div class="mt-8 space-y-4 overflow-x-hidden border-t border-line pt-6 sm:space-y-6">
 			<button
 				type="button"
 				class="flex w-full items-center justify-between sm:cursor-default"
 				on:click={() => (isAboutCollapsed = !isAboutCollapsed)}
 			>
 				<div>
-					<h2 class="text-base font-semibold sm:text-lg">About</h2>
-					<p class="hidden text-sm text-gray-400 sm:block">
+					<h2 class="text-xl font-bold tracking-tight text-text">About</h2>
+					<p class="hidden text-[13px] text-text-3 sm:block">
 						Learn more about the token or the equity
 					</p>
 				</div>
-				<svg
-					class="h-5 w-5 text-gray-400 transition-transform sm:hidden"
-					class:rotate-180={!isAboutCollapsed}
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M19 9l-7 7-7-7"
-					/>
-				</svg>
+				<Icon
+					name="chevronDown"
+					className="h-5 w-5 text-text-2 transition-transform sm:hidden {!isAboutCollapsed
+						? 'rotate-180'
+						: ''}"
+				/>
 			</button>
 			<div
 				class="grid gap-4 overflow-x-hidden sm:gap-6 lg:grid-cols-2"
@@ -1632,7 +1559,7 @@
 				<!-- Token Details (Left) -->
 				<div class="min-w-0 space-y-4">
 					<div class="space-y-3">
-						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
+						<h3 class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-3">
 							Token Details
 						</h3>
 						<TabNav tabs={TOKEN_TABS} activeId={activeTokenTab} on:change={handleTokenTabChange} />
@@ -1652,9 +1579,9 @@
 								/>
 							{/if}
 							<h3 class="mb-3 font-semibold">Contract Information</h3>
-							<div class="space-y-3 text-sm">
-								<div class="flex items-center justify-between gap-2">
-									<span class="text-gray-400">Wrapped Token</span>
+							<div class="divide-y divide-line text-sm">
+								<div class="flex items-center justify-between gap-2 py-2.5">
+									<span class="text-text-2">Wrapped Token</span>
 									<div>
 										<div class="sm:hidden">
 											<ExternalLink
@@ -1662,7 +1589,7 @@
 													tokenId}"
 												label={currentPythToken?.address ?? tokenId}
 												truncate={{ start: 0, end: 6 }}
-												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+												className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 											/>
 										</div>
 										<div class="hidden sm:block">
@@ -1670,48 +1597,48 @@
 												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
 													tokenId}"
 												label={truncateAddress(currentPythToken?.address ?? tokenId)}
-												className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+												className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 											/>
 										</div>
 									</div>
 								</div>
 								{#if currentPythToken?.unwrappedAddress}
-									<div class="flex items-center justify-between gap-2">
-										<span class="text-gray-400">Underlying Token</span>
+									<div class="flex items-center justify-between gap-2 py-2.5">
+										<span class="text-text-2">Underlying Token</span>
 										<div>
 											<div class="sm:hidden">
 												<ExternalLink
 													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
 													label={currentPythToken.unwrappedAddress}
 													truncate={{ start: 0, end: 6 }}
-													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+													className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 												/>
 											</div>
 											<div class="hidden sm:block">
 												<ExternalLink
 													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
 													label={truncateAddress(currentPythToken.unwrappedAddress)}
-													className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+													className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 												/>
 											</div>
 										</div>
 									</div>
 								{/if}
-								<div class="flex justify-between">
-									<span class="text-gray-400">Network</span>
+								<div class="flex justify-between py-2.5">
+									<span class="text-text-2">Network</span>
 									<span>{$currentNetwork.displayName}</span>
 								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Symbol</span>
+								<div class="flex justify-between py-2.5">
+									<span class="text-text-2">Symbol</span>
 									<span>{currentPythToken?.symbol ?? currentToken.symbol}</span>
 								</div>
-								<div class="flex justify-between">
-									<span class="text-gray-400">Decimals</span>
+								<div class="flex justify-between py-2.5">
+									<span class="text-text-2">Decimals</span>
 									<span>18</span>
 								</div>
 								{#if hasRatio}
-									<div class="flex justify-between">
-										<span class="text-gray-400">Wrap ratio</span>
+									<div class="flex justify-between py-2.5">
+										<span class="text-text-2">Wrap ratio</span>
 										<span class="font-mono tabular-nums"
 											>1 {currentPythToken?.symbol ?? currentToken.symbol} ↔ {Number.isInteger(
 												currentRatio
@@ -1724,9 +1651,12 @@
 										>
 									</div>
 								{/if}
-								<div class="flex items-center justify-between">
-									<span class="text-gray-400">Proofs</span>
-									<a href={`/trade/${tokenId}/proofs`} class="text-blue-400 hover:text-blue-300">
+								<div class="flex items-center justify-between py-2.5">
+									<span class="text-text-2">Proofs</span>
+									<a
+										href={`/trade/${tokenId}/proofs`}
+										class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+									>
 										View proofs
 									</a>
 								</div>
@@ -1745,19 +1675,19 @@
 							<h3 class="mb-3 font-semibold">Supply & Distribution</h3>
 							<div class="space-y-3 text-sm">
 								<div class="flex justify-between">
-									<span class="text-gray-400">Total Supply</span>
-									<span
+									<span class="text-text-2">Total Supply</span>
+									<span class="font-mono tabular-nums"
 										>{formatBaseUnitAmount(
 											currentToken.bridgedSupply ?? currentToken.totalShares
 										)}</span
 									>
 								</div>
 								<div class="flex justify-between">
-									<span class="text-gray-400">Holders</span>
+									<span class="text-text-2">Holders</span>
 									<span>{currentToken.holderCount ?? 0}</span>
 								</div>
 								<div class="flex justify-between">
-									<span class="text-gray-400">Total Transfers</span>
+									<span class="text-text-2">Total Transfers</span>
 									<span>{currentToken.transferCount ?? 0}</span>
 								</div>
 							</div>
@@ -1769,14 +1699,14 @@
 								<ExternalLink
 									href="https://portal.s01issuer.com/metrics"
 									label="View All"
-									className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+									className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 								/>
 							</div>
 							{#if currentToken?.deposits?.length}
 								<div>
 									{#each currentToken.deposits.slice(0, 5) as dep}
 										<div
-											class="border-b border-white/5 px-2 py-3 transition-colors hover:bg-white/5"
+											class="border-b border-line px-2 py-3 transition-colors hover:bg-surface-2"
 										>
 											<div class="flex items-center justify-between gap-3 text-xs">
 												<div class="min-w-0 truncate">
@@ -1789,21 +1719,21 @@
 													<TxLink hash={dep.transaction.id} />
 												</div>
 											</div>
-											<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+											<div class="mt-1 flex items-center gap-2 text-xs text-text-3">
 												<span>
 													<span class="sm:hidden">…{dep.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
 														{truncateAddress(dep.emitter.address)}
 													</span>
 												</span>
-												<span class="text-gray-600">•</span>
+												<span class="text-text-muted">•</span>
 												<span>{new Date(Number(dep.timestamp) * 1000).toLocaleString()}</span>
 											</div>
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<div class="text-sm text-gray-400">No recent mints.</div>
+								<div class="text-sm text-text-2">No recent mints.</div>
 							{/if}
 						</div>
 					{:else}
@@ -1813,14 +1743,14 @@
 								<ExternalLink
 									href="https://portal.s01issuer.com/metrics"
 									label="View All"
-									className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+									className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 								/>
 							</div>
 							{#if currentToken?.withdraws?.length}
 								<div>
 									{#each currentToken.withdraws.slice(0, 5) as w}
 										<div
-											class="border-b border-white/5 px-2 py-3 transition-colors hover:bg-white/5"
+											class="border-b border-line px-2 py-3 transition-colors hover:bg-surface-2"
 										>
 											<div class="flex items-center justify-between gap-3 text-xs">
 												<div class="min-w-0 truncate">
@@ -1833,21 +1763,21 @@
 													<TxLink hash={w.transaction.id} />
 												</div>
 											</div>
-											<div class="mt-1 flex items-center gap-2 text-xs text-gray-500">
+											<div class="mt-1 flex items-center gap-2 text-xs text-text-3">
 												<span>
 													<span class="sm:hidden">…{w.emitter.address.slice(-6)}</span>
 													<span class="hidden sm:inline">
 														{truncateAddress(w.emitter.address)}
 													</span>
 												</span>
-												<span class="text-gray-600">•</span>
+												<span class="text-text-muted">•</span>
 												<span>{new Date(Number(w.timestamp) * 1000).toLocaleString()}</span>
 											</div>
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<div class="text-sm text-gray-400">No recent burns.</div>
+								<div class="text-sm text-text-2">No recent burns.</div>
 							{/if}
 						</div>
 					{/if}
@@ -1855,7 +1785,7 @@
 				<!-- Underlying Equity (Right) -->
 				<div class="min-w-0 space-y-4">
 					<div class="space-y-3">
-						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
+						<h3 class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-3">
 							Equity Details
 						</h3>
 						<TabNav tabs={ASSET_TABS} activeId={activeAssetTab} on:change={handleAssetTabChange} />
@@ -1880,7 +1810,7 @@
 							</div>
 						{:else}
 							<div class="p-4">
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+								<p class="text-sm text-text-2">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
 					{:else if activeAssetTab === 'fundamentals'}
@@ -1903,7 +1833,7 @@
 							</div>
 						{:else}
 							<div class="p-4">
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+								<p class="text-sm text-text-2">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
 					{:else if activeAssetTab === 'technical'}
@@ -1926,7 +1856,7 @@
 							</div>
 						{:else}
 							<div class="p-4">
-								<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+								<p class="text-sm text-text-2">TradingView data unavailable for this token.</p>
 							</div>
 						{/if}
 					{:else if tradingViewSymbol}
@@ -1948,7 +1878,7 @@
 						</div>
 					{:else}
 						<div class="p-4">
-							<p class="text-sm text-gray-400">TradingView data unavailable for this token.</p>
+							<p class="text-sm text-text-2">TradingView data unavailable for this token.</p>
 						</div>
 					{/if}
 				</div>
@@ -1964,7 +1894,7 @@
 				on:click={closeTradePanel}
 			></button>
 			<aside
-				class="relative h-full w-full border-l-0 border-white/10 bg-gradient-to-b from-gray-950 to-gray-900 shadow-2xl sm:max-w-[22rem] sm:border-l"
+				class="relative h-full w-full border-l-0 border-line bg-gradient-to-b from-surface-1 to-surface-2 shadow-2xl sm:max-w-[22rem] sm:border-l"
 				in:fly={{ x: 320, duration: 220 }}
 				out:fly={{ x: 320, duration: 180 }}
 				role="dialog"
@@ -1974,14 +1904,14 @@
 			>
 				<div class="flex h-full flex-col">
 					<div
-						class="flex items-start justify-between border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5"
+						class="flex items-start justify-between border-b border-line px-4 py-4 sm:px-6 sm:py-5"
 					>
 						<div class="flex items-start gap-2 sm:gap-3">
 							{#if currentPythToken?.logoUrl}
 								<img
 									src={currentPythToken.logoUrl}
 									alt={tokenDisplaySymbol || tokenDisplayName}
-									class="h-8 w-8 rounded-full border border-white/10 object-cover sm:h-10 sm:w-10"
+									class="h-8 w-8 rounded-full border border-line object-cover sm:h-10 sm:w-10"
 								/>
 							{/if}
 							<div>
@@ -1990,7 +1920,7 @@
 						</div>
 						<button
 							type="button"
-							class="rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+							class="rounded-lg p-2 text-text-2 transition hover:bg-surface-2 hover:text-text focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
 							on:click={closeTradePanel}
 							aria-label="Close trade panel"
 						>
@@ -2016,8 +1946,8 @@
 									data-side="buy"
 									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Buy'
-											? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
-											: 'bg-white/5 text-gray-200 hover:bg-white/10'
+											? 'bg-green-500 text-text shadow-lg shadow-green-500/30'
+											: 'bg-surface-2 text-text-2 hover:bg-surface-2'
 									}`}
 									on:click={() => (panelOrderSide = 'Buy')}
 								>
@@ -2029,8 +1959,8 @@
 									data-side="sell"
 									class={`rounded-lg px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-yellow-500/40 sm:px-4 sm:py-3 ${
 										panelOrderSide === 'Sell'
-											? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
-											: 'bg-white/5 text-gray-200 hover:bg-white/10'
+											? 'bg-red-500 text-text shadow-lg shadow-red-500/30'
+											: 'bg-surface-2 text-text-2 hover:bg-surface-2'
 									}`}
 									on:click={() => (panelOrderSide = 'Sell')}
 								>
@@ -2039,11 +1969,11 @@
 							</div>
 							<div class="space-y-1 sm:space-y-2">
 								<div
-									class="flex flex-wrap items-center gap-1 text-xs font-medium text-gray-300 sm:gap-2 sm:text-sm"
+									class="flex flex-wrap items-center gap-1 text-xs font-medium text-text-2 sm:gap-2 sm:text-sm"
 								>
 									<span>{panelSummaryVerb} {panelTokenLabel}</span>
-									<span class="text-gray-500">{panelSummaryPreposition}</span>
-									<span class="inline-flex items-center gap-1 text-gray-200">
+									<span class="text-text-3">{panelSummaryPreposition}</span>
+									<span class="inline-flex items-center gap-1 text-text-2">
 										{settlementTokenSymbol}
 										<img
 											src={settlementTokenLogo}
@@ -2057,20 +1987,20 @@
 										type="button"
 										on:click={openWrapExplainer}
 										data-testid="wrap-explainer-trigger"
-										class="block text-left font-mono text-[11px] tabular-nums text-gray-500 transition hover:text-yellow-200 hover:underline sm:text-xs"
+										class="block text-left font-mono text-[11px] tabular-nums text-text-3 transition hover:text-accent hover:underline sm:text-xs"
 									>
 										1 {panelWrappedSymbol} = {panelRatioCalloutDisplay}
 										{panelAssetSymbol}
 									</button>
 								{/if}
-								<div class="flex items-center gap-1 text-xs text-gray-400 sm:gap-2 sm:text-sm">
+								<div class="flex items-center gap-1 text-xs text-text-2 sm:gap-2 sm:text-sm">
 									<span>On</span>
 									<img src="/images/BASE.svg" alt="Base" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
 									<span>{$currentNetwork.displayName}</span>
 								</div>
 								{#if hasRatio}
 									<label
-										class="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-white/5 bg-white/[0.03] p-2 text-xs text-gray-300 sm:text-sm"
+										class="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-line bg-surface-2 p-2 text-xs text-text-2 sm:text-sm"
 									>
 										<input
 											type="checkbox"
@@ -2078,11 +2008,11 @@
 											checked={$panelDenom === 'unwrapped'}
 											on:change={(e) =>
 												panelDenom.set(e.currentTarget.checked ? 'unwrapped' : 'wrapped')}
-											class="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-transparent text-yellow-400 focus:ring-yellow-400/40"
+											class="mt-0.5 h-3.5 w-3.5 rounded border-line-strong bg-transparent text-accent focus:ring-yellow-400/40"
 										/>
 										<span class="flex-1 leading-snug">
 											Show wrapped token quantities in {panelAssetSymbol} equivalents
-											<span class="mt-0.5 block text-[10px] text-gray-500 sm:text-[11px]">
+											<span class="mt-0.5 block text-[10px] text-text-3 sm:text-[11px]">
 												You're still trading wrapped tokens — only the displayed quantities and
 												prices change.
 											</span>
@@ -2125,7 +2055,7 @@
 							<label class="block space-y-1.5 sm:space-y-2" for={PANEL_STRATEGY_SELECT_ID}>
 								<span
 									id={PANEL_STRATEGY_LABEL_ID}
-									class="block text-xs font-medium text-gray-300 sm:text-sm"
+									class="block text-xs font-medium text-text-2 sm:text-sm"
 								>
 									Order Type
 								</span>
@@ -2216,23 +2146,23 @@
 		</div>
 	{/if}
 	<!-- Compact Footer -->
-	<footer class="border-t border-white/5 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+	<footer class="border-t border-line px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
 		<div class="mx-auto max-w-5xl">
 			<!-- Links Row - fewer on mobile -->
 			<div
-				class="mb-4 flex flex-wrap items-center justify-center gap-3 text-[10px] text-gray-400 sm:mb-6 sm:gap-6 sm:text-sm"
+				class="mb-4 flex flex-wrap items-center justify-center gap-3 text-[10px] text-text-2 sm:mb-6 sm:gap-6 sm:text-sm"
 			>
-				<a href="/terms" class="transition-colors hover:text-yellow-500">Terms</a>
-				<a href="/privacy-policy" class="transition-colors hover:text-yellow-500">Privacy</a>
-				<a href="/docs" class="transition-colors hover:text-yellow-500">Docs</a>
-				<a href="/faqs" class="hidden transition-colors hover:text-yellow-500 sm:inline">FAQs</a>
+				<a href="/terms" class="transition-colors hover:text-accent">Terms</a>
+				<a href="/privacy-policy" class="transition-colors hover:text-accent">Privacy</a>
+				<a href="/docs" class="transition-colors hover:text-accent">Docs</a>
+				<a href="/faqs" class="hidden transition-colors hover:text-accent sm:inline">FAQs</a>
 			</div>
 
 			<!-- Social Links -->
 			<div class="mb-4 flex items-center justify-center gap-3 sm:mb-6 sm:gap-4">
 				<a
 					href="mailto:toby@st0x.io"
-					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-text-2 transition-all hover:bg-yellow-500/20 hover:text-accent"
 					aria-label="Email"
 				>
 					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"
@@ -2245,7 +2175,7 @@
 					href="https://x.com/st0x_io"
 					target="_blank"
 					rel="noopener noreferrer"
-					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-text-2 transition-all hover:bg-yellow-500/20 hover:text-accent"
 					aria-label="X"
 				>
 					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
@@ -2258,7 +2188,7 @@
 					href="https://t.me/+oIzo_I9xi745ODU0"
 					target="_blank"
 					rel="noopener noreferrer"
-					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-text-2 transition-all hover:bg-yellow-500/20 hover:text-accent"
 					aria-label="Telegram"
 				>
 					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
@@ -2271,7 +2201,7 @@
 					href="https://www.linkedin.com/company/st0x"
 					target="_blank"
 					rel="noopener noreferrer"
-					class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-400 transition-all hover:bg-yellow-500/20 hover:text-yellow-500"
+					class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-text-2 transition-all hover:bg-yellow-500/20 hover:text-accent"
 					aria-label="LinkedIn"
 				>
 					<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
@@ -2284,12 +2214,12 @@
 
 			<!-- Copyright and Risk Warning -->
 			<div class="text-center">
-				<p class="mb-4 text-xs text-gray-500">
+				<p class="mb-4 text-xs text-text-3">
 					© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
 				</p>
-				<p class="text-[10px] leading-relaxed text-gray-600 sm:text-xs">
-					<span class="text-yellow-600">Risk Warning:</span> Trading tokenized assets involves substantial
-					risk. Past performance does not guarantee future results.
+				<p class="text-[10px] leading-relaxed text-text-muted sm:text-xs">
+					<span class="text-amber-700 dark:text-amber-300">Risk Warning:</span> Trading tokenized assets
+					involves substantial risk. Past performance does not guarantee future results.
 				</p>
 			</div>
 		</div>
@@ -2309,17 +2239,15 @@
 				}
 			}}
 		></button>
-		<div class="relative z-10 flex h-full flex-col bg-gray-950">
-			<div
-				class="flex items-center justify-between border-b border-white/10 px-3 py-3 sm:px-6 sm:py-5"
-			>
+		<div class="relative z-10 flex h-full flex-col bg-surface-1">
+			<div class="flex items-center justify-between border-b border-line px-3 py-3 sm:px-6 sm:py-5">
 				<div class="min-w-0 flex-1">
-					<p class="text-[10px] uppercase tracking-wide text-gray-500 sm:text-xs">Advanced Chart</p>
-					<h2 class="truncate text-base font-semibold text-white sm:text-xl">{modalTitle}</h2>
+					<p class="text-[10px] uppercase tracking-wide text-text-3 sm:text-xs">Advanced Chart</p>
+					<h2 class="truncate text-base font-semibold text-text sm:text-xl">{modalTitle}</h2>
 				</div>
 				<button
 					type="button"
-					class="ml-2 rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+					class="ml-2 rounded-lg p-2 text-text-2 transition hover:bg-surface-2 hover:text-text focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
 					on:click={closeChartModal}
 					aria-label="Close terminal view"
 				>
@@ -2337,7 +2265,7 @@
 				</button>
 			</div>
 			<div class="flex-1 overflow-hidden px-2 pb-2 pt-2 sm:px-6 sm:pb-6 sm:pt-4">
-				<div class="h-full w-full rounded-xl border border-white/10 bg-gray-900 p-1 sm:p-2">
+				<div class="h-full w-full rounded-xl border border-line bg-surface-1 p-1 sm:p-2">
 					{#if tradingViewSymbol}
 						<!--
 							PERF-01: TradingViewChart lives inside the chart modal
@@ -2349,32 +2277,37 @@
 								<LoadingSpinner size="md" text="Loading TradingView chart…" />
 							</div>
 						{:then Mod}
-							<svelte:component this={Mod.default} symbol={tradingViewSymbol} interval="60" />
+							<svelte:component
+								this={Mod.default}
+								symbol={tradingViewSymbol}
+								interval="60"
+								theme={$theme}
+							/>
 						{:catch _err}
 							<div class="flex h-full items-center justify-center text-sm text-red-400">
 								Failed to load TradingView chart. Please reload the page.
 							</div>
 						{/await}
 					{:else}
-						<div class="flex h-full items-center justify-center text-sm text-gray-400">
+						<div class="flex h-full items-center justify-center text-sm text-text-2">
 							TradingView data unavailable for this token.
 						</div>
 					{/if}
 				</div>
 			</div>
 			<div
-				class="flex flex-row gap-2 border-t border-white/10 bg-gradient-to-r from-green-500/10 via-gray-900/80 to-red-500/10 px-3 py-3 sm:justify-end sm:gap-3 sm:px-6 sm:py-6"
+				class="via-surface-1/80 flex flex-row gap-2 border-t border-line bg-gradient-to-r from-green-500/10 to-red-500/10 px-3 py-3 sm:justify-end sm:gap-3 sm:px-6 sm:py-6"
 			>
 				<button
 					type="button"
-					class="flex-1 rounded-xl bg-green-500 px-4 py-3 text-base font-semibold text-white shadow-xl shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:flex-none sm:rounded-2xl sm:px-8 sm:py-4 sm:text-lg"
+					class="flex-1 rounded-xl bg-green-500 px-4 py-3 text-base font-semibold text-text shadow-xl shadow-green-500/30 transition hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400/60 focus:ring-offset-2 focus:ring-offset-surface-1 sm:flex-none sm:rounded-2xl sm:px-8 sm:py-4 sm:text-lg"
 					on:click={() => openTradePanel('Buy', { closeTerminal: false })}
 				>
 					Buy
 				</button>
 				<button
 					type="button"
-					class="flex-1 rounded-xl bg-red-500 px-4 py-3 text-base font-semibold text-white shadow-xl shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-gray-900 sm:flex-none sm:rounded-2xl sm:px-8 sm:py-4 sm:text-lg"
+					class="flex-1 rounded-xl bg-red-500 px-4 py-3 text-base font-semibold text-text shadow-xl shadow-red-500/30 transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/60 focus:ring-offset-2 focus:ring-offset-surface-1 sm:flex-none sm:rounded-2xl sm:px-8 sm:py-4 sm:text-lg"
 					on:click={() => openTradePanel('Sell', { closeTerminal: false })}
 				>
 					Sell

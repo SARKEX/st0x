@@ -18,13 +18,13 @@
 			container: 'flex flex-col items-center justify-center gap-3',
 			spinner:
 				'relative animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500',
-			text: 'font-medium text-gray-300'
+			text: 'font-medium text-text-2'
 		},
 		fullscreen: {
-			container: 'flex flex-col h-screen items-center justify-center bg-gray-900 gap-4',
+			container: 'flex flex-col h-screen items-center justify-center bg-surface-1 gap-4',
 			spinner:
 				'relative animate-spin rounded-full border-4 border-transparent border-b-purple-700 border-l-green-500 border-r-blue-600 border-t-yellow-500',
-			text: 'text-center font-semibold text-white'
+			text: 'text-center font-semibold text-text'
 		},
 		button: {
 			container: 'flex items-center gap-2',
@@ -49,14 +49,14 @@
 	<div class={currentVariant.container}>
 		<div class="relative">
 			<div
-				class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-purple-700 via-blue-600 to-yellow-500 opacity-20"
+				class="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-accent-bright via-accent to-accent-deep opacity-20"
 			></div>
 			<div class="relative {currentSize.spinner} {currentVariant.spinner}"></div>
 			<div class="absolute inset-0 flex items-center justify-center">
 				<div
 					class="h-{size === 'xl' ? '24' : '12'} w-{size === 'xl'
 						? '24'
-						: '12'} rounded-full bg-gray-{size === 'xl' ? '900' : '800'}"
+						: '12'} rounded-full bg-surface-{size === 'xl' ? '1' : '2'}"
 				></div>
 			</div>
 		</div>

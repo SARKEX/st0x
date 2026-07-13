@@ -44,23 +44,23 @@
 	class="rounded-lg px-3.5 py-3"
 	style="background: linear-gradient(180deg, rgba(250,204,21,0.06), rgba(250,204,21,0.02)); border: 1px solid rgba(250,204,21,0.18);"
 >
-	<p class="text-[10px] uppercase tracking-[0.14em] text-yellow-200/80">
+	<p class="text-[10px] uppercase tracking-[0.14em] text-accent">
 		{side === 'Buy' ? 'Your wallet will receive' : 'Your wallet will spend'}
 	</p>
 	<div class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-		<span class="font-mono text-2xl font-semibold tabular-nums text-white">
+		<span class="font-mono text-2xl font-semibold tabular-nums text-text">
 			{empty ? '—' : fmtNum(wrappedAmount, 4)}
 		</span>
-		<span class="text-sm text-yellow-200">{wrappedSymbol}</span>
+		<span class="text-sm text-accent">{wrappedSymbol}</span>
 	</div>
-	<p class="mt-1 text-[11.5px] text-gray-400">
+	<p class="mt-1 text-[11.5px] text-text-2">
 		{#if empty}
 			1 {wrappedSymbol} bundles {ratioLabel}
 			{assetSymbol} shares — you'll see the {wrappedSymbol} count in your wallet, not the share count.
 		{:else}
-			= <span class="font-mono tabular-nums text-gray-200">{fmtNum(sharesAmount, 4)}</span>
+			= <span class="font-mono tabular-nums text-text-2">{fmtNum(sharesAmount, 4)}</span>
 			{assetSymbol} shares ·
-			<span class="font-mono tabular-nums text-gray-200">{fmtUsd(totalUsd)}</span>
+			<span class="font-mono tabular-nums text-text-2">{fmtUsd(totalUsd)}</span>
 		{/if}
 	</p>
 </div>

@@ -186,19 +186,19 @@
 					</svg>
 				</div>
 				<div class="text-center">
-					<h3 class="text-lg font-semibold text-white">Transaction Submitted</h3>
-					<p class="mt-1 text-sm text-gray-400">
+					<h3 class="text-lg font-semibold text-text">Transaction Submitted</h3>
+					<p class="mt-1 text-sm text-text-2">
 						Sending {amount}
 						{selectedToken?.symbol} to
 					</p>
-					<p class="mt-1 font-mono text-xs text-gray-500">
+					<p class="mt-1 font-mono text-xs text-text-3">
 						{recipientAddress.slice(0, 10)}...{recipientAddress.slice(-8)}
 					</p>
 					<a
 						href="{$currentNetwork?.blockExplorer}/tx/{txHash}"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="mt-3 inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+						class="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 					>
 						View on BaseScan
 						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -218,11 +218,10 @@
 			<div class="space-y-4">
 				<!-- From address (read-only) -->
 				<div>
-					<label class="mb-1.5 block text-sm font-medium text-gray-300" for="from-address"
-						>From</label
+					<label class="mb-1.5 block text-sm font-medium text-text-2" for="from-address">From</label
 					>
-					<div id="from-address" class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5">
-						<span class="font-mono text-sm text-gray-400">
+					<div id="from-address" class="rounded-lg border border-line bg-surface-2 px-3 py-2.5">
+						<span class="font-mono text-sm text-text-2">
 							{$dynamicSession?.walletAddress
 								? `${$dynamicSession.walletAddress.slice(
 										0,
@@ -235,7 +234,7 @@
 
 				<!-- To address -->
 				<div>
-					<label class="mb-1.5 block text-sm font-medium text-gray-300" for="recipient">
+					<label class="mb-1.5 block text-sm font-medium text-text-2" for="recipient">
 						Recipient Address
 					</label>
 					<input
@@ -244,7 +243,7 @@
 						placeholder="0x..."
 						value={recipientAddress}
 						on:input={handleAddressInput}
-						class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 font-mono text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+						class="w-full rounded-lg border border-line bg-surface-2 px-3 py-2.5 font-mono text-sm text-text placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 					/>
 					{#if recipientAddress && !isValidAddress}
 						<p class="mt-1 text-xs text-red-400">Invalid Ethereum address</p>
@@ -254,17 +253,17 @@
 				<!-- Token selector and amount -->
 				<div>
 					<div class="mb-1.5 flex items-center justify-between">
-						<label class="text-sm font-medium text-gray-300" for="amount">Amount</label>
+						<label class="text-sm font-medium text-text-2" for="amount">Amount</label>
 						{#if preSelectedBalance}
-							<span class="text-xs text-gray-400">
-								Balance: <span class="text-gray-300">{preSelectedBalance}</span>
+							<span class="text-xs text-text-2">
+								Balance: <span class="text-text-2">{preSelectedBalance}</span>
 							</span>
 						{/if}
 					</div>
 					<div class="flex gap-2">
 						<select
 							bind:value={selectedTokenSymbol}
-							class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+							class="rounded-lg border border-line bg-surface-2 px-3 py-2.5 text-sm text-text focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 						>
 							{#each availableTokens as token}
 								<option value={token.symbol}>{token.symbol}</option>
@@ -278,13 +277,13 @@
 								placeholder="0.0"
 								value={amount}
 								on:input={handleAmountInput}
-								class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 pr-14 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+								class="w-full rounded-lg border border-line bg-surface-2 px-3 py-2.5 pr-14 text-sm text-text placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 							/>
 							{#if preSelectedBalanceRaw}
 								<button
 									type="button"
 									on:click={handleMax}
-									class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-gray-700 px-2 py-0.5 text-xs font-medium text-yellow-400 hover:bg-gray-600"
+									class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-surface-3 px-2 py-0.5 text-xs font-medium text-accent hover:bg-gray-600"
 								>
 									MAX
 								</button>

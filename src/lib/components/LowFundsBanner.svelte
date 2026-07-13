@@ -81,7 +81,7 @@
 </script>
 
 {#if showBanner}
-	<div class="relative z-50 bg-blue-600 px-4 py-2.5 text-center text-sm text-white">
+	<div class="relative z-50 bg-iris px-4 py-2.5 text-center text-sm text-text">
 		<div class="mx-auto flex max-w-4xl items-center justify-center gap-2">
 			<svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path
@@ -95,14 +95,14 @@
 			<button
 				type="button"
 				on:click={handleDeposit}
-				class="ml-1 font-semibold underline underline-offset-2 transition hover:text-blue-100"
+				class="ml-1 font-semibold underline underline-offset-2 transition hover:text-iris"
 			>
 				Deposit to start trading
 			</button>
 			<button
 				type="button"
 				on:click={handleDismiss}
-				class="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-white/80 transition hover:bg-white/10 hover:text-white"
+				class="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-text-2 transition hover:bg-surface-3 hover:text-text"
 				aria-label="Dismiss"
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -730,27 +730,25 @@
 		<!-- Row 1: Trade History (2/3) -->
 		<div
 			data-testid="trade-history-chart"
-			class="flex min-h-96 flex-col lg:col-span-2 xl:col-span-2 xl:row-span-2"
+			class="flex min-h-96 flex-col rounded-2xl border border-line bg-overlay-1 p-5 backdrop-blur lg:col-span-2 xl:col-span-2 xl:row-span-2"
 		>
 			<div class="pb-3">
 				<div
 					class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
 				>
 					<div>
-						<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">
-							Trade History
-						</h3>
-						<p class="mt-1 text-xs text-gray-500">On-chain trade executions over time</p>
+						<h3 class="text-[15px] font-semibold text-text">Trade History</h3>
+						<p class="mt-1 text-xs text-text-3">On-chain trade executions over time</p>
 					</div>
 					{#if historyRangeOptions.length > 0}
-						<div class="flex items-center gap-2 self-start">
+						<div class="flex items-center gap-1 self-start rounded-lg bg-overlay-2 p-0.5">
 							{#each historyRangeOptions as option}
 								<button
 									type="button"
-									class={`rounded-md border px-3 py-1 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+									class={`rounded-md px-2 py-1 text-[11px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1 ${
 										historyRange === option.key
-											? 'border-blue-400/60 bg-blue-500/20 text-blue-200'
-											: 'border-white/10 text-gray-400 hover:border-white/25 hover:text-white'
+											? 'bg-blue-500/80 text-white'
+											: 'text-text-2 hover:text-text'
 									}`}
 									aria-pressed={historyRange === option.key}
 									on:click={() => {
@@ -771,7 +769,7 @@
 			<div class="relative flex-1 pt-4">
 				{#if !browser}
 					<div
-						class="absolute inset-4 flex items-center justify-center rounded-lg border border-dashed border-white/10 p-4 text-center text-sm text-gray-400"
+						class="absolute inset-4 flex items-center justify-center rounded-lg border border-dashed border-line p-4 text-center text-sm text-text-2"
 					>
 						Charts are available in a browser environment.
 					</div>
@@ -779,12 +777,12 @@
 					<div class="relative h-96 lg:h-80">
 						<canvas bind:this={historyCanvas} class="absolute inset-0 h-full w-full"></canvas>
 						{#if !chartsReady}
-							<div class="absolute inset-0 flex items-center justify-center bg-gray-900">
+							<div class="absolute inset-0 flex items-center justify-center bg-surface-1">
 								<LoadingSpinner variant="inline" size="md" text="Loading chart data..." />
 							</div>
 						{:else if chartsReady && historyEmpty}
 							<div
-								class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-gray-400"
+								class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-text-2"
 							>
 								No on-chain trades recorded for this token during the selected period.
 							</div>
@@ -797,16 +795,16 @@
 		<!-- Orderbook Depth (spans remaining column) -->
 		<div
 			data-testid="orderbook-depth-chart"
-			class="flex min-h-96 flex-col lg:row-span-1 xl:row-span-2"
+			class="flex min-h-96 flex-col rounded-2xl border border-line bg-overlay-1 p-5 backdrop-blur lg:row-span-1 xl:row-span-2"
 		>
 			<div class="pb-3">
-				<h3 class="text-sm font-semibold uppercase tracking-wide text-gray-400">Orderbook Depth</h3>
-				<p class="mt-1 text-xs text-gray-500">Current on-chain liquidity</p>
+				<h3 class="text-[15px] font-semibold text-text">Orderbook Depth</h3>
+				<p class="mt-1 text-xs text-text-3">Current on-chain liquidity</p>
 			</div>
 			<div class="relative min-h-80 flex-1 pt-4">
 				{#if !browser}
 					<div
-						class="absolute inset-4 flex items-center justify-center rounded-lg border border-dashed border-white/10 p-4 text-center text-sm text-gray-400"
+						class="absolute inset-4 flex items-center justify-center rounded-lg border border-dashed border-line p-4 text-center text-sm text-text-2"
 					>
 						Charts are available in a browser environment.
 					</div>
@@ -818,12 +816,12 @@
 							on:mouseenter={handleDepthChartInspected}
 						></canvas>
 						{#if !chartsReady}
-							<div class="absolute inset-0 flex items-center justify-center bg-gray-900">
+							<div class="absolute inset-0 flex items-center justify-center bg-surface-1">
 								<LoadingSpinner variant="inline" size="md" text="Loading orderbook data..." />
 							</div>
 						{:else if chartsReady && depthEmpty}
 							<div
-								class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-gray-400"
+								class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-text-2"
 							>
 								No active on-chain quotes available for this token.
 							</div>

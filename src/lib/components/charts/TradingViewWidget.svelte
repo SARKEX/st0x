@@ -1,5 +1,6 @@
 <script lang="ts">
 	import TradingViewEmbed from './TradingViewEmbed.svelte';
+	import { theme as appTheme } from '$lib/stores/themeStore';
 
 	export let widgetType:
 		| 'symbol-profile'
@@ -10,10 +11,18 @@
 		| 'symbol-info';
 	export let symbol: string | undefined;
 	export let locale = 'en';
-	export let colorTheme: 'light' | 'dark' = 'dark';
+	// Follows the app theme by default so widgets aren't stuck light in dark mode.
+	// An explicit prop still wins; otherwise it tracks themeStore and re-renders on toggle.
+	export let colorTheme: 'light' | 'dark' | undefined = undefined;
+	$: effectiveColorTheme = colorTheme ?? $appTheme;
 	export let width = '100%';
 	export let height: string | number = '480';
 	export let isTransparent = false;
+	// TradingView quirk (verified empirically): isTransparent:true forces a LIGHT skin
+	// even when colorTheme is 'dark', which left every widget white in dark mode. So only
+	// keep transparency in light mode — where it renders correctly — and force an opaque
+	// (dark) background in dark mode.
+	$: effectiveTransparent = isTransparent && effectiveColorTheme === 'light';
 	export let containerClass = '';
 
 	// Widget-specific props
@@ -54,8 +63,8 @@
 			width,
 			height: normaliseHeight(height),
 			locale,
-			colorTheme,
-			isTransparent
+			colorTheme: effectiveColorTheme,
+			isTransparent: effectiveTransparent
 		};
 
 		switch (widgetType) {
@@ -113,7 +122,7 @@
 {:else}
 	<slot name="fallback">
 		{#if widgetType === 'financials'}
-			<div class="px-4 py-6 text-sm text-gray-400">
+			<div class="px-4 py-6 text-sm text-text-2">
 				TradingView fundamentals are unavailable for this token.
 			</div>
 		{/if}

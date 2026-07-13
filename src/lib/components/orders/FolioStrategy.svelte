@@ -223,36 +223,36 @@
 	<div class="space-y-6 lg:col-span-2">
 		<div>
 			<h3 class="mb-4 text-lg font-semibold">Select Tokens</h3>
-			<p class="mb-6 text-sm text-gray-400">
+			<p class="mb-6 text-sm text-text-2">
 				Select the tokens that you want to use in your portfolio.
 			</p>
 			<div class="grid grid-cols-1 gap-3 sm:gap-4">
 				<div>
-					<span class="mb-2 block text-sm font-medium text-gray-300">Token 1</span>
+					<span class="mb-2 block text-sm font-medium text-text-2">Token 1</span>
 					<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken1} />
 				</div>
 				<div>
-					<span class="mb-2 block text-sm font-medium text-gray-300">Token 2</span>
+					<span class="mb-2 block text-sm font-medium text-text-2">Token 2</span>
 					<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken2} />
 				</div>
 				<div>
-					<span class="mb-2 block text-sm font-medium text-gray-300">Token 3</span>
+					<span class="mb-2 block text-sm font-medium text-text-2">Token 3</span>
 					<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken3} />
 				</div>
 				<div>
-					<span class="mb-2 block text-sm font-medium text-gray-300">Token 4</span>
+					<span class="mb-2 block text-sm font-medium text-text-2">Token 4</span>
 					<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken4} />
 				</div>
 				<div>
-					<span class="mb-2 block text-sm font-medium text-gray-300">Token 5</span>
+					<span class="mb-2 block text-sm font-medium text-text-2">Token 5</span>
 					<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken5} />
 				</div>
 				<div>
-					<span class="mb-2 block text-sm font-medium text-gray-300">Token 6</span>
+					<span class="mb-2 block text-sm font-medium text-text-2">Token 6</span>
 					<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken6} />
 				</div>
 				<div>
-					<span class="mb-2 block text-sm font-medium text-gray-300">Token 7</span>
+					<span class="mb-2 block text-sm font-medium text-text-2">Token 7</span>
 					<TokenSelect options={ALL_TOKENS} bind:selected={selectedToken7} />
 				</div>
 			</div>
@@ -263,11 +263,11 @@
 				<button
 					on:click={() => (showAdvancedOptions = !showAdvancedOptions)}
 					class="relative h-6 w-12 rounded-full transition-colors {showAdvancedOptions
-						? 'bg-blue-500'
-						: 'bg-gray-600'}"
+						? 'bg-accent'
+						: 'bg-text-muted'}"
 				>
 					<div
-						class="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform {showAdvancedOptions
+						class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform {showAdvancedOptions
 							? 'translate-x-6'
 							: 'translate-x-0.5'}"
 					/>
@@ -275,10 +275,10 @@
 				<span class="text-sm font-medium">Show advanced options</span>
 			</div>
 			{#if showAdvancedOptions}
-				<div class="space-y-4 rounded-lg border border-white/5 bg-gray-800/30 p-4">
-					<h4 class="text-sm font-medium text-gray-300">Advanced Options</h4>
+				<div class="space-y-4 rounded-xl border border-line bg-surface-2 p-4">
+					<h4 class="text-sm font-medium text-text-2">Advanced Options</h4>
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Threshold</span>
+						<span class="block text-sm font-medium text-text-2">Threshold</span>
 						<Input
 							type="text"
 							placeholder="0.05"
@@ -287,7 +287,7 @@
 						/>
 					</div>
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Fee</span>
+						<span class="block text-sm font-medium text-text-2">Fee</span>
 						<Input
 							type="text"
 							placeholder="0.003"
@@ -297,7 +297,7 @@
 					</div>
 
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 1 Deposit Amount</span>
+						<span class="block text-sm font-medium text-text-2">Token 1 Deposit Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken1}
 							bind:amount={overrideDepositAmount1}
@@ -306,7 +306,7 @@
 						/>
 					</div>
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 2 Deposit Amount</span>
+						<span class="block text-sm font-medium text-text-2">Token 2 Deposit Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken2}
 							bind:amount={overrideDepositAmount2}
@@ -315,7 +315,7 @@
 						/>
 					</div>
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 3 Deposit Amount</span>
+						<span class="block text-sm font-medium text-text-2">Token 3 Deposit Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken3}
 							bind:amount={overrideDepositAmount3}
@@ -324,7 +324,7 @@
 						/>
 					</div>
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 4 Deposit Amount</span>
+						<span class="block text-sm font-medium text-text-2">Token 4 Deposit Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken4}
 							bind:amount={overrideDepositAmount4}
@@ -333,7 +333,7 @@
 						/>
 					</div>
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 5 Deposit Amount</span>
+						<span class="block text-sm font-medium text-text-2">Token 5 Deposit Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken5}
 							bind:amount={overrideDepositAmount5}
@@ -342,7 +342,7 @@
 						/>
 					</div>
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 6 Deposit Amount</span>
+						<span class="block text-sm font-medium text-text-2">Token 6 Deposit Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken6}
 							bind:amount={overrideDepositAmount6}
@@ -351,7 +351,7 @@
 						/>
 					</div>
 					<div class="grid grid-cols-1 gap-3 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 7 Deposit Amount</span>
+						<span class="block text-sm font-medium text-text-2">Token 7 Deposit Amount</span>
 						<TradeAmountInput
 							amountToken={selectedToken7}
 							bind:amount={overrideDepositAmount7}
@@ -359,106 +359,106 @@
 							bind:isError={overrideDepositAmount7Error}
 						/>
 					</div>
-					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 1 Vault ID</span>
+					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-line pt-4 sm:gap-4">
+						<span class="block text-sm font-medium text-text-2">Token 1 Vault ID</span>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Input {selectedToken1.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={inputVaultId1} bind:isError={inputVaultId1Error} />
 						</div>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Output {selectedToken1.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={outputVaultId1} bind:isError={outputVaultId1Error} />
 						</div>
 					</div>
-					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 2 Vault ID</span>
+					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-line pt-4 sm:gap-4">
+						<span class="block text-sm font-medium text-text-2">Token 2 Vault ID</span>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Input {selectedToken2.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={inputVaultId2} bind:isError={inputVaultId2Error} />
 						</div>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Output {selectedToken2.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={outputVaultId2} bind:isError={outputVaultId2Error} />
 						</div>
 					</div>
-					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 3 Vault ID</span>
+					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-line pt-4 sm:gap-4">
+						<span class="block text-sm font-medium text-text-2">Token 3 Vault ID</span>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Input {selectedToken3.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={inputVaultId3} bind:isError={inputVaultId3Error} />
 						</div>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Output {selectedToken3.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={outputVaultId3} bind:isError={outputVaultId3Error} />
 						</div>
 					</div>
-					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 4 Vault ID</span>
+					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-line pt-4 sm:gap-4">
+						<span class="block text-sm font-medium text-text-2">Token 4 Vault ID</span>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Input {selectedToken4.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={inputVaultId4} bind:isError={inputVaultId4Error} />
 						</div>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Output {selectedToken4.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={outputVaultId4} bind:isError={outputVaultId4Error} />
 						</div>
 					</div>
-					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 5 Vault ID</span>
+					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-line pt-4 sm:gap-4">
+						<span class="block text-sm font-medium text-text-2">Token 5 Vault ID</span>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Input {selectedToken5.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={inputVaultId5} bind:isError={inputVaultId5Error} />
 						</div>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Output {selectedToken5.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={outputVaultId5} bind:isError={outputVaultId5Error} />
 						</div>
 					</div>
-					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 6 Vault ID</span>
+					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-line pt-4 sm:gap-4">
+						<span class="block text-sm font-medium text-text-2">Token 6 Vault ID</span>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Input {selectedToken6.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={inputVaultId6} bind:isError={inputVaultId6Error} />
 						</div>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Output {selectedToken6.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={outputVaultId6} bind:isError={outputVaultId6Error} />
 						</div>
 					</div>
-					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-white/10 pt-4 sm:gap-4">
-						<span class="block text-sm font-medium text-gray-300">Token 7 Vault ID</span>
+					<div class="mt-4 grid grid-cols-1 gap-3 border-t border-line pt-4 sm:gap-4">
+						<span class="block text-sm font-medium text-text-2">Token 7 Vault ID</span>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Input {selectedToken7.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={inputVaultId7} bind:isError={inputVaultId7Error} />
 						</div>
 						<div class="flex flex-col gap-2">
-							<span class="text-left text-sm font-medium text-gray-400">
+							<span class="text-left text-sm font-medium text-text-2">
 								Output {selectedToken7.symbol} Vault ID
 							</span>
 							<VaultIdInput bind:vaultId={outputVaultId7} bind:isError={outputVaultId7Error} />
@@ -473,15 +473,27 @@
 	{#if selectedToken1 && selectedToken2 && selectedToken3 && selectedToken4 && selectedToken5 && selectedToken6 && selectedToken7}
 		<div class="mt-4 space-y-4 lg:mt-0">
 			<div class={containerStyles.cardBordered}>
-				<h4 class="mb-3 text-sm font-medium text-gray-300">Prices</h4>
+				<h4 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-text-2">Prices</h4>
 				<div class="overflow-x-auto">
-					<table class="min-w-full text-sm text-gray-200">
+					<table class="min-w-full text-sm text-text-2">
 						<thead>
 							<tr>
-								<th class="px-2 py-1 text-left">Token</th>
-								<th class="px-2 py-1 text-right">Oracle Price</th>
-								<th class="px-2 py-1 text-right">Price Certainty</th>
-								<th class="px-2 py-1 text-right">Off-chain</th>
+								<th
+									class="px-2 py-1 text-left text-[11px] font-medium uppercase tracking-wide text-text-3"
+									>Token</th
+								>
+								<th
+									class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+									>Oracle Price</th
+								>
+								<th
+									class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+									>Price Certainty</th
+								>
+								<th
+									class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+									>Off-chain</th
+								>
 							</tr>
 						</thead>
 						<tbody>
@@ -490,9 +502,18 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken1?.symbol ?? '-'}</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
 								</tr>
 							{/if}
 							{#if hasValidPriceFeedId(selectedToken2)}
@@ -500,9 +521,18 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken2?.symbol ?? '-'}</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
 								</tr>
 							{/if}
 							{#if hasValidPriceFeedId(selectedToken3)}
@@ -510,9 +540,18 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken3?.symbol ?? '-'}</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
 								</tr>
 							{/if}
 							{#if hasValidPriceFeedId(selectedToken4)}
@@ -520,9 +559,18 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken4?.symbol ?? '-'}</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
 								</tr>
 							{/if}
 							{#if hasValidPriceFeedId(selectedToken5)}
@@ -530,9 +578,18 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken5?.symbol ?? '-'}</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
 								</tr>
 							{/if}
 							{#if hasValidPriceFeedId(selectedToken6)}
@@ -540,9 +597,18 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken6?.symbol ?? '-'}</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
 								</tr>
 							{/if}
 							{#if hasValidPriceFeedId(selectedToken7)}
@@ -550,9 +616,18 @@
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken7?.symbol ?? '-'}</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
-									<td class="px-2 py-1 text-right">-</td>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
+									<td
+										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
+										>-</td
+									>
 								</tr>
 							{/if}
 						</tbody>
@@ -562,83 +637,85 @@
 			</div>
 
 			<div class={containerStyles.cardBordered}>
-				<h4 class="mb-3 text-sm font-medium text-gray-300">Portfolio Order Summary</h4>
+				<h4 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-text-2">
+					Portfolio Order Summary
+				</h4>
 				<div class="space-y-2">
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Threshold</span>
-						<span class="font-medium text-white">{overrideThreshold || '0.05'}</span>
+						<span class="text-text-2">Threshold</span>
+						<span class="font-medium text-text">{overrideThreshold || '0.05'}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Fee</span>
-						<span class="font-medium text-white">{overrideFee || '0.003'}</span>
+						<span class="text-text-2">Fee</span>
+						<span class="font-medium text-text">{overrideFee || '0.003'}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Selected Token 1</span>
-						<span class="font-medium text-white">{selectedToken1.symbol}</span>
+						<span class="text-text-2">Selected Token 1</span>
+						<span class="font-medium text-text">{selectedToken1.symbol}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Selected Token 2</span>
-						<span class="font-medium text-white">{selectedToken2.symbol}</span>
+						<span class="text-text-2">Selected Token 2</span>
+						<span class="font-medium text-text">{selectedToken2.symbol}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Selected Token 3</span>
-						<span class="font-medium text-white">{selectedToken3.symbol}</span>
+						<span class="text-text-2">Selected Token 3</span>
+						<span class="font-medium text-text">{selectedToken3.symbol}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Selected Token 4</span>
-						<span class="font-medium text-white">{selectedToken4.symbol}</span>
+						<span class="text-text-2">Selected Token 4</span>
+						<span class="font-medium text-text">{selectedToken4.symbol}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Selected Token 5</span>
-						<span class="font-medium text-white">{selectedToken5.symbol}</span>
+						<span class="text-text-2">Selected Token 5</span>
+						<span class="font-medium text-text">{selectedToken5.symbol}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Selected Token 6</span>
-						<span class="font-medium text-white">{selectedToken6.symbol}</span>
+						<span class="text-text-2">Selected Token 6</span>
+						<span class="font-medium text-text">{selectedToken6.symbol}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Selected Token 7</span>
-						<span class="font-medium text-white">{selectedToken7.symbol}</span>
+						<span class="text-text-2">Selected Token 7</span>
+						<span class="font-medium text-text">{selectedToken7.symbol}</span>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Token 1 Deposit Amount</span>
-						<span class="font-medium text-white"
+						<span class="text-text-2">Token 1 Deposit Amount</span>
+						<span class="font-medium text-text"
 							>{formatUnits(overrideDepositAmount1 ?? 0n, selectedToken1.decimals)}</span
 						>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Token 2 Deposit Amount</span>
-						<span class="font-medium text-white"
+						<span class="text-text-2">Token 2 Deposit Amount</span>
+						<span class="font-medium text-text"
 							>{formatUnits(overrideDepositAmount2 ?? 0n, selectedToken2.decimals)}</span
 						>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Token 3 Deposit Amount</span>
-						<span class="font-medium text-white"
+						<span class="text-text-2">Token 3 Deposit Amount</span>
+						<span class="font-medium text-text"
 							>{formatUnits(overrideDepositAmount3 ?? 0n, selectedToken3.decimals)}</span
 						>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Token 4 Deposit Amount</span>
-						<span class="font-medium text-white"
+						<span class="text-text-2">Token 4 Deposit Amount</span>
+						<span class="font-medium text-text"
 							>{formatUnits(overrideDepositAmount4 ?? 0n, selectedToken4.decimals)}</span
 						>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Token 5 Deposit Amount</span>
-						<span class="font-medium text-white"
+						<span class="text-text-2">Token 5 Deposit Amount</span>
+						<span class="font-medium text-text"
 							>{formatUnits(overrideDepositAmount5 ?? 0n, selectedToken5.decimals)}</span
 						>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Token 6 Deposit Amount</span>
-						<span class="font-medium text-white"
+						<span class="text-text-2">Token 6 Deposit Amount</span>
+						<span class="font-medium text-text"
 							>{formatUnits(overrideDepositAmount6 ?? 0n, selectedToken6.decimals)}</span
 						>
 					</div>
 					<div class="flex justify-between text-sm">
-						<span class="text-gray-400">Token 7 Deposit Amount</span>
-						<span class="font-medium text-white"
+						<span class="text-text-2">Token 7 Deposit Amount</span>
+						<span class="font-medium text-text"
 							>{formatUnits(overrideDepositAmount7 ?? 0n, selectedToken7.decimals)}</span
 						>
 					</div>

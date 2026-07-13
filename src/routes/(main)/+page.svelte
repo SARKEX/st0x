@@ -11,6 +11,7 @@
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import QuickTrade from '$lib/components/QuickTrade.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
 	import Footer from '$lib/components/Footer.svelte';
 	import { track, trackPageView } from '$lib/services/analytics';
@@ -172,170 +173,89 @@
 	<section class="px-4 pb-16 pt-20 sm:px-6 sm:pb-24 sm:pt-28 lg:px-8 lg:pb-32 lg:pt-36">
 		<div class="mx-auto max-w-5xl text-center">
 			<h1
-				class="mb-6 text-3xl font-bold tracking-tight text-white sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
+				class="mb-6 text-3xl font-bold tracking-tight text-text sm:mb-8 sm:text-4xl lg:text-5xl xl:text-6xl"
 			>
 				Tokenised Equities.<br class="sm:hidden" />
-				<span class="text-yellow-400">{displayedText}</span><span
-					class="animate-blink text-yellow-400">|</span
+				<span class="text-accent">{displayedText}</span><span class="animate-blink text-accent"
+					>|</span
 				>
 			</h1>
 
 			<!-- Rewards APY Banner - temporarily hidden -->
 
-			<!-- QuickTrade widget centered below hero -->
-			<div class="flex w-full flex-col items-center gap-4 px-2 sm:px-0">
+			<div
+				class="mx-auto flex w-full max-w-md flex-col items-stretch gap-5 px-2 text-left sm:px-0 md:max-w-none"
+			>
 				<QuickTrade />
+			</div>
+
+			<div class="mt-4 flex justify-center">
 				<button
 					type="button"
-					class="w-full max-w-md rounded-lg bg-yellow-500 px-6 py-3 text-sm font-medium text-black transition hover:bg-yellow-400 sm:w-auto sm:py-2.5"
-					on:click={() => goto('/trade/0x2289249984f1fa2ce86c4e8867e7eb819ea7df95')}
-				>
-					Launch Trading Terminal
-				</button>
-				<button
-					type="button"
-					class="hidden text-sm text-gray-400 underline decoration-gray-500 underline-offset-4 transition hover:text-yellow-500 hover:decoration-yellow-500 sm:inline-block"
+					class="hidden text-sm text-text-3 underline decoration-text-muted underline-offset-4 transition hover:text-accent hover:decoration-accent sm:inline-block"
 					on:click={startTour}
 				>
 					New? Take the tour 👉
 				</button>
 			</div>
 
-			<!-- Trust Indicators -->
-			<div class="mt-12 grid grid-cols-3 gap-3 text-center sm:mt-20 sm:gap-10 lg:mt-24 lg:gap-16">
-				<!-- Decentralised -->
-				<div class="p-2 sm:p-5">
-					<div class="mb-2 flex justify-center sm:mb-4">
+			<!-- Why st0x — trust pillars -->
+			<div class="mt-16 sm:mt-24 lg:mt-28">
+				<p class="text-accent/70 text-xs font-semibold uppercase tracking-[0.2em]">Why st0x</p>
+				<h2 class="mt-3 text-2xl font-bold tracking-tight text-text sm:text-[32px]">
+					Tokenised equities &amp; yield, done properly.
+				</h2>
+				<div class="mt-10 grid gap-8 sm:grid-cols-3">
+					<!-- Decentralised -->
+					<div class="flex flex-col items-center text-center">
 						<div
-							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
 						>
-							<svg
-								class="h-6 w-6 text-yellow-500 sm:h-10 sm:w-10"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
-								/>
-							</svg>
+							<Icon name="blocks" className="h-7 w-7" />
 						</div>
+						<h3 class="mt-4 text-base font-semibold text-text">Decentralised</h3>
+						<p class="mt-2 max-w-[17rem] text-[13.5px] leading-relaxed text-text-2">
+							Withdraw to your wallet. Compatible with DeFi protocols.
+						</p>
 					</div>
-					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
-						Decentralised
-					</h3>
-					<p class="hidden text-sm text-gray-300 sm:block sm:text-base">
-						Withdraw to your wallet. Compatible with DeFi protocols
-					</p>
-				</div>
 
-				<!-- Exchange-Linked Liquidity -->
-				<div class="p-2 sm:p-5">
-					<div class="mb-2 flex justify-center sm:mb-4">
+					<!-- Liquid -->
+					<div class="flex flex-col items-center text-center">
 						<div
-							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
 						>
-							<svg
-								class="h-8 w-8 text-yellow-500 sm:h-12 sm:w-12"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 36 24"
-							>
-								<!-- Swap arrows in center -->
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M21 5l3 3-3 3"
-								/>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M24 8H16a4 4 0 00-4 4"
-								/>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M15 19l-3-3 3-3"
-								/>
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M12 16h8a4 4 0 004-4"
-								/>
-								<!-- Institution building (top-left) -->
-								<g transform="translate(1, 1)" stroke-width="1.2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M0 4l4.5-3 4.5 3" />
-									<path d="M1 4v4" />
-									<path d="M4.5 4v4" />
-									<path d="M8 4v4" />
-									<path stroke-linecap="round" d="M0 8h9" />
-								</g>
-								<!-- Ethereum diamond (bottom-right) -->
-								<g transform="translate(28, 14)" stroke-width="1.2">
-									<path d="M3.5 0L7 5L3.5 6.5L0 5L3.5 0Z" />
-									<path d="M0 5L3.5 4L7 5" />
-									<path d="M3.5 6.5L7 5L3.5 9.5L0 5L3.5 6.5Z" />
-								</g>
-							</svg>
+							<Icon name="swap" className="h-7 w-7" />
 						</div>
+						<h3 class="mt-4 text-base font-semibold text-text">Liquid</h3>
+						<p class="mt-2 max-w-[17rem] text-[13.5px] leading-relaxed text-text-2">
+							Supply bridged real-time from stock markets. 24/7 trading.
+						</p>
 					</div>
-					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
-						Liquid
-					</h3>
-					<p class="hidden text-sm text-gray-300 sm:block sm:text-base">
-						Supply bridged real-time from stock markets. 24/7 trading.
-					</p>
-				</div>
 
-				<!-- Fully Backed -->
-				<div class="p-2 sm:p-5">
-					<div class="mb-2 flex justify-center sm:mb-4">
+					<!-- 1:1 Collateralised -->
+					<div class="flex flex-col items-center text-center">
 						<div
-							class="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10 sm:h-20 sm:w-20"
+							class="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
 						>
-							<svg
-								class="h-6 w-6 text-yellow-500 sm:h-10 sm:w-10"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<!-- Layered security circles with $ -->
-								<circle cx="12" cy="12" r="10" stroke-width="1.5" />
-								<circle cx="12" cy="12" r="7" stroke-dasharray="3 2" stroke-width="1.5" />
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="1.5"
-									d="M12 9c-1.1 0-2 .6-2 1.3s.9 1.3 2 1.3 2 .6 2 1.3-.9 1.3-2 1.3m0-5.2c.7 0 1.4.3 1.7.6M12 9v-.5m0 .5v5.2m0 0v.5m0-.5c-.7 0-1.4-.3-1.7-.6"
-								/>
-							</svg>
+							<Icon name="shield" className="h-7 w-7" />
 						</div>
+						<h3 class="mt-4 text-base font-semibold text-text">1:1 Collateralised</h3>
+						<p class="mt-2 max-w-[17rem] text-[13.5px] leading-relaxed text-text-2">
+							Every token fully collateralised with a legal right of exchange.
+						</p>
 					</div>
-					<h3 class="mb-1 text-sm font-semibold text-white sm:mb-2 sm:text-xl lg:text-2xl">
-						1:1 Collateralised
-					</h3>
-					<p class="hidden text-sm text-gray-300 sm:block sm:text-base">
-						Every token fully collateralised with a legal right of exchange.
-					</p>
 				</div>
 			</div>
 
 			<!-- Pioneer Logos -->
 			<div class="relative z-0 mt-8 text-center sm:mt-16">
-				<p class="mb-3 text-xs text-gray-400 sm:mb-4 sm:text-sm">Built by pioneers from</p>
-				<div class="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
+				<p class="mb-5 text-[13px] font-medium text-text-2">Built by pioneers from</p>
+				<div class="flex flex-wrap items-center justify-center gap-x-10 gap-y-5">
 					{#each pioneerLogos as logo}
 						<img
 							src={logo.src}
 							alt={logo.alt}
-							class="h-4 w-auto opacity-60 grayscale transition-opacity hover:opacity-100 hover:grayscale-0 sm:h-6"
+							class="pioneer-logo h-4 w-auto opacity-60 grayscale transition-opacity hover:opacity-100 hover:grayscale-0 sm:h-6"
 							style="transform: scale({logo.scale})"
 							loading="lazy"
 						/>
@@ -353,31 +273,35 @@
 					<LoadingSpinner variant="fullscreen" size="lg" text="Loading assets..." />
 				</div>
 			{:else if vaultsError}
-				<div class="flex w-full items-center justify-center py-16 text-sm text-red-400">
+				<div class="flex w-full items-center justify-center py-16 text-sm text-down">
 					Failed to load assets: {vaultsError}
 				</div>
 			{:else if hasVaults}
-				<div class="overflow-hidden rounded-xl" data-tutorial="token-list">
+				<div
+					class="overflow-hidden rounded-xl border border-line bg-overlay-1"
+					data-tutorial="token-list"
+				>
 					<Table>
 						<thead>
 							<tr>
 								<th
-									class="sticky left-0 z-10 px-3 py-3 text-left text-xs font-medium text-gray-400 sm:px-5 sm:py-4"
+									class="sticky left-0 z-10 px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-3 sm:px-5"
 									>Token</th
 								>
-								<th class="px-3 py-3 text-left text-xs font-medium text-gray-400 sm:px-5 sm:py-4"
+								<th
+									class="px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-3 sm:px-5"
 									>Price</th
 								>
 								<th
-									class="hidden px-3 py-3 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-5 sm:py-4"
+									class="hidden px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-3 sm:table-cell sm:px-5"
 									>TVL</th
 								>
 								<th
-									class="hidden px-3 py-3 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-5 sm:py-4"
+									class="hidden px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-3 sm:table-cell sm:px-5"
 									>Bridged On-Chain</th
 								>
 								<th
-									class="hidden px-3 py-3 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-5 sm:py-4"
+									class="hidden px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-3 sm:table-cell sm:px-5"
 									>Holders</th
 								>
 								<th class="w-10"></th>
@@ -386,7 +310,7 @@
 						<tbody>
 							{#if !processedTokens.length}
 								<tr>
-									<td colspan="6" class="px-5 py-8 text-center text-sm text-gray-400">
+									<td colspan="6" class="px-5 py-8 text-center text-sm text-text-3">
 										No assets available.
 									</td>
 								</tr>
@@ -400,7 +324,7 @@
 											? bridgedSupply * displayPrice
 											: null}
 									<tr
-										class="cursor-pointer transition-all hover:bg-yellow-500/5"
+										class="cursor-pointer transition-all hover:bg-surface-2"
 										on:click={() => {
 											track('token_clicked', {
 												token_symbol: token.symbol,
@@ -411,19 +335,21 @@
 										}}
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
-											<TokenDisplay
-												logoUrl={findApiTokenByAnyAddress(apiTokens, token.address)?.logoUrl}
-												symbol={token.symbol}
-												name={token.name}
-											/>
+											<div class="flex items-center gap-2">
+												<TokenDisplay
+													logoUrl={findApiTokenByAnyAddress(apiTokens, token.address)?.logoUrl}
+													symbol={token.symbol}
+													showName={false}
+												/>
+											</div>
 										</td>
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
-											<div class="font-medium text-white">
+											<div class="font-mono font-medium text-text">
 												{Number.isFinite(displayPrice) ? `$${displayPrice.toFixed(2)}` : 'N/A'}
 											</div>
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
-											<div class="text-sm text-gray-300">
+											<div class="font-mono text-sm text-text-2">
 												{#if marketCap != null}
 													{marketCap >= 1_000_000
 														? `$${(marketCap / 1_000_000).toFixed(2)}M`
@@ -436,29 +362,17 @@
 											</div>
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
-											<div class="text-sm text-gray-300">
+											<div class="font-mono text-sm text-text-2">
 												{bridgedSupply >= 1000
 													? `${(bridgedSupply / 1000).toFixed(2)}K`
 													: bridgedSupply.toFixed(2)}
 											</div>
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
-											<div class="text-sm text-gray-300">{token.totalHolders}</div>
+											<div class="font-mono text-sm text-text-2">{token.totalHolders}</div>
 										</td>
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
-											<svg
-												class="h-4 w-4 text-gray-500"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M9 5l7 7-7 7"
-												/>
-											</svg>
+											<Icon name="arrowRight" className="h-4 w-4 text-text-muted" />
 										</td>
 									</tr>
 								{/each}
@@ -468,7 +382,7 @@
 				</div>
 
 				<!-- More Coming Soon -->
-				<p class="mt-6 text-center text-base text-gray-400">More equities coming soon!</p>
+				<p class="mt-5 text-center text-sm text-text-3">More equities coming soon</p>
 			{:else}
 				<div class="flex w-full items-center justify-center py-16">
 					<EmptyState
@@ -487,6 +401,17 @@
 	/* Blinking cursor animation for typewriter */
 	.animate-blink {
 		animation: blink 1s step-end infinite;
+	}
+
+	/* Pioneer logos are light/white assets (drawn for the dark shell). In light mode
+	   darken them to a legible silhouette instead of near-invisible light-grey. */
+	:global([data-theme='light']) .pioneer-logo {
+		filter: brightness(0);
+		opacity: 0.55;
+	}
+	:global([data-theme='light']) .pioneer-logo:hover {
+		filter: brightness(0);
+		opacity: 0.85;
 	}
 
 	@keyframes blink {
