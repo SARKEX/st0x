@@ -41,8 +41,10 @@ import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
  */
 export interface DeployEventContext {
 	order_type: 'limit' | 'dca';
+	order_side: 'buy' | 'sell';
 	asset_symbol: string;
 	payment_symbol: string;
+	trade_id: string;
 }
 
 /** Lazily resolve DotrainRegistry from the WASM-based orderbook package. */
@@ -259,6 +261,7 @@ export const getDcaDeploymentArgs = async (
 	// from the caller's eventContext — no silent fallback (checker fix #6).
 	trackTradeEvent('sign_trade', {
 		order_type: eventContext.order_type,
+		order_side: eventContext.order_side,
 		asset_symbol: eventContext.asset_symbol,
 		payment_symbol: eventContext.payment_symbol
 	});
@@ -313,6 +316,7 @@ export const getLimitOrderDeploymentArgs = async (
 	// OBS-07: see getDcaDeploymentArgs for emission rationale.
 	trackTradeEvent('sign_trade', {
 		order_type: eventContext.order_type,
+		order_side: eventContext.order_side,
 		asset_symbol: eventContext.asset_symbol,
 		payment_symbol: eventContext.payment_symbol
 	});

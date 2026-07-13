@@ -16,9 +16,7 @@ const componentSource = readFileSync(componentPath, 'utf-8');
 
 describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 	it('Test L1: imports trade lifecycle modules', () => {
-		expect(componentSource).toMatch(
-			/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/
-		);
+		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/);
 		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeId['"]/);
 		expect(componentSource).toMatch(/mintTradeId/);
 		expect(componentSource).toMatch(/clearTradeId/);
@@ -56,9 +54,7 @@ describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 	it('Test L4b: warning-deferred paths (proceedWithDeploy + cancelDeploy) call clearTradeId', () => {
 		// Pitfall 2 (T-2-E) — warning-acknowledged AND warning-cancel paths must
 		// clear the deferred trade_id minted by handleDeploy.
-		const proceedFn = componentSource.match(
-			/const proceedWithDeploy = [\s\S]*?\n\s*\};/
-		);
+		const proceedFn = componentSource.match(/const proceedWithDeploy = [\s\S]*?\n\s*\};/);
 		const cancelFn = componentSource.match(/const cancelDeploy = [\s\S]*?\n\s*\};/);
 		expect(proceedFn).toBeTruthy();
 		expect(cancelFn).toBeTruthy();
@@ -66,10 +62,26 @@ describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 		expect(cancelFn![0]).toMatch(/clearTradeId\(\)/);
 	});
 
+	it('Test L4c: component teardown clears a trade id deferred to the warning modal', () => {
+		const destroyFn = componentSource.match(/onDestroy\(\(\) => \{[\s\S]*?\n\s*\}\);/);
+		expect(destroyFn).toBeTruthy();
+		expect(destroyFn![0]).toMatch(/if \(pendingTradeId\)[\s\S]*?clearTradeId\(\)/);
+		expect(destroyFn![0]).toMatch(/pendingTradeId = null/);
+	});
+
 	it('Test L5: emits trade_failed with order_type "limit" and error_class on error path', () => {
 		expect(componentSource).toMatch(
 			/trackTradeEvent\(\s*['"]trade_failed['"][\s\S]*?order_type:\s*['"]limit['"][\s\S]*?error_class:/
 		);
+	});
+
+	it('Test L5b: warning-acknowledged deployment failures emit trade_failed', () => {
+		const proceedFn = componentSource.match(/const proceedWithDeploy = [\s\S]*?\n\s*\};/);
+		expect(proceedFn).toBeTruthy();
+		expect(proceedFn![0]).toMatch(
+			/catch \(error\)[\s\S]*?trackTradeEvent\(\s*['"]trade_failed['"]/
+		);
+		expect(proceedFn![0]).toMatch(/error_class:\s*classifyError\(error\)/);
 	});
 
 	it('Test L6: panel-level events route through trackTradeEvent', () => {
@@ -88,9 +100,7 @@ describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 	});
 
 	it('Test L8: component imports the shared classifyError', () => {
-		expect(componentSource).toMatch(
-			/from\s+['"]\$lib\/services\/observability\/classifyError['"]/
-		);
+		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/classifyError['"]/);
 		expect(componentSource).toMatch(/classifyError\s*\(/);
 	});
 
@@ -99,5 +109,7 @@ describe('LimitOrder.svelte event instrumentation (Plan 02-03 Task 2a)', () => {
 		// (Task 2c modifies the orderDeployment.ts signature; LimitOrder must update
 		// the call site to satisfy the typed contract).
 		expect(componentSource).toMatch(/order_type:\s*['"]limit['"]/);
+		expect(componentSource).toMatch(/trade_id:\s*(tradeId|pendingTradeId)/);
+		expect(componentSource).toMatch(/await\s+transactionStore\.handleLimitDeploy/);
 	});
 });

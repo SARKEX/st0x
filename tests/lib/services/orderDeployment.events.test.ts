@@ -40,6 +40,8 @@ describe('orderDeployment.ts mandatory eventContext (Plan 02-03 Task 2c)', () =>
 		expect(orderDeploymentSource).toMatch(
 			/export\s+(interface|type)\s+DeployEventContext[\s\S]*?order_type:\s*['"]limit['"]\s*\|\s*['"]dca['"]/
 		);
+		expect(orderDeploymentSource).toMatch(/trade_id:\s*string/);
+		expect(orderDeploymentSource).toMatch(/order_side:\s*['"]buy['"]\s*\|\s*['"]sell['"]/);
 	});
 
 	it('Test O3: getLimitOrderDeploymentArgs requires eventContext as second parameter (no `?`, no default)', () => {
@@ -55,19 +57,22 @@ describe('orderDeployment.ts mandatory eventContext (Plan 02-03 Task 2c)', () =>
 		);
 	});
 
-	it('Test O5: emits sign_trade with order_type from eventContext (not hardcoded literal)', () => {
-		expect(orderDeploymentSource).toMatch(
-			/trackTradeEvent\(\s*['"]sign_trade['"][\s\S]{0,300}?order_type:\s*eventContext\.order_type/
+	it('Test O5: emits sign_trade with order type and side from eventContext', () => {
+		const signCalls = orderDeploymentSource.match(
+			/trackTradeEvent\(\s*['"]sign_trade['"][\s\S]*?\n\s*\}\);/g
 		);
+		expect(signCalls).toHaveLength(2);
+		for (const call of signCalls ?? []) {
+			expect(call).toMatch(/order_type:\s*eventContext\.order_type/);
+			expect(call).toMatch(/order_side:\s*eventContext\.order_side/);
+		}
 	});
 
 	it("Test O6: NO silent 'limit' literal default in trackTradeEvent calls (checker fix #6)", () => {
 		// All trackTradeEvent invocations in orderDeployment.ts MUST use
 		// eventContext.order_type. A bare `order_type: 'limit'` literal would be
 		// the silent-fallback bug — assert it's absent.
-		const calls = orderDeploymentSource.match(
-			/trackTradeEvent\([\s\S]*?\}\s*\)/g
-		) ?? [];
+		const calls = orderDeploymentSource.match(/trackTradeEvent\([\s\S]*?\}\s*\)/g) ?? [];
 		for (const call of calls) {
 			// Either uses eventContext.order_type, OR doesn't include order_type.
 			// Hardcoded 'limit' or 'dca' literals are a bug.
@@ -114,5 +119,28 @@ describe('deployTransactionStore.ts plumbs eventContext through (Plan 02-03 Task
 		// only when an eventContext is plumbed through (from limit/DCA paths).
 		expect(deployStoreSource).toMatch(/trackTradeEvent\(\s*['"]broadcast['"]/);
 		expect(deployStoreSource).toMatch(/trackTradeEvent\(\s*['"]confirmed['"]/);
+	});
+
+	it('Test S4: reports handled calldata, signing, submission, and confirmation failures to Sentry', () => {
+		expect(deployStoreSource).toMatch(/captureTradeFlowError/);
+		for (const stage of ['calldata', 'approval', 'signing', 'submission', 'confirmation']) {
+			expect(deployStoreSource).toContain(`'${stage}'`);
+		}
+		expect(deployStoreSource).toMatch(/tradeId:\s*eventContext\.trade_id/);
+	});
+
+	it('Test S5: uses one operation name for balance reads and insufficient-balance failures', () => {
+		expect(deployStoreSource).toContain("'check_balances'");
+		expect(deployStoreSource).not.toContain("'check_balance'");
+	});
+
+	it('Test S6: restores and clears the explicit trade id around deferred modal deployment', () => {
+		const confirmationStart = deployStoreSource.indexOf('export const showRainlangConfirmation');
+		expect(confirmationStart).toBeGreaterThan(-1);
+		const confirmationBlock = deployStoreSource.slice(confirmationStart, confirmationStart + 2400);
+		expect(confirmationBlock).toMatch(/onDeploy:\s*async/);
+		expect(confirmationBlock).toMatch(/setTradeId\(eventContext\.trade_id\)/);
+		expect(confirmationBlock).toMatch(/await handleStrategyDeployment/);
+		expect(confirmationBlock).toMatch(/finally[\s\S]*?clearTradeId\(\)/);
 	});
 });

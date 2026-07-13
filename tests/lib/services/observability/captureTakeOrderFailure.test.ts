@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as Sentry from '@sentry/sveltekit';
 import {
 	captureTakeOrderFailure,
+	getTakeOrderFailureStage,
 	type TakeOrderTranscript,
 	type TakeOrderFailureReason
 } from '$lib/services/observability/captureTakeOrderFailure';
@@ -66,11 +67,18 @@ describe('captureTakeOrderFailure', () => {
 		captureTakeOrderFailure(err, transcript, 'no_quotes_available');
 
 		expect(captureSpy).toHaveBeenCalledTimes(1);
-		const [capturedErr, opts] = captureSpy.mock.calls[0] as [unknown, { tags?: Record<string, string>; extra?: Record<string, unknown> }];
+		const [capturedErr, opts] = captureSpy.mock.calls[0] as [
+			unknown,
+			{ tags?: Record<string, string>; extra?: Record<string, unknown> }
+		];
 		expect(capturedErr).toBe(err);
 		expect(opts?.tags).toMatchObject({
+			feature: 'trade_flow',
 			failure_reason: 'no_quotes_available',
-			side: 'ask'
+			trade_stage: 'quote',
+			order_type: 'market',
+			order_side: 'buy',
+			maker_side: 'ask'
 		});
 		// `extra` must include the entire transcript (fullQuotePayload + onChainStateRead)
 		expect(opts?.extra).toBeDefined();
@@ -94,6 +102,29 @@ describe('captureTakeOrderFailure', () => {
 		expect(consoleSpy).toHaveBeenCalled();
 	});
 
+	it('maps quote, calldata, signing, and submission failures to critical-flow stages', () => {
+		expect(getTakeOrderFailureStage('no_quotes_available', new Error('none'))).toBe('quote');
+		expect(getTakeOrderFailureStage('unhydrated_fills', new Error('missing order data'))).toBe(
+			'calldata'
+		);
+		expect(getTakeOrderFailureStage('aggregated_failed', new Error('User rejected request'))).toBe(
+			'signing'
+		);
+		expect(
+			getTakeOrderFailureStage(
+				'caught_exception',
+				new Error('Failed to generate calldata'),
+				'calldata'
+			)
+		).toBe('calldata');
+		expect(getTakeOrderFailureStage('caught_exception', new Error('missing ratio'), 'quote')).toBe(
+			'quote'
+		);
+		expect(getTakeOrderFailureStage('aggregated_failed', new Error('RPC broadcast failed'))).toBe(
+			'submission'
+		);
+	});
+
 	it('emits a `[take-order failed]` console.error line with JSON-stringified payload', () => {
 		vi.spyOn(Sentry, 'captureException').mockImplementation(() => 'evt-id');
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -102,9 +133,7 @@ describe('captureTakeOrderFailure', () => {
 		captureTakeOrderFailure(new Error('boom'), transcript, 'caught_exception');
 
 		// Find the `[take-order failed]` invocation (there should be exactly one such line)
-		const matchingCall = consoleSpy.mock.calls.find(
-			(call) => call[0] === '[take-order failed]'
-		);
+		const matchingCall = consoleSpy.mock.calls.find((call) => call[0] === '[take-order failed]');
 		expect(matchingCall, '[take-order failed] line was not emitted').toBeDefined();
 		expect(matchingCall).toHaveLength(2);
 
@@ -122,6 +151,34 @@ describe('captureTakeOrderFailure', () => {
 		expect(parsed.onChainStateRead).toEqual(transcript.onChainStateRead);
 	});
 
+	it('keeps expected wallet failures at warning severity', () => {
+		const captureSpy = vi.spyOn(Sentry, 'captureException');
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		captureTakeOrderFailure(
+			new Error('User rejected the request'),
+			makeTranscript(),
+			'aggregated_failed',
+			'submission'
+		);
+		captureTakeOrderFailure(
+			new Error('Insufficient balance'),
+			makeTranscript(),
+			'aggregated_failed',
+			'submission'
+		);
+		captureTakeOrderFailure(
+			new Error('RPC broadcast failed'),
+			makeTranscript(),
+			'aggregated_failed',
+			'submission'
+		);
+
+		expect(captureSpy.mock.calls[0][1]).toMatchObject({ level: 'warning' });
+		expect(captureSpy.mock.calls[1][1]).toMatchObject({ level: 'warning' });
+		expect(captureSpy.mock.calls[2][1]).toMatchObject({ level: 'error' });
+	});
+
 	it('does not throw back to caller when Sentry.captureException throws (T-07-04)', () => {
 		vi.spyOn(Sentry, 'captureException').mockImplementation(() => {
 			throw new Error('Sentry SDK exploded');
@@ -136,7 +193,9 @@ describe('captureTakeOrderFailure', () => {
 
 		// The Sentry-failure log line is emitted via console.error
 		const sentryFailureLine = consoleSpy.mock.calls.find(
-			(call) => typeof call[0] === 'string' && call[0].includes('[captureTakeOrderFailure] Sentry sink failed')
+			(call) =>
+				typeof call[0] === 'string' &&
+				call[0].includes('[captureTakeOrderFailure] Sentry sink failed')
 		);
 		expect(sentryFailureLine).toBeDefined();
 
@@ -209,14 +268,13 @@ describe('captureTakeOrderFailure', () => {
 			captureTakeOrderFailure(new Error('x'), makeTranscript(), 'no_quotes_available');
 
 			expect(captureSpy).toHaveBeenCalledTimes(1);
-			const [, opts] = captureSpy.mock.calls[0] as [
-				unknown,
-				{ tags: Record<string, string> }
-			];
+			const [, opts] = captureSpy.mock.calls[0] as [unknown, { tags: Record<string, string> }];
 			expect(opts.tags.trade_id).toBe(fakeTradeId);
 			// Existing tags still present + unchanged (Test 4 regression guard)
 			expect(opts.tags.failure_reason).toBe('no_quotes_available');
-			expect(opts.tags.side).toBe('ask');
+			expect(opts.tags.order_side).toBe('buy');
+			expect(opts.tags.maker_side).toBe('ask');
+			expect(opts.tags).not.toHaveProperty('side');
 		});
 
 		it('Test 2: omits trade_id key from tags when getCurrentTradeId returns null', () => {
@@ -226,33 +284,24 @@ describe('captureTakeOrderFailure', () => {
 
 			captureTakeOrderFailure(new Error('x'), makeTranscript(), 'no_quotes_available');
 
-			const [, opts] = captureSpy.mock.calls[0] as [
-				unknown,
-				{ tags: Record<string, string> }
-			];
+			const [, opts] = captureSpy.mock.calls[0] as [unknown, { tags: Record<string, string> }];
 			// Critical: literally no `trade_id` key — assert via Object.keys, not `== null`,
 			// per acceptance criteria. The conditional spread `...(tradeId ? {...} : {})`
 			// must produce an object with no `trade_id` property at all.
 			expect(Object.keys(opts.tags)).not.toContain('trade_id');
 		});
 
-		it('Test 4: failure_reason and side tags unchanged regardless of trade_id presence', () => {
+		it('Test 4: failure_reason and explicit side tags are stable regardless of trade_id', () => {
 			vi.mocked(getCurrentTradeId).mockReturnValue('550e8400-e29b-41d4-a716-446655440000');
 			const captureSpy = vi.spyOn(Sentry, 'captureException');
 			vi.spyOn(console, 'error').mockImplementation(() => {});
 
-			captureTakeOrderFailure(
-				new Error('x'),
-				makeTranscript({ side: 'bid' }),
-				'aggregated_failed'
-			);
+			captureTakeOrderFailure(new Error('x'), makeTranscript({ side: 'bid' }), 'aggregated_failed');
 
-			const [, opts] = captureSpy.mock.calls[0] as [
-				unknown,
-				{ tags: Record<string, string> }
-			];
+			const [, opts] = captureSpy.mock.calls[0] as [unknown, { tags: Record<string, string> }];
 			expect(opts.tags.failure_reason).toBe('aggregated_failed');
-			expect(opts.tags.side).toBe('bid');
+			expect(opts.tags.order_side).toBe('buy');
+			expect(opts.tags.maker_side).toBe('bid');
 		});
 	});
 

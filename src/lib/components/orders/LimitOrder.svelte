@@ -34,6 +34,13 @@
 	});
 
 	onDestroy(() => {
+		// The price-warning flow keeps the Sentry trade id active while the modal is
+		// open. Navigating away bypasses both modal actions, so release it here too.
+		if (pendingTradeId) {
+			clearTradeId();
+			pendingTradeId = null;
+		}
+
 		// Track abandonment if user had entered values but didn't complete trade
 		if (!tradeSubmittedSuccessfully && selectedAmount > 0n) {
 			trackTradeEvent('trade_panel_abandoned', {
@@ -237,7 +244,7 @@
 		}
 
 		// Mint AFTER guards, BEFORE try (Pitfall 2 / T-2-E discipline).
-		mintTradeId();
+		const tradeId = mintTradeId();
 		// `cleared` flag: when the modal-warning path defers deploy to proceedWithDeploy,
 		// proceedWithDeploy owns the clear (the trade_id stays alive across the modal).
 		// Otherwise this handler clears in finally below.
@@ -301,6 +308,7 @@
 			// Check if price warning is needed
 			if (checkPriceWarning()) {
 				pendingDeployData = deployData;
+				pendingTradeId = tradeId;
 				showPriceWarning = true;
 				// Defer trade_id clearing to proceedWithDeploy (warning-acknowledged path)
 				// or cancelDeploy. Same trade_id spans the modal lifecycle.
@@ -314,8 +322,10 @@
 					price: selectedInitialRatio,
 					amount: formatUnits(selectedAmount, assetToken.decimals)
 				});
-				transactionStore.handleLimitDeploy(deployData, {
+				await transactionStore.handleLimitDeploy(deployData, {
 					order_type: 'limit',
+					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+					trade_id: tradeId,
 					asset_symbol: assetToken?.symbol ?? '',
 					payment_symbol: settlementToken?.symbol ?? ''
 				});
@@ -346,6 +356,7 @@
 		depositAmount: bigint;
 		inputVaultId: Hex | undefined;
 	} | null = null;
+	let pendingTradeId: string | null = null;
 
 	// Check if limit price is significantly off market price
 	const checkPriceWarning = (): boolean => {
@@ -373,8 +384,8 @@
 		return false;
 	};
 
-	const proceedWithDeploy = () => {
-		if (!pendingDeployData) return;
+	const proceedWithDeploy = async () => {
+		if (!pendingDeployData || !pendingTradeId) return;
 		try {
 			tradeSubmittedSuccessfully = true;
 			trackTradeEvent('limit_order_deployed', {
@@ -384,11 +395,22 @@
 				price: selectedInitialRatio,
 				amount: assetToken ? formatUnits(selectedAmount, assetToken.decimals) : '0'
 			});
-			transactionStore.handleLimitDeploy(pendingDeployData, {
+			await transactionStore.handleLimitDeploy(pendingDeployData, {
 				order_type: 'limit',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				trade_id: pendingTradeId,
 				asset_symbol: assetToken?.symbol ?? '',
 				payment_symbol: settlementToken?.symbol ?? ''
 			});
+		} catch (error) {
+			trackTradeEvent('trade_failed', {
+				order_type: 'limit',
+				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+				asset_symbol: assetToken?.symbol,
+				error_class: classifyError(error),
+				error_message: error instanceof Error ? error.message : String(error)
+			});
+			throw error;
 		} finally {
 			// Pitfall 2 (T-2-E): trade_id was minted in handleDeploy and deferred
 			// across the modal — clear here on the warning-acknowledged path.
@@ -396,6 +418,7 @@
 			showPriceWarning = false;
 			userAcknowledgesWarning = false;
 			pendingDeployData = null;
+			pendingTradeId = null;
 		}
 	};
 
@@ -405,6 +428,7 @@
 		showPriceWarning = false;
 		userAcknowledgesWarning = false;
 		pendingDeployData = null;
+		pendingTradeId = null;
 	};
 
 	// Calculate total cost

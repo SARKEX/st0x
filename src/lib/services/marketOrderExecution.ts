@@ -49,6 +49,8 @@ import {
 	type TakeOrderFailureReason
 } from '$lib/services/observability/captureTakeOrderFailure';
 import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
+import { addTradeFlowBreadcrumb } from '$lib/services/observability/tradeFlow';
+import { getCurrentTradeId } from '$lib/services/observability/tradeId';
 import {
 	getMakerInputIOIndex,
 	getMakerOutputIOIndex,
@@ -226,6 +228,18 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		request_id: null,
 		timestamp: new Date().toISOString()
 	};
+	const flowContext = (stage: 'quote' | 'calldata' | 'submission', operation: string) => ({
+		stage,
+		operation,
+		orderType: 'market' as const,
+		orderSide: orderSide.toLowerCase() as 'buy' | 'sell',
+		tradeId: getCurrentTradeId(),
+		chainId: network.id,
+		assetSymbol: assetToken.symbol,
+		paymentSymbol: paymentToken.symbol
+	});
+	addTradeFlowBreadcrumb(flowContext('quote', 'build_market_route'), 'started');
+	let activeStage: 'quote' | 'calldata' | 'submission' = 'quote';
 
 	// Single-seam dispatcher: every failure-return path routes through this so the
 	// transcript-builder pattern stays correct under future edits. Phase 1 fence:
@@ -234,9 +248,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 	const failWith = (
 		reason: TakeOrderFailureReason,
 		errOrMessage: unknown,
-		userFacingError: string
+		userFacingError: string,
+		stageOverride?: 'quote' | 'calldata' | 'submission'
 	): MarketOrderResult => {
-		captureTakeOrderFailure(errOrMessage, transcript, reason);
+		captureTakeOrderFailure(errOrMessage, transcript, reason, stageOverride ?? activeStage);
 		return { success: false, error: userFacingError, errorClass: errorClassForReason(reason) };
 	};
 
@@ -396,7 +411,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			return failWith(
 				'unhydrated_fills',
 				new Error('firstQuote missing orderData/sgOrder after hydration'),
-				'Unable to prepare aggregated order route. Please refresh and retry.'
+				'Unable to prepare aggregated order route. Please refresh and retry.',
+				'calldata'
 			);
 		}
 
@@ -563,6 +579,9 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			amount: formatUnits(amount, amountDecimals),
 			priceCap: priceCapStrForSdk
 		};
+		addTradeFlowBreadcrumb(flowContext('quote', 'build_market_route'), 'completed');
+		activeStage = 'calldata';
+		addTradeFlowBreadcrumb(flowContext('calldata', 'prepare_take_order'), 'started');
 		console.log('[executeMarketOrder] TakeOrdersRequest', {
 			mode: takeRequest.mode,
 			amount: takeRequest.amount,
@@ -618,6 +637,9 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			orderFillAmounts,
 			orderFillDecimals
 		};
+		addTradeFlowBreadcrumb(flowContext('calldata', 'prepare_take_order'), 'completed');
+		activeStage = 'submission';
+		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'started');
 		const approvalSymbol = isBuy ? paymentToken.symbol : assetToken.symbol;
 		const aggregatedHandled = await handleAggregatedTakeOrdersCalldata(
 			takeRequest,
@@ -669,6 +691,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		}
 		const { status, error: txError } = get(transactionStoreInternal);
 		if (status === TransactionStatus.SUCCESS) {
+			addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'completed');
 			// OBS-07 (Plan 02-03 Task 1b): SDK callback boundary collapse.
 			// `handleAggregatedTakeOrdersCalldata` / `handleOracleOrders` already block
 			// through wallet-sign → on-chain dispatch → receipt confirmation by the

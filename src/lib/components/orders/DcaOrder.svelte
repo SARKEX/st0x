@@ -191,7 +191,7 @@
 		}
 		if (!($isAuthenticated && $walletRegistered)) return;
 
-		await withTradeId(async () => {
+		await withTradeId(async (tradeId) => {
 			try {
 				trackTradeEvent('trade_button_clicked', {
 					order_type: 'dca',
@@ -217,7 +217,7 @@
 				// Ask (selling): Accumulate the settlement token over time by selling the asset
 				const inputTok = orderType === 'Bid' ? selectedInputToken : selectedOutputToken;
 				const outputTok = orderType === 'Bid' ? selectedOutputToken : selectedInputToken;
-				transactionStore.handleDcaDeploy(
+				await transactionStore.handleDcaDeploy(
 					{
 						outputToken: outputTok,
 						inputToken: inputTok,
@@ -236,16 +236,12 @@
 					},
 					{
 						order_type: 'dca',
-						// User-perspective symbols (CLAUDE.md §"Order Semantics"):
-						// Buy: asset = the token the user accumulates (selectedInputToken),
-						//      payment = the token they spend (selectedOutputToken).
-						// Sell: inverted — asset = selectedOutputToken,
-						//      payment = selectedInputToken (we sell asset for payment over time).
-						asset_symbol:
-							(orderSide === 'Buy' ? selectedInputToken?.symbol : selectedOutputToken?.symbol) ??
-							'',
-						payment_symbol:
-							(orderSide === 'Buy' ? selectedOutputToken?.symbol : selectedInputToken?.symbol) ?? ''
+						order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+						trade_id: tradeId,
+						// User-perspective symbols stay stable across Buy and Sell. Only the
+						// maker-perspective input/output deployment arguments invert by side.
+						asset_symbol: selectedInputToken?.symbol ?? '',
+						payment_symbol: selectedOutputToken?.symbol ?? ''
 					}
 				);
 

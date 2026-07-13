@@ -96,9 +96,7 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 	});
 
 	it("Test 5b: component imports the shared classifyError + calls it with the 'market' scope", () => {
-		expect(componentSource).toMatch(
-			/from\s+['"]\$lib\/services\/observability\/classifyError['"]/
-		);
+		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/classifyError['"]/);
 		expect(componentSource).toMatch(/classifyError\s*\([^,]*,\s*['"]market['"]\s*\)/);
 	});
 
@@ -110,15 +108,41 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_panel_abandoned['"]/);
 		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_error_shown['"]/);
 		// And the raw `track` import must not be needed in the component anymore.
-		expect(componentSource).not.toMatch(/import\s+\{\s*track\s*\}\s+from\s+['"]\$lib\/services\/analytics['"]/);
+		expect(componentSource).not.toMatch(
+			/import\s+\{\s*track\s*\}\s+from\s+['"]\$lib\/services\/analytics['"]/
+		);
 	});
 
 	it('Test 7: imports both new lifecycle modules', () => {
-		expect(componentSource).toMatch(
-			/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/
-		);
+		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/);
 		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeId['"]/);
 		expect(componentSource).toMatch(/trackTradeEvent/);
 		expect(componentSource).toMatch(/withTradeId/);
+	});
+
+	it('Test 8: reports submit-time quote and preparation failures with the explicit trade id', () => {
+		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeFlow['"]/);
+		expect(componentSource).toMatch(/withTradeId\(async\s*\(tradeId\)/);
+		expect(componentSource).toMatch(/captureTradeFlowError/);
+		expect(componentSource).toMatch(/flowContext\(['"]quote['"]/);
+		expect(componentSource).toMatch(/activeStage\s*=\s*['"]calldata['"]/);
+	});
+
+	it('Test 9: reports token-configuration failures during quote preparation', () => {
+		const validationContexts = componentSource.match(
+			/flowContext\(['"]quote['"],\s*['"]validate_token_config['"]\)/g
+		);
+		expect(validationContexts).toHaveLength(2);
+		expect(componentSource).not.toMatch(
+			/flowContext\(['"]calldata['"],\s*['"]validate_token_config['"]\)/
+		);
+	});
+
+	it('Test 10: remaps unexpected post-preparation failures at the wallet boundary', () => {
+		expect(componentSource).toMatch(/inferWalletFailureStage/);
+		expect(componentSource).toMatch(
+			/activeStage === ['"]calldata['"]\s*\? inferWalletFailureStage\(error\)\s*:\s*activeStage/
+		);
+		expect(componentSource).toMatch(/flowContext\(failureStage, ['"]submit_market_order['"]\)/);
 	});
 });

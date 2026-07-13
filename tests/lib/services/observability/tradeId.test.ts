@@ -18,7 +18,8 @@ import * as Sentry from '@sentry/sveltekit';
 import {
 	mintTradeId,
 	getCurrentTradeId,
-	clearTradeId
+	clearTradeId,
+	setTradeId
 } from '$lib/services/observability/tradeId';
 
 const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -76,7 +77,14 @@ describe('tradeId', () => {
 		expect(errorLine).toBeDefined();
 	});
 
-	it('Test 6: clearTradeId() calls Sentry.setTag(\'trade_id\', undefined)', () => {
+	it('Test 6: setTradeId() restores a known id and its Sentry scope tag', () => {
+		const setTagSpy = vi.spyOn(Sentry, 'setTag');
+		setTradeId('deferred-trade-id');
+		expect(getCurrentTradeId()).toBe('deferred-trade-id');
+		expect(setTagSpy).toHaveBeenCalledWith('trade_id', 'deferred-trade-id');
+	});
+
+	it("Test 7: clearTradeId() calls Sentry.setTag('trade_id', undefined)", () => {
 		mintTradeId();
 		const setTagSpy = vi.spyOn(Sentry, 'setTag');
 		clearTradeId();
