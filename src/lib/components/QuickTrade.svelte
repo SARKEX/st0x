@@ -785,6 +785,9 @@
 				track('quick_trade_failed', {
 					token_symbol: selectedToken?.symbol,
 					direction: isBuying ? 'buy' : 'sell',
+					usdc_amount: topAmount,
+					token_amount: bottomAmount,
+					avg_price: quote?.avgPrice,
 					error: tradeError
 				});
 			} else {
@@ -806,6 +809,9 @@
 			track('quick_trade_failed', {
 				token_symbol: selectedToken?.symbol,
 				direction: isBuying ? 'buy' : 'sell',
+				usdc_amount: topAmount,
+				token_amount: bottomAmount,
+				avg_price: quote?.avgPrice,
 				error: tradeError
 			});
 		} finally {

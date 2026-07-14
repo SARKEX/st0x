@@ -1,6 +1,8 @@
 import posthog from 'posthog-js';
 import { browser } from '$app/environment';
 import { get } from 'svelte/store';
+import { getAccount } from '@wagmi/core';
+import { wagmiConfig } from 'svelte-wagmi';
 import { walletAddress, authMethod } from '$lib/stores/authStore';
 import { dynamicSession } from '$lib/stores/dynamicStore';
 import { currentNetwork } from '$lib/stores';
@@ -39,6 +41,34 @@ export function initAnalytics(apiKey: string): void {
 }
 
 /**
+ * Resolve a wallet_type value for segmentation.
+ *
+ * Dynamic Labs sessions expose a walletType ('embedded' | 'external'). Direct
+ * wagmi wallets (MetaMask, WalletConnect, injected, Coinbase, ...) don't populate
+ * dynamicSession, which previously left wallet_type undefined for the majority of
+ * connections. Fall back to the active wagmi connector's id (e.g. 'metaMask',
+ * 'walletConnect', 'injected', 'coinbaseWalletSDK') for those.
+ */
+function resolveWalletType(
+	dynamicWalletType: string | undefined,
+	method: string | null
+): string | undefined {
+	if (dynamicWalletType) return dynamicWalletType;
+	if (method === 'wallet') {
+		try {
+			const config = get(wagmiConfig);
+			if (config) {
+				const { connector } = getAccount(config);
+				return connector?.id ?? connector?.name;
+			}
+		} catch {
+			// getAccount can throw before the wagmi config is ready; ignore.
+		}
+	}
+	return undefined;
+}
+
+/**
  * Subscribe to wallet address changes for user identification
  */
 function setupWalletTracking(): void {
@@ -53,6 +83,7 @@ function setupWalletTracking(): void {
 			const method = get(authMethod);
 			const session = get(dynamicSession);
 			const network = get(currentNetwork);
+			const walletType = resolveWalletType(session?.walletType, method);
 
 			// Store current auth method for disconnect tracking
 			previousAuthMethod = method;
@@ -60,7 +91,7 @@ function setupWalletTracking(): void {
 			// Identify user by wallet address (normalized to lowercase)
 			posthog.identify(address.toLowerCase(), {
 				auth_method: method,
-				wallet_type: session?.walletType,
+				wallet_type: walletType,
 				network: network?.displayName,
 				chain_id: network?.chainId
 			});
@@ -68,7 +99,7 @@ function setupWalletTracking(): void {
 			// Track connection event (without email domain for privacy)
 			track('wallet_connected', {
 				method,
-				wallet_type: session?.walletType
+				wallet_type: walletType
 			});
 
 			previousWalletAddress = address;

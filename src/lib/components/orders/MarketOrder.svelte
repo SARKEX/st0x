@@ -1033,6 +1033,12 @@
 						order_type: 'market',
 						order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 						asset_symbol: assetToken?.symbol,
+						payment_symbol: paymentToken?.symbol,
+						amount: formatUnits(
+							selectedAmount,
+							inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+						),
+						avg_price: marketPrice,
 						error_class: eventErrorClass,
 						error_message: result.error
 					});
@@ -1063,6 +1069,12 @@
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 					asset_symbol: assetToken?.symbol,
+					payment_symbol: paymentToken?.symbol,
+					amount: formatUnits(
+						selectedAmount,
+						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+					),
+					avg_price: marketPrice,
 					error_class: classifyError(error, 'market'),
 					error_message: orderPreparationError
 				});
