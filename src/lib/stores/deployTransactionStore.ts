@@ -39,6 +39,14 @@ import {
 import { wrapToken, unwrapToken } from '$lib/services/wrapService';
 import { track } from '$lib/services/analytics';
 import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
+import { clearTradeId, setTradeId } from '$lib/services/observability/tradeId';
+import {
+	addTradeFlowBreadcrumb,
+	captureTradeFlowError,
+	inferWalletFailureStage,
+	type TradeFlowContext,
+	type TradeFlowStage
+} from '$lib/services/observability/tradeFlow';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { invalidateOrderQueries } from '$lib/queries/orderbook';
 import { invalidateUserVaultQueries } from '$lib/queries/vaults';
@@ -74,6 +82,36 @@ const sendTransaction = walletServiceSendTransaction;
 
 // Unified wait for transaction (works with both Dynamic and wagmi wallets, includes retry logic)
 const waitForTransaction = walletServiceWaitForTransaction;
+
+function deployFlowContext(
+	eventContext: DeployEventContext | undefined,
+	stage: TradeFlowStage,
+	operation: string,
+	chainId?: number
+): TradeFlowContext | null {
+	if (!eventContext) return null;
+	return {
+		stage,
+		operation,
+		orderType: eventContext.order_type,
+		orderSide: eventContext.order_side,
+		tradeId: eventContext.trade_id,
+		chainId,
+		assetSymbol: eventContext.asset_symbol,
+		paymentSymbol: eventContext.payment_symbol
+	};
+}
+
+function reportDeployFailure(
+	error: unknown,
+	eventContext: DeployEventContext | undefined,
+	stage: TradeFlowStage,
+	operation: string,
+	chainId?: number
+): void {
+	const context = deployFlowContext(eventContext, stage, operation, chainId);
+	if (context) captureTradeFlowError(error, context);
+}
 
 // Destructure the leaf-owned status-helper surface so the lifted method bodies
 // below can keep calling `awaitWalletConfirmation(...)` etc. unchanged. This
@@ -141,18 +179,25 @@ export const handleStrategyDeployment = async (
 	eventContext?: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	if (!config) throw new Error('Wagmi config not found');
-	const $signerAddress = get(walletAddress);
-	if (!$signerAddress) throw new Error('Signer address not found');
-
-	// Get network early - used for validation and later for subgraph queries
 	const network = get(currentNetwork);
+	if (!config) {
+		const error = new Error('Wagmi config not found');
+		reportDeployFailure(error, eventContext, 'submission', 'wallet_config', network?.id);
+		return transactionError(error.message as TransactionErrorMessage);
+	}
+	const $signerAddress = get(walletAddress);
+	if (!$signerAddress) {
+		const error = new Error('Signer address not found');
+		reportDeployFailure(error, eventContext, 'signing', 'wallet_identity', network?.id);
+		return transactionError(error.message as TransactionErrorMessage);
+	}
 
 	// Security: Validate orderbook address BEFORE any approvals are granted
 	// This prevents a compromised orderbook from receiving token approvals
 	try {
 		validateOrderbookAddress(deploymentArgs.orderbookAddress, network);
 	} catch (error) {
+		reportDeployFailure(error, eventContext, 'calldata', 'validate_orderbook', network.id);
 		return transactionError((error as Error).message as TransactionErrorMessage);
 	}
 
@@ -165,17 +210,23 @@ export const handleStrategyDeployment = async (
 		requiredAmount: bigint;
 	};
 
-	const decodedApprovals: DecodedApproval[] = deploymentArgs.approvals.map((approval) => {
-		const { args: approvalArgs } = decodeFunctionData({
-			abi: erc20Abi,
-			data: approval.calldata as Hex
+	let decodedApprovals: DecodedApproval[];
+	try {
+		decodedApprovals = deploymentArgs.approvals.map((approval) => {
+			const { args: approvalArgs } = decodeFunctionData({
+				abi: erc20Abi,
+				data: approval.calldata as Hex
+			});
+			return {
+				approval,
+				spender: approvalArgs[0] as Hex,
+				requiredAmount: BigInt(approvalArgs[1] as string)
+			};
 		});
-		return {
-			approval,
-			spender: approvalArgs[0] as Hex,
-			requiredAmount: BigInt(approvalArgs[1] as string)
-		};
-	});
+	} catch (error) {
+		reportDeployFailure(error, eventContext, 'calldata', 'decode_approval', network.id);
+		return transactionError(extractTransactionError(error));
+	}
 
 	if (decodedApprovals.length > 0) {
 		checkingWalletAllowance('Checking balances and allowances...');
@@ -183,20 +234,36 @@ export const handleStrategyDeployment = async (
 		// Check all balances in PARALLEL — balance shortfalls block deployment
 		// before any wallet prompt (cheaper failure mode for the user). Allowance
 		// reads are inside `ensureAllowance` so we don't double-read them here.
-		const balances = await Promise.all(
-			decodedApprovals.map((d) =>
-				readContract(config, {
-					abi: erc20Abi,
-					address: d.approval.token as `0x${string}`,
-					functionName: 'balanceOf',
-					args: [$signerAddress as Hex]
-				})
-			)
+		const approvalContext = deployFlowContext(
+			eventContext,
+			'approval',
+			'check_balances',
+			network.id
 		);
+		if (approvalContext) addTradeFlowBreadcrumb(approvalContext, 'started');
+		let balances: bigint[];
+		try {
+			balances = (await Promise.all(
+				decodedApprovals.map((d) =>
+					readContract(config, {
+						abi: erc20Abi,
+						address: d.approval.token as `0x${string}`,
+						functionName: 'balanceOf',
+						args: [$signerAddress as Hex]
+					})
+				)
+			)) as bigint[];
+		} catch (error) {
+			reportDeployFailure(error, eventContext, 'approval', 'check_balances', network.id);
+			return transactionError(extractTransactionError(error));
+		}
+		if (approvalContext) addTradeFlowBreadcrumb(approvalContext, 'completed');
 
 		for (let i = 0; i < decodedApprovals.length; i++) {
 			const { approval, requiredAmount } = decodedApprovals[i];
 			if (balances[i] < requiredAmount) {
+				const error = new Error(`Insufficient ${approval.symbol} balance`);
+				reportDeployFailure(error, eventContext, 'approval', 'check_balances', network.id);
 				return transactionError(
 					`Insufficient ${approval.symbol} balance. Please add more ${approval.symbol} to your wallet or reduce the ${approval.symbol} deposit amount in advanced options.` as TransactionErrorMessage
 				);
@@ -219,6 +286,13 @@ export const handleStrategyDeployment = async (
 					setStatus: (s) => transactionStoreInternal.update((state) => ({ ...state, status: s }))
 				});
 			} catch (error) {
+				reportDeployFailure(
+					error,
+					eventContext,
+					inferWalletFailureStage(error) === 'signing' ? 'signing' : 'approval',
+					'approve_token',
+					network.id
+				);
 				if (isStaleWalletSessionError(error)) {
 					const msg = await handleStaleWalletSession(config);
 					return transactionError(msg as TransactionErrorMessage);
@@ -229,12 +303,20 @@ export const handleStrategyDeployment = async (
 	}
 	let hash: Hash;
 	try {
+		const submitContext = deployFlowContext(
+			eventContext,
+			'submission',
+			'deploy_strategy',
+			network.id
+		);
+		if (submitContext) addTradeFlowBreadcrumb(submitContext, 'started');
 		awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
 		hash = await sendTransaction({
 			to: deploymentArgs.orderbookAddress as `0x${string}`,
 			data: deploymentArgs.deploymentCalldata as Hex
 		});
+		if (submitContext) addTradeFlowBreadcrumb(submitContext, 'completed');
 		// OBS-07 (Plan 02-03 Task 2c): tx hash returned post-dispatch — emit
 		// `broadcast` for limit/dca deploy paths. `confirmed` is emitted when the
 		// receipt-poll loop terminates successfully (transactionSuccess).
@@ -245,6 +327,13 @@ export const handleStrategyDeployment = async (
 			});
 		}
 	} catch (error) {
+		reportDeployFailure(
+			error,
+			eventContext,
+			inferWalletFailureStage(error),
+			'deploy_strategy',
+			network.id
+		);
 		if (isStaleWalletSessionError(error)) {
 			const msg = await handleStaleWalletSession(config);
 			return transactionError(msg as TransactionErrorMessage);
@@ -265,20 +354,30 @@ export const handleStrategyDeployment = async (
 		});
 	}
 
-	const tryFetchOrderLink = async () => {
-		const client = await createRaindexClient();
-		const orders = await client.getAddOrdersForTransaction(
-			network.id,
-			deploymentArgs.orderbookAddress as `0x${string}`,
-			hash as `0x${string}`
-		);
-		if (orders.error || !orders.value?.length) {
+	let orderLinkErrorReported = false;
+	const tryFetchOrderLink = async (): Promise<RaindexLink | null> => {
+		try {
+			const client = await createRaindexClient();
+			const orders = await client.getAddOrdersForTransaction(
+				network.id,
+				deploymentArgs.orderbookAddress as `0x${string}`,
+				hash as `0x${string}`
+			);
+			if (orders.error || !orders.value?.length) {
+				return null;
+			}
+			const orderHash = orders.value[0].orderHash;
+			const orderbookId = orders.value[0].orderbook;
+			return createRaindexLink(network.id, orderbookId, orderHash);
+		} catch (error) {
+			// Polling retries for up to a minute. Report the first transport failure only,
+			// preserving useful signal without emitting the same incident every two seconds.
+			if (!orderLinkErrorReported) {
+				orderLinkErrorReported = true;
+				reportDeployFailure(error, eventContext, 'confirmation', 'resolve_order_link', network.id);
+			}
 			return null;
 		}
-		const orderHash = orders.value[0].orderHash;
-		const orderbookId = orders.value[0].orderbook;
-		const chainId = network.id;
-		return createRaindexLink(chainId, orderbookId, orderHash);
 	};
 
 	// Poll for the order to be added to the orderbook
@@ -336,12 +435,12 @@ export const handleStrategyDeployment = async (
 	}, 2000);
 };
 
-export const showRainlangConfirmation = (
+export const showRainlangConfirmation = async (
 	composedRainlang: string,
 	deploymentArgs: DeploymentTransactionArgs,
 	assetTokenInfo?: AssetTokenInfo,
 	eventContext?: DeployEventContext
-) => {
+): Promise<void> => {
 	// Check if user wants to review strategy source code before deploying
 	const shouldReview = get(reviewStrategyOnDeploy);
 
@@ -350,14 +449,23 @@ export const showRainlangConfirmation = (
 		rainlangConfirmationModal.set({
 			show: true,
 			rainlangCode: composedRainlang,
-			onDeploy: () => {
+			onDeploy: async () => {
 				rainlangConfirmationModal.set({
 					show: false,
 					rainlangCode: '',
 					onDeploy: null,
 					onCancel: null
 				});
-				handleStrategyDeployment(deploymentArgs, assetTokenInfo, eventContext);
+				// The originating handler has already returned after opening this modal,
+				// so its withTradeId/finally lifecycle has cleared the module scope. Restore
+				// the explicit id while the deferred wallet flow runs so PostHog funnel
+				// events and ambient Sentry scope share the same correlation id.
+				if (eventContext) setTradeId(eventContext.trade_id);
+				try {
+					await handleStrategyDeployment(deploymentArgs, assetTokenInfo, eventContext);
+				} finally {
+					if (eventContext) clearTradeId();
+				}
 			},
 			onCancel: () => {
 				rainlangConfirmationModal.set({
@@ -371,7 +479,7 @@ export const showRainlangConfirmation = (
 		});
 	} else {
 		// Skip modal and deploy directly
-		handleStrategyDeployment(deploymentArgs, assetTokenInfo, eventContext);
+		await handleStrategyDeployment(deploymentArgs, assetTokenInfo, eventContext);
 	}
 };
 
@@ -382,7 +490,7 @@ export const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
 	awaitWalletConfirmation(`Preparing strategy...`);
 	const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(network, args);
 
-	showRainlangConfirmation(composedRainlang, deploymentArgs);
+	await showRainlangConfirmation(composedRainlang, deploymentArgs);
 };
 
 export const handleDcaDeploy = async (
@@ -390,14 +498,28 @@ export const handleDcaDeploy = async (
 	eventContext: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	if (!config) throw new Error('Wagmi config not found');
 	const network = get(currentNetwork);
+	if (!config) {
+		const error = new Error('Wagmi config not found');
+		reportDeployFailure(error, eventContext, 'calldata', 'prepare_dca', network?.id);
+		throw error;
+	}
 	awaitWalletConfirmation(`Preparing strategy...`);
-	const { composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(
-		network,
-		args,
-		eventContext
-	);
+	const calldataContext = deployFlowContext(eventContext, 'calldata', 'prepare_dca', network.id);
+	if (calldataContext) addTradeFlowBreadcrumb(calldataContext, 'started');
+	let composedRainlang: string;
+	let deploymentArgs: DeploymentTransactionArgs;
+	try {
+		({ composedRainlang, deploymentArgs } = await getDcaDeploymentArgs(
+			network,
+			args,
+			eventContext
+		));
+	} catch (error) {
+		reportDeployFailure(error, eventContext, 'calldata', 'prepare_dca', network.id);
+		throw error;
+	}
+	if (calldataContext) addTradeFlowBreadcrumb(calldataContext, 'completed');
 
 	// Only show Track in Wallet for Buy orders (when user is acquiring an asset)
 	// Buy DCA: outputToken is payment token (e.g., USDC), inputToken is the asset
@@ -411,7 +533,7 @@ export const handleDcaDeploy = async (
 			}
 		: undefined;
 
-	showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo, eventContext);
+	await showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo, eventContext);
 };
 
 export const handleLimitDeploy = async (
@@ -419,14 +541,28 @@ export const handleLimitDeploy = async (
 	eventContext: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	if (!config) throw new Error('Wagmi config not found');
 	const network = get(currentNetwork);
+	if (!config) {
+		const error = new Error('Wagmi config not found');
+		reportDeployFailure(error, eventContext, 'calldata', 'prepare_limit', network?.id);
+		throw error;
+	}
 	awaitWalletConfirmation(`Preparing strategy...`);
-	const { composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(
-		network,
-		args,
-		eventContext
-	);
+	const calldataContext = deployFlowContext(eventContext, 'calldata', 'prepare_limit', network.id);
+	if (calldataContext) addTradeFlowBreadcrumb(calldataContext, 'started');
+	let composedRainlang: string;
+	let deploymentArgs: DeploymentTransactionArgs;
+	try {
+		({ composedRainlang, deploymentArgs } = await getLimitOrderDeploymentArgs(
+			network,
+			args,
+			eventContext
+		));
+	} catch (error) {
+		reportDeployFailure(error, eventContext, 'calldata', 'prepare_limit', network.id);
+		throw error;
+	}
+	if (calldataContext) addTradeFlowBreadcrumb(calldataContext, 'completed');
 
 	// Only show Track in Wallet for Buy orders (when user is acquiring an asset)
 	// Buy Limit: outputToken is payment token (e.g., USDC), inputToken is the asset
@@ -440,7 +576,7 @@ export const handleLimitDeploy = async (
 			}
 		: undefined;
 
-	showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo, eventContext);
+	await showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo, eventContext);
 };
 
 export const handleWithdraw = async (vault: RaindexVault) => {
@@ -1023,5 +1159,5 @@ export const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
 	awaitWalletConfirmation(`Preparing strategy...`);
 	const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(network, args);
 
-	showRainlangConfirmation(composedRainlang, deploymentArgs);
+	await showRainlangConfirmation(composedRainlang, deploymentArgs);
 };

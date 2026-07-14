@@ -15,9 +15,7 @@ const componentSource = readFileSync(componentPath, 'utf-8');
 
 describe('DcaOrder.svelte event instrumentation (Plan 02-03 Task 2b)', () => {
 	it('Test D1: imports trade lifecycle modules (raw analytics import removed)', () => {
-		expect(componentSource).toMatch(
-			/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/
-		);
+		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/);
 		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeId['"]/);
 		expect(componentSource).toMatch(/trackTradeEvent/);
 		expect(componentSource).toMatch(/withTradeId/);
@@ -49,7 +47,7 @@ describe('DcaOrder.svelte event instrumentation (Plan 02-03 Task 2b)', () => {
 
 	it('Test D5: deploy handler brackets the submit body with withTradeId()', () => {
 		// withTradeId owns mint/clear lifecycle — call site must not open-code it.
-		expect(componentSource).toMatch(/await\s+withTradeId\(/);
+		expect(componentSource).toMatch(/await\s+withTradeId\(async\s*\(tradeId\)/);
 		expect(componentSource).not.toMatch(/mintTradeId\(\)/);
 		expect(componentSource).not.toMatch(/clearTradeId\(\)/);
 	});
@@ -63,6 +61,17 @@ describe('DcaOrder.svelte event instrumentation (Plan 02-03 Task 2b)', () => {
 	it("Test D7: DCA caller passes eventContext: { order_type: 'dca' } to transactionStore.handleDcaDeploy", () => {
 		// Per checker fix #6: no silent fallback — DCA must explicitly identify itself.
 		expect(componentSource).toMatch(/order_type:\s*['"]dca['"]/);
+		expect(componentSource).toMatch(/trade_id:\s*tradeId/);
+		expect(componentSource).toMatch(/await\s+transactionStore\.handleDcaDeploy/);
+	});
+
+	it('Test D7b: deploy event context keeps user-perspective symbols stable across order sides', () => {
+		const deployStart = componentSource.indexOf('await transactionStore.handleDcaDeploy');
+		expect(deployStart).toBeGreaterThan(-1);
+		const deployCall = componentSource.slice(deployStart, deployStart + 1800);
+		expect(deployCall).toMatch(/asset_symbol:\s*selectedInputToken\?\.symbol \?\? ''/);
+		expect(deployCall).toMatch(/payment_symbol:\s*selectedOutputToken\?\.symbol \?\? ''/);
+		expect(deployCall).not.toMatch(/asset_symbol:[\s\S]*?orderSide === ['"]Buy['"]/);
 	});
 
 	it("Test D8: occurrences of order_type: 'dca' >= 2 (mount + deploy events at minimum)", () => {

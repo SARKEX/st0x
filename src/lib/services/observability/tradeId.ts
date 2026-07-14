@@ -23,15 +23,21 @@ import * as Sentry from '@sentry/sveltekit';
 
 let current: string | null = null;
 
-export function mintTradeId(): string {
-	current = crypto.randomUUID();
+/** Restore a known trade id when a deferred UI flow resumes. */
+export function setTradeId(tradeId: string): void {
+	current = tradeId;
 	try {
 		Sentry.setTag('trade_id', current);
 	} catch (err) {
 		// Logging never throws back into caller (project convention)
 		console.error('[tradeId] Sentry.setTag failed:', err);
 	}
-	return current;
+}
+
+export function mintTradeId(): string {
+	const tradeId = crypto.randomUUID();
+	setTradeId(tradeId);
+	return tradeId;
 }
 
 export function getCurrentTradeId(): string | null {
@@ -62,10 +68,10 @@ export function clearTradeId(): void {
  * boundary (button → modal-confirm) and so keep the mint/clear lifecycle
  * inline.
  */
-export async function withTradeId<T>(fn: () => Promise<T> | T): Promise<T> {
-	mintTradeId();
+export async function withTradeId<T>(fn: (tradeId: string) => Promise<T> | T): Promise<T> {
+	const tradeId = mintTradeId();
 	try {
-		return await fn();
+		return await fn(tradeId);
 	} finally {
 		clearTradeId();
 	}

@@ -27,6 +27,12 @@
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
 	import { classifyError } from '$lib/services/observability/classifyError';
+	import {
+		addTradeFlowBreadcrumb,
+		captureTradeFlowError,
+		inferWalletFailureStage,
+		type TradeFlowStage
+	} from '$lib/services/observability/tradeFlow';
 	import { withTradeId } from '$lib/services/observability/tradeId';
 	import { onMount } from 'svelte';
 
@@ -894,8 +900,20 @@
 
 		// Mint after early-return guards so unauthenticated/idle clicks do not
 		// pollute the funnel; withTradeId clears in finally (T-2-E mitigation).
-		await withTradeId(async () => {
+		await withTradeId(async (tradeId) => {
+			let activeStage: TradeFlowStage = 'quote';
+			const flowContext = (stage: TradeFlowStage, operation: string) => ({
+				stage,
+				operation,
+				orderType: 'market' as const,
+				orderSide: orderSide.toLowerCase() as 'buy' | 'sell',
+				tradeId,
+				chainId: $currentNetwork?.id,
+				assetSymbol: assetToken?.symbol,
+				paymentSymbol: paymentToken?.symbol
+			});
 			try {
+				addTradeFlowBreadcrumb(flowContext('quote', 'select_executable_quotes'), 'started');
 				trackTradeEvent('trade_button_clicked', {
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
@@ -912,10 +930,18 @@
 				});
 				// Validate token configuration
 				if (!paymentToken || typeof paymentToken.decimals !== 'number') {
+					captureTradeFlowError(
+						new Error('Payment token configuration is incomplete'),
+						flowContext('quote', 'validate_token_config')
+					);
 					orderPreparationError = 'Token configuration error. Please refresh the page.';
 					return;
 				}
 				if (!assetToken || typeof assetToken.decimals !== 'number') {
+					captureTradeFlowError(
+						new Error('Asset token configuration is incomplete'),
+						flowContext('quote', 'validate_token_config')
+					);
 					orderPreparationError = 'Token configuration error. Please refresh the page.';
 					return;
 				}
@@ -924,9 +950,22 @@
 				const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
 				const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
 				if (isStaleQuotes) {
-					await $orderbookQuotesQuery?.refetch?.();
+					const refreshResult = await $orderbookQuotesQuery?.refetch?.();
+					if (refreshResult?.isError) {
+						captureTradeFlowError(
+							refreshResult.error ?? new Error('Orderbook quote refresh failed'),
+							flowContext('quote', 'refresh_quotes')
+						);
+						priceError = true;
+						priceErrorReason = 'error';
+						return;
+					}
 					await fetchMarketPrice();
 					if (priceError) {
+						captureTradeFlowError(
+							new Error(`Quote refresh failed: ${priceErrorReason ?? 'unknown'}`),
+							flowContext('quote', 'refresh_quotes')
+						);
 						return;
 					}
 				}
@@ -934,10 +973,15 @@
 				// Get filtered quotes with price guard
 				const filteredQuotes = getQuotesWithPriceGuard();
 				if (filteredQuotes.length === 0) {
+					captureTradeFlowError(
+						new Error('No executable quotes passed the price guard'),
+						flowContext('quote', 'select_executable_quotes')
+					);
 					priceError = true;
 					priceErrorReason = 'no_quotes';
 					return;
 				}
+				addTradeFlowBreadcrumb(flowContext('quote', 'select_executable_quotes'), 'completed');
 
 				// OBS-07 funnel step: post-walk, pre-execute. Once we have at least one
 				// price-guard-passing quote we count `quote_received` as fired.
@@ -957,6 +1001,7 @@
 				// Execute market order using shared service.
 				// `broadcast` and `confirmed` step events are emitted from
 				// `marketOrderExecution.ts` at SDK callback boundaries (Task 1b).
+				activeStage = 'calldata';
 				const result = await executeMarketOrder({
 					orderSide,
 					amount: selectedAmount,
@@ -1007,6 +1052,12 @@
 				}
 			} catch (error) {
 				console.error('Market order error:', error);
+				// executeMarketOrder owns quote/calldata failures internally. A rejection
+				// escaping after preparation is at the wallet boundary, so distinguish a
+				// signing rejection from a submission/transport failure.
+				const failureStage =
+					activeStage === 'calldata' ? inferWalletFailureStage(error) : activeStage;
+				captureTradeFlowError(error, flowContext(failureStage, 'submit_market_order'));
 				orderPreparationError = error instanceof Error ? error.message : 'Unknown error occurred';
 				trackTradeEvent('trade_failed', {
 					order_type: 'market',

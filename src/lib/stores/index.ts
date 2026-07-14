@@ -50,7 +50,7 @@ export const oracleQuotes = mapQueryData(oracleQuotesQuery, {} as Record<string,
 export const rainlangConfirmationModal = writable<{
 	show: boolean;
 	rainlangCode: string;
-	onDeploy: (() => void) | null;
+	onDeploy: (() => void | Promise<void>) | null;
 	onCancel: (() => void) | null;
 }>({
 	show: false,

@@ -295,7 +295,13 @@ describe('transactionStore tests', () => {
 						maxTradeAmount: 1000000000000000000n,
 						depositAmount: 2000000000000000000n
 					},
-					{ order_type: 'dca', asset_symbol: 'tNVDA', payment_symbol: 'USDC' }
+					{
+						order_type: 'dca',
+						order_side: 'buy',
+						trade_id: 'test-dca-trade',
+						asset_symbol: 'tNVDA',
+						payment_symbol: 'USDC'
+					}
 				),
 			expectedFn: getDcaDeploymentArgs
 		},
@@ -309,7 +315,13 @@ describe('transactionStore tests', () => {
 						ioRatio: '1',
 						depositAmount: 1000000000000000000n
 					},
-					{ order_type: 'limit', asset_symbol: 'tNVDA', payment_symbol: 'USDC' }
+					{
+						order_type: 'limit',
+						order_side: 'buy',
+						trade_id: 'test-limit-trade',
+						asset_symbol: 'tNVDA',
+						payment_symbol: 'USDC'
+					}
 				),
 			expectedFn: getLimitOrderDeploymentArgs
 		},

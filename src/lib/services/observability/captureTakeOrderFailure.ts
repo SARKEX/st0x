@@ -26,6 +26,8 @@
 import * as Sentry from '@sentry/sveltekit';
 import type { ProcessedQuote } from '$lib/utils/orderbook';
 import { getCurrentTradeId } from './tradeId';
+import { classifyError } from './classifyError';
+import type { TradeFlowStage } from './tradeFlow';
 
 export type TakeOrderFailureReason =
 	| 'no_quotes_available'
@@ -69,6 +71,30 @@ export interface TakeOrderTranscript {
 	timestamp: string; // ISO 8601
 }
 
+/** Map the market failure taxonomy onto the RAI-260 critical-flow stages. */
+export function getTakeOrderFailureStage(
+	reason: TakeOrderFailureReason,
+	error: unknown,
+	explicitStage?: TradeFlowStage
+): TradeFlowStage {
+	const errorClass = classifyError(error, 'market');
+	if (errorClass === 'user_rejected') return 'signing';
+	if (explicitStage) return explicitStage;
+
+	if (
+		reason === 'no_quotes_available' ||
+		reason === 'no_walk_fills' ||
+		reason === 'preflight_chain_unreachable' ||
+		reason === 'preflight_order_vanished' ||
+		reason === 'auto_retry_exhausted'
+	) {
+		return 'quote';
+	}
+	if (reason === 'unhydrated_fills') return 'calldata';
+	if (errorClass === 'no_liquidity' || errorClass === 'stale_oracle') return 'quote';
+	return 'submission';
+}
+
 /**
  * Dispatch a take-order failure transcript to both observability sinks.
  *
@@ -80,9 +106,12 @@ export interface TakeOrderTranscript {
 export function captureTakeOrderFailure(
 	err: unknown,
 	transcript: TakeOrderTranscript,
-	reason: TakeOrderFailureReason
+	reason: TakeOrderFailureReason,
+	explicitStage?: TradeFlowStage
 ): void {
 	const errorMessage = err instanceof Error ? err.message : String(err);
+	const stage = getTakeOrderFailureStage(reason, err, explicitStage);
+	const errorClass = classifyError(err, 'market');
 
 	// OBS-09 (Plan 02-02 Task 2): attach the active trade_id (if any) so the on-error
 	// Sentry Replay is navigable to PostHog events + pino logs. Conditional spread
@@ -94,14 +123,33 @@ export function captureTakeOrderFailure(
 	// Sink 1: Sentry — immediate alert + breadcrumb context with PII scrubbed by beforeSend
 	try {
 		Sentry.captureException(err, {
+			level:
+				errorClass === 'user_rejected' || errorClass === 'insufficient_balance'
+					? 'warning'
+					: 'error',
 			tags: {
+				feature: 'trade_flow',
 				failure_reason: reason,
-				side: transcript.side,
+				trade_stage: stage,
+				trade_operation: 'take_market_order',
+				order_type: 'market',
+				error_class: errorClass,
+				order_side: transcript.userAction.toLowerCase(),
+				maker_side: transcript.side,
 				...(tradeId ? { trade_id: tradeId } : {})
 			},
 			extra: {
 				...transcript,
 				errorMessage
+			},
+			contexts: {
+				trade_flow: {
+					stage,
+					operation: 'take_market_order',
+					order_type: 'market',
+					order_side: transcript.userAction.toLowerCase(),
+					...(tradeId ? { trade_id: tradeId } : {})
+				}
 			}
 		});
 	} catch (sentryErr) {

@@ -9,7 +9,7 @@
 
 	export let show: boolean = false;
 	export let rainlangCode: string = '';
-	export let onDeploy: () => void;
+	export let onDeploy: () => void | Promise<void>;
 	export let onCancel: () => void;
 
 	let codeElement: HTMLElement | null = null;
