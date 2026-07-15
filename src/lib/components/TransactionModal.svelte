@@ -2,6 +2,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import TradeErrorPanel from '$lib/components/trade/TradeErrorPanel.svelte';
 	import transactionStore, { TransactionStatus } from '$lib/stores/transaction';
 	import { TransactionErrorMessage } from '$lib/types/errors';
 	// currentNetwork not needed directly; TxLink uses it from store
@@ -129,10 +130,16 @@
 						{$transactionStore.status}
 					{/if}
 				</p>
-				<p class="mt-2 text-center text-base text-text-2" data-testid="error-message">
-					{$transactionStore.error}
-				</p>
-				{#if $transactionStore.error === TransactionErrorMessage.GENERIC}
+				{#if $transactionStore.tradeError}
+					<div class="mt-2 w-full">
+						<TradeErrorPanel error={$transactionStore.tradeError} />
+					</div>
+				{:else}
+					<p class="mt-2 text-center text-base text-text-2" data-testid="error-message">
+						{$transactionStore.error}
+					</p>
+				{/if}
+				{#if !$transactionStore.tradeError && $transactionStore.error === TransactionErrorMessage.GENERIC}
 					<p class="mt-2 text-center text-sm text-text-2">
 						If this issue persists, please contact support on our
 						<a

@@ -5,8 +5,8 @@
  * and partial-fill-detection state machines can share TransactionStatus +
  * interfaces without circular imports, and so the types are easily unit-tested.
  *
- * This file is a LEAF — it imports nothing from $lib/services or any other
- * $lib/stores/* module. The dependency-graph direction is one-way:
+ * This file is a runtime LEAF — it imports no values from $lib/services or any
+ * other $lib/stores/* module. The dependency-graph direction is one-way:
  *   transactionShared → consumers (deployTransactionStore, marketTakeStore,
  *                                   approvalStore, partialFillDetection,
  *                                   transaction.ts façade)
@@ -16,6 +16,7 @@ import { writable } from 'svelte/store';
 import type { Hex } from 'viem';
 import type { Network } from '$lib/config/network';
 import { TransactionErrorMessage } from '$lib/types/errors';
+import type { UserFacingTradeError } from '$lib/services/tradeError';
 
 /**
  * Classify error messages into safe, non-sensitive categories for analytics.
@@ -135,6 +136,7 @@ const initialState = {
 	data: null as TransactionMetadata | null,
 	functionName: '',
 	message: '',
+	tradeError: null as UserFacingTradeError | null,
 	multiTxAcknowledged: false,
 	onMultiTxAcknowledge: null as (() => void) | null
 };
@@ -161,6 +163,7 @@ const createTransactionStore = () => {
 			hash?: string;
 			error?: string;
 			data?: TransactionMetadata | null;
+			tradeError?: UserFacingTradeError | null;
 		} = {}
 	) =>
 		update((state) => ({
@@ -169,7 +172,8 @@ const createTransactionStore = () => {
 			message: options.message ?? '',
 			hash: options.hash ?? '',
 			error: options.error ?? '',
-			data: options.data ?? null
+			data: options.data ?? null,
+			tradeError: options.tradeError ?? null
 		}));
 
 	const checkingWalletAllowance = (message?: string) =>
@@ -179,8 +183,11 @@ const createTransactionStore = () => {
 	const awaitApprovalTx = (hash: string) => setState(TransactionStatus.PENDING_APPROVAL, { hash });
 	const transactionSuccess = (hash: string, message?: string, data?: TransactionMetadata) =>
 		setState(TransactionStatus.SUCCESS, { hash, message, data });
-	const transactionError = (message: TransactionErrorMessage, hash?: string) =>
-		setState(TransactionStatus.ERROR, { error: message, hash });
+	const transactionError = (
+		message: TransactionErrorMessage,
+		hash?: string,
+		tradeError?: UserFacingTradeError
+	) => setState(TransactionStatus.ERROR, { error: message, hash, tradeError });
 
 	const acknowledgeMultiTx = () => {
 		update((state) => {
