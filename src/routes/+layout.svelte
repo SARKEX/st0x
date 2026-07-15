@@ -13,11 +13,36 @@
 	const DEFAULT_TITLE = 'ST0x — Trade & Earn on DeFi-Native Tokenized Assets';
 	const DEFAULT_DESCRIPTION =
 		'ST0x brings real-world assets on-chain as DeFi-first tokens. Trade tokenized stocks, ETFs & commodities 24/7, then earn yield with fully composable, on-chain assets.';
-	const OG_IMAGE = `${SITE_URL}/apple-touch-icon.png`;
+	const OG_IMAGE = `${SITE_URL}/og-image.png`;
 
 	$: metaTitle = ($page.data?.title as string | undefined) ?? DEFAULT_TITLE;
 	$: metaDescription = ($page.data?.description as string | undefined) ?? DEFAULT_DESCRIPTION;
 	$: canonicalUrl = `${SITE_URL}${$page.url.pathname}`;
+
+	// Site-wide structured data: Organization (brand/logo/social knowledge-panel
+	// signals) + WebSite (enables the sitelinks search box). Emitted once from the
+	// root layout so every page carries it.
+	const siteJsonLd = JSON.stringify({
+		'@context': 'https://schema.org',
+		'@graph': [
+			{
+				'@type': 'Organization',
+				'@id': `${SITE_URL}/#organization`,
+				name: 'ST0x',
+				url: SITE_URL,
+				logo: `${SITE_URL}/logo.svg`,
+				description: DEFAULT_DESCRIPTION,
+				sameAs: ['https://x.com/st0x_io']
+			},
+			{
+				'@type': 'WebSite',
+				'@id': `${SITE_URL}/#website`,
+				url: SITE_URL,
+				name: 'ST0x',
+				publisher: { '@id': `${SITE_URL}/#organization` }
+			}
+		]
+	});
 	import { onMount } from 'svelte';
 	import { injectAnalytics } from '@vercel/analytics/sveltekit';
 	import { injectSpeedInsights } from '@vercel/speed-insights/sveltekit';
@@ -159,6 +184,10 @@
 	<meta name="twitter:title" content={metaTitle} />
 	<meta name="twitter:description" content={metaDescription} />
 	<meta name="twitter:image" content={OG_IMAGE} />
+
+	<!-- Structured data (Organization + WebSite) -->
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- static JSON-LD serialized from a local const; no user input -->
+	{@html `<script type="application/ld+json">${siteJsonLd}</` + 'script>'}
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>

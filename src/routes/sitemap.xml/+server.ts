@@ -8,15 +8,39 @@ import type { RequestHandler } from './$types';
 // Sitemap URL returning 404.
 const SITE = 'https://www.st0x.io';
 
+// `lastmod` for the listed URLs. Bump on meaningful content changes; it tells
+// Google which pages are worth recrawling. (Kept a single constant rather than
+// per-URL git timestamps to avoid pulling git state into the request path.)
+const LASTMOD = '2026-07-15';
+
+// Published documentation slugs (served at /docs/<slug>). These are now
+// server-rendered and indexable, so they belong in the sitemap. Keep in sync
+// with the published docs under src/docs/**. `introduction` is the canonical
+// destination of the /docs redirect, so /docs itself is intentionally omitted.
+const DOC_SLUGS = [
+	'introduction',
+	'how-to',
+	'architecture',
+	'tokenisation-layer',
+	'liquidity-bridges',
+	'programmatic-intents-system',
+	'st0x-solvers',
+	'st0x-interface'
+];
+
 // Public, indexable routes. App/auth-gated routes (/dashboard, /trade,
-// /strategies, /platform-metrics) are intentionally excluded. Use canonical
-// destinations only — `/docs` 307-redirects to `/docs/introduction`, so list
-// the latter to avoid advertising a redirecting URL.
-const ROUTES = ['/', '/faqs', '/docs/introduction', '/terms', '/privacy-policy'];
+// /strategies, /platform-metrics) are intentionally excluded.
+const ROUTES = [
+	'/',
+	'/faqs',
+	'/terms',
+	'/privacy-policy',
+	...DOC_SLUGS.map((slug) => `/docs/${slug}`)
+];
 
 export const GET: RequestHandler = () => {
 	const urls = ROUTES.map(
-		(path) => `	<url>\n		<loc>${SITE}${path}</loc>\n		<changefreq>weekly</changefreq>\n	</url>`
+		(path) => `	<url>\n		<loc>${SITE}${path}</loc>\n		<lastmod>${LASTMOD}</lastmod>\n	</url>`
 	).join('\n');
 
 	const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;

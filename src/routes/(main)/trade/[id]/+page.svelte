@@ -1002,6 +1002,19 @@
 
 <svelte:head>
 	<title>{pageTitle}</title>
+	<meta
+		name="description"
+		content={`Trade ${tokenDisplayName} 24/7 on ST0x — a tokenized, on-chain asset backed 1:1 and settled non-custodially.`}
+	/>
+	<meta property="og:title" content={`${pageTitle} | ST0x`} />
+	<meta
+		property="og:description"
+		content={`Trade ${tokenDisplayName} 24/7 on ST0x — a tokenized, on-chain asset backed 1:1 and settled non-custodially.`}
+	/>
+	<meta property="og:image" content="https://www.st0x.io/og-image.png" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={`${pageTitle} | ST0x`} />
+	<meta name="twitter:image" content="https://www.st0x.io/og-image.png" />
 </svelte:head>
 <svelte:window on:keydown={handleGlobalKeydown} />
 {#if $singleTokenQuery.isPending}
