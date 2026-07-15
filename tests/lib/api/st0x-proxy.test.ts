@@ -9,11 +9,17 @@ vi.mock('$env/dynamic/private', () => ({
 
 type St0xProxyEvent = Parameters<typeof GET>[0];
 
-function proxyEvent(method: string, path: string, body?: BodyInit): St0xProxyEvent {
+function proxyEvent(
+	method: string,
+	path: string,
+	body?: BodyInit,
+	headers?: Record<string, string>
+): St0xProxyEvent {
 	const event = createMockRequestEvent({
 		method,
 		url: `http://localhost/api/st0x/${path}?page=1`,
-		body
+		body,
+		headers
 	});
 	return {
 		...event,
@@ -341,5 +347,95 @@ describe('/api/st0x proxy', () => {
 			'https://api.example.test/v1/tokens/0xToken/details?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
+	});
+
+	it('forwards the website request id and preserves upstream correlation metadata', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					request_id: 'web-request-123',
+					error: { code: 'ORDERS_QUERY_FAILED', message: 'Order source unavailable' }
+				}),
+				{
+					status: 502,
+					headers: {
+						'Content-Type': 'application/json',
+						'X-Request-Id': 'web-request-123',
+						'Retry-After': '5'
+					}
+				}
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(
+			proxyEvent('GET', 'v1/orders/token/0xToken', undefined, {
+				'X-Request-Id': 'web-request-123'
+			})
+		);
+
+		const init = fetchMock.mock.calls[0][1] as RequestInit;
+		expect((init.headers as Headers).get('X-Request-Id')).toBe('web-request-123');
+		expect(response.status).toBe(502);
+		expect(response.headers.get('X-Request-Id')).toBe('web-request-123');
+		expect(response.headers.get('Retry-After')).toBe('5');
+		expect(response.headers.get('Cache-Control')).toBe('no-store');
+		expect(await response.json()).toMatchObject({
+			request_id: 'web-request-123',
+			error: { code: 'ORDERS_QUERY_FAILED' }
+		});
+	});
+
+	it('replaces an invalid request id before forwarding it upstream', async () => {
+		const incomingId = 'x'.repeat(129);
+		const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+			const requestId = (init.headers as Headers).get('X-Request-Id');
+			return new Response(
+				JSON.stringify({
+					request_id: requestId,
+					error: { code: 'ORDERS_QUERY_FAILED', message: 'Order source unavailable' }
+				}),
+				{
+					status: 502,
+					headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId ?? '' }
+				}
+			);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(
+			proxyEvent('GET', 'v1/orders/token/0xToken', undefined, {
+				'X-Request-Id': incomingId
+			})
+		);
+		const body = await response.json();
+		const forwardedId = (fetchMock.mock.calls[0][1].headers as Headers).get('X-Request-Id');
+
+		expect(forwardedId).toMatch(/^[0-9a-f-]{36}$/);
+		expect(forwardedId).not.toBe(incomingId);
+		expect(response.headers.get('X-Request-Id')).toBe(forwardedId);
+		expect(body.request_id).toBe(forwardedId);
+	});
+
+	it('returns a correlated static envelope when the upstream cannot be reached', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('private DNS detail')));
+
+		const response = await GET(
+			proxyEvent('GET', 'v1/orders/token/0xToken', undefined, {
+				'X-Request-Id': 'web-request-503'
+			})
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(503);
+		expect(response.headers.get('X-Request-Id')).toBe('web-request-503');
+		expect(body).toEqual({
+			request_id: 'web-request-503',
+			error: {
+				code: 'UPSTREAM_UNAVAILABLE',
+				message: 'The trading API is unavailable'
+			}
+		});
+		expect(JSON.stringify(body)).not.toContain('private DNS detail');
 	});
 });

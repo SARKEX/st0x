@@ -77,6 +77,15 @@ export function getRequestContext(): RequestContext | undefined {
 	return contextStore.getStore();
 }
 
+/** Keep correlation IDs compatible with the REST API's accepted header contract. */
+export function requestIdOrUuid(value: string | null | undefined): string {
+	const trimmed = value?.trim();
+	if (trimmed && trimmed.length <= 128 && /^[\x20-\x7E]+$/.test(trimmed)) {
+		return trimmed;
+	}
+	return randomUUID();
+}
+
 /**
  * SvelteKit `Handle` hook — must be the FIRST link in the sequence chain so that:
  *  - Sentry breadcrumbs see the request_id;
@@ -93,7 +102,7 @@ export function getRequestContext(): RequestContext | undefined {
  * lack the field rather than blocking the request).
  */
 export const requestContextHandle: Handle = async ({ event, resolve }) => {
-	const request_id = event.request.headers.get('x-request-id') ?? randomUUID();
+	const request_id = requestIdOrUuid(event.request.headers.get('x-request-id'));
 	const sessionId = event.cookies.get('session');
 	let wallet: string | null = null;
 	if (sessionId && /^[a-f0-9]{64}$/.test(sessionId)) {

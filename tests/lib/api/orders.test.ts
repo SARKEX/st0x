@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Float } from '@rainlanguage/float';
-import { fetchAndQuoteTokenOrders } from '$lib/api/orders';
+import { fetchAndQuotePaymentTokenOrders, fetchAndQuoteTokenOrders } from '$lib/api/orders';
 import { apiGetOrdersByToken, type ApiOrderSummary } from '$lib/api/st0xApi';
 
 vi.mock('$lib/api/st0xApi', async (importOriginal) => {
@@ -92,5 +92,63 @@ describe('fetchAndQuoteTokenOrders', () => {
 		const quotes = await fetchAndQuoteTokenOrders(8453, stockToken.address, paymentToken);
 
 		expect(quotes).toEqual([]);
+	});
+
+	it('propagates REST failures instead of presenting an empty orderbook', async () => {
+		vi.mocked(apiGetOrdersByToken).mockRejectedValueOnce(new Error('REST unavailable'));
+
+		await expect(fetchAndQuoteTokenOrders(8453, stockToken.address, paymentToken)).rejects.toThrow(
+			'REST unavailable'
+		);
+	});
+
+	it('returns earlier pages when a later page fails', async () => {
+		vi.mocked(apiGetOrdersByToken)
+			.mockResolvedValueOnce({
+				orders: [orderSummary()],
+				pagination: { page: 1, pageSize: 50, totalOrders: 2, totalPages: 2, hasMore: true }
+			})
+			.mockRejectedValueOnce(new Error('page 2 unavailable'));
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const quotes = await fetchAndQuoteTokenOrders(8453, stockToken.address, paymentToken);
+
+		expect(quotes).toHaveLength(1);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining('using partial orderbook'),
+			expect.any(Error)
+		);
+		warn.mockRestore();
+	});
+});
+
+describe('fetchAndQuotePaymentTokenOrders', () => {
+	it('propagates REST failures when no usable quotes remain', async () => {
+		vi.mocked(apiGetOrdersByToken).mockReset();
+		vi.mocked(apiGetOrdersByToken).mockRejectedValue(new Error('REST unavailable'));
+
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
+			'REST unavailable'
+		);
+	});
+
+	it('returns quotes from successful tokens when another token request fails', async () => {
+		vi.mocked(apiGetOrdersByToken).mockReset();
+		vi.mocked(apiGetOrdersByToken)
+			.mockResolvedValueOnce({
+				orders: [orderSummary()],
+				pagination: { page: 1, pageSize: 50, totalOrders: 1, totalPages: 1, hasMore: false }
+			})
+			.mockRejectedValue(new Error('token unavailable'));
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const quotes = await fetchAndQuotePaymentTokenOrders(8453, paymentToken);
+
+		expect(quotes).toHaveLength(1);
+		expect(warn).toHaveBeenCalledWith(
+			'[orders] Token fetch failed; using partial orderbook:',
+			expect.any(Error)
+		);
+		warn.mockRestore();
 	});
 });
