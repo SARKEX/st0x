@@ -197,19 +197,27 @@ export async function deployMakerLimitOrder(
 	const registry = await getRegistry(
 		params.registryUrl ?? 'http://127.0.0.1:4173/registry/manifest'
 	);
-	const guiResult = await registry.getGui('fixed-limit', 'base');
+	// Sell (ask) → base (DIA direct); buy (bid) → base-inv (DIA inverted).
+	const deploymentKey = orderType === 'ask' ? 'base' : 'base-inv';
+	const guiResult = await registry.getGui('fixed-limit', deploymentKey);
 	if (guiResult.error || !guiResult.value) {
 		throw new Error(
-			`registry.getGui(fixed-limit) failed: ${guiResult.error?.readableMsg ?? 'no value'}`
+			`registry.getGui(fixed-limit, ${deploymentKey}) failed: ${guiResult.error?.readableMsg ?? 'no value'}`
 		);
 	}
 	const gui = guiResult.value;
 
-	await gui.setSelectToken('token1', sdkInputToken.address);
-	await gui.setSelectToken('token2', sdkOutputToken.address);
+	await gui.setSelectToken('input', sdkInputToken.address);
+	await gui.setSelectToken('output', sdkOutputToken.address);
+
+	// Strip wt/t prefix → DiaWords feed id (e.g. wtCOIN → "COIN").
+	const diaFeed = params.assetToken.symbol.replace(/^(wt|t)/i, '').toUpperCase();
+	gui.setFieldValue('dia-id', `"${diaFeed}"`);
+	gui.setFieldValue('baseline-multiplier', '1.001');
+	gui.setFieldValue('oracle-price-timeout', '300');
 	gui.setFieldValue('fixed-io', sdkRatio);
 	gui.setDeposit(
-		'token2',
+		'output',
 		formatUnits(params.depositAmount, sdkOutputToken.decimals)
 	);
 

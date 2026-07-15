@@ -124,10 +124,30 @@ function getDeploymentKey(raindexNetworkSlug: string): string {
 		case 'polygon':
 			return 'polygon';
 		case 'arbitrum':
-			return 'fixed-limit-arbitrum';
+			return 'arbitrum';
 		default:
 			return raindexNetworkSlug;
 	}
+}
+
+/** DIA feed ids supported by `fixed-limit.rain` (DiaWords on Base). */
+const DIA_FEED_IDS = new Set(['AMZN', 'TSLA', 'NVDA', 'COIN', 'MSTR', 'CEG', 'TSM', 'SGOV']);
+
+/** Default DIA limit multiplier / oracle freshness when the UI does not override. */
+const DIA_LIMIT_BASELINE_MULTIPLIER = '1.001';
+const DIA_LIMIT_ORACLE_PRICE_TIMEOUT = '300';
+
+/**
+ * Map an app asset symbol (e.g. wtNVDA) to the DiaWords string binding (`"NVDA"`).
+ */
+export function assetSymbolToDiaId(assetSymbol: string): string {
+	const feed = assetSymbol.replace(/^(wt|t)/i, '').toUpperCase();
+	if (!DIA_FEED_IDS.has(feed)) {
+		throw new Error(
+			`No DIA price feed configured for ${assetSymbol}. Supported feeds: ${[...DIA_FEED_IDS].join(', ')}`
+		);
+	}
+	return `"${feed}"`;
 }
 
 /** Cached registry instance to avoid repeated network fetches. */
@@ -153,10 +173,15 @@ async function getRegistry(): Promise<DotrainRegistryInstance> {
 /**
  * Loads the registry and returns a DotrainOrderGui for the given order and network.
  * Use this for all order types so strategy and settings stay in sync with the registry.
+ * Optional `deploymentKeyOverride` selects a specific GUI deployment (e.g. base-inv for buy limits).
  */
-async function getGuiFromRegistry(orderKey: string, raindexNetworkSlug: string) {
+async function getGuiFromRegistry(
+	orderKey: string,
+	raindexNetworkSlug: string,
+	deploymentKeyOverride?: string
+) {
 	const registry = await getRegistry();
-	const deploymentKey = getDeploymentKey(raindexNetworkSlug);
+	const deploymentKey = deploymentKeyOverride ?? getDeploymentKey(raindexNetworkSlug);
 	const guiResult = await registry.getGui(orderKey, deploymentKey);
 	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
 	return guiResult.value;
@@ -285,15 +310,19 @@ export const getLimitOrderDeploymentArgs = async (
 	args: LimitOrderDeploymentArgs,
 	eventContext: DeployEventContext
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
-	const gui = await getGuiFromRegistry('fixed-limit', network.raindexNetworkSlug);
+	// Buy (bid): inverted DIA baseline. Sell (ask): direct DIA baseline.
+	const deploymentKey = eventContext.order_side === 'buy' ? 'base-inv' : 'base';
+	const gui = await getGuiFromRegistry('fixed-limit', network.raindexNetworkSlug, deploymentKey);
 
-	await gui.setSelectToken('token1', args.inputToken.address);
-	await gui.setSelectToken('token2', args.outputToken.address);
+	await gui.setSelectToken('input', args.inputToken.address);
+	await gui.setSelectToken('output', args.outputToken.address);
 
-	// Save field values using the selected strategy parameters
+	gui.setFieldValue('dia-id', assetSymbolToDiaId(eventContext.asset_symbol));
+	gui.setFieldValue('baseline-multiplier', DIA_LIMIT_BASELINE_MULTIPLIER);
+	gui.setFieldValue('oracle-price-timeout', DIA_LIMIT_ORACLE_PRICE_TIMEOUT);
 	gui.setFieldValue('fixed-io', args.ioRatio);
 
-	gui.setDeposit('token2', formatUnits(args.depositAmount, args.outputToken.decimals));
+	gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
 	const $walletAddress = get(walletAddress);
 	if (!$walletAddress) throw new Error('Wallet address not found');
@@ -302,7 +331,7 @@ export const getLimitOrderDeploymentArgs = async (
 	// - Input vault: Use provided vault ID if specified, otherwise let system generate random
 	// - Output vault: Always let system generate random (unique per order)
 	if (args.inputVaultId) {
-		gui.setVaultId('input', 'token1', args.inputVaultId);
+		gui.setVaultId('input', 'input', args.inputVaultId);
 	}
 
 	const composedRainlangResult = await gui.getComposedRainlang();

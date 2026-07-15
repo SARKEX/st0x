@@ -1,132 +1,228 @@
 version: 5
 
-orderbooks:
-  fixed-limit-arbitrum:
-    network: arbitrum
-    subgraph: arbitrum
-    address: 0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB
-    deployment-block: 352866209
-    local-db-remote: raindex
-
 orders:
   base:
     orderbook: base
     inputs:
-      - token: token1
+      - token: input
     outputs:
-      - token: token2
-  fixed-limit-arbitrum:
-    orderbook: fixed-limit-arbitrum
-    inputs:
-      - token: token1
-    outputs:
-      - token: token2
-  polygon:
-    orderbook: polygon
-    inputs:
-      - token: token1
-    outputs:
-      - token: token2
+      - token: output
+
 scenarios:
-  fixed-limit-arbitrum:
-    orderbook: fixed-limit-arbitrum
-    rainlang: arbitrum
-    runs: 1
-    bindings:
-      raindex-subparser: 0xe80e7438ce6b1055c8e9CDE1b6336a4F9D53C666
-      fixed-io-output-token: ${order.outputs.0.token.address}
-  polygon:
-    orderbook: polygon
-    runs: 1
-    bindings:
-      raindex-subparser: 0xAD4DeD9BBda1B409536906Fa48fe2b261bBaBde1
-      fixed-io-output-token: ${order.outputs.0.token.address}
-  base:
+  dia-limit-base:
     orderbook: base
+    rainlang: base
     runs: 1
     bindings:
       raindex-subparser: 0x22839F16281E67E5Fd395fAFd1571e820CbD46cB
+      subparser-0: 0xb4bf51998aB1f1b733C9df4a06e131182dBDf447
       fixed-io-output-token: ${order.outputs.0.token.address}
+      baseline-fn: '''dia-price-baseline'
+  dia-limit-base-inv:
+    orderbook: base
+    rainlang: base
+    runs: 1
+    bindings:
+      raindex-subparser: 0x22839F16281E67E5Fd395fAFd1571e820CbD46cB
+      subparser-0: 0xb4bf51998aB1f1b733C9df4a06e131182dBDf447
+      fixed-io-output-token: ${order.outputs.0.token.address}
+      baseline-fn: '''dia-price-baseline-inv'
+
 deployments:
   base:
     order: base
-    scenario: base
-  fixed-limit-arbitrum:
-    order: fixed-limit-arbitrum
-    scenario: fixed-limit-arbitrum
-  polygon:
-    order: polygon
-    scenario: polygon
+    scenario: dia-limit-base
+  base-inv:
+    order: base
+    scenario: dia-limit-base-inv
+
 gui:
-  name: Fixed limit
-  description: A very simple order that places a limit order at a fixed price.
-  short-description: A very simple order that places a limit order at a fixed price.
+  name: DIA limit
+  description: https://raw.githubusercontent.com/ST0x-Technology/st0x.registry/main/src/dia-limit.md
+  short-description: >
+    Offers min(DIA price x spread, fixed limit) using on-chain DIA oracle feeds.
   deployments:
     base:
-      name: Base
-      description: Deploy a limit order on Base.
+      name: Base DIA sell shares
+      description: >
+        Deploy a DIA-priced order on Base. Offers the minimum of
+        (DIA price x benchmark multiplier) and a fixed limit when selling shares.
       deposits:
-        - token: token2
+        - token: output
       fields:
+        - binding: dia-id
+          name: Dia price feed pair
+          description: |
+            The Dia price feed pair to use for the auction.
+            This is used to determine the baseline IO ratio for the offer.
+            For example, if you are selling WETH and buying USDC then you would use the WETH/USD price feed.
+          show-custom-field: false
+          presets:
+            - name: AMZN
+              value: '"AMZN"'
+            - name: TSLA
+              value: '"TSLA"'
+            - name: NVDA
+              value: '"NVDA"'
+            - name: COIN
+              value: '"COIN"'
+            - name: MSTR
+              value: '"MSTR"'
+            - name: CEG
+              value: '"CEG"'
+            - name: TSM
+              value: '"TSM"'
+            - name: SGOV
+              value: '"SGOV"'
+        - binding: baseline-multiplier
+          name: Benchmark price multiplier
+          description: |
+            The multiplier to be applied to the DIA benchmark when calculating the market leg of the offer.
+            Final IO is min(DIA x this multiplier, fixed limit).
+          show-custom-field: true
+          default: 1.001
+          presets:
+            - name: 1.001x
+              value: 1.001
+            - name: 1.005x
+              value: 1.005
+            - name: 1.0025x
+              value: 1.0025
         - binding: fixed-io
-          name: ${order.inputs.0.token.symbol} per ${order.outputs.0.token.symbol}
-          description: Fixed exchange rate (${order.inputs.0.token.symbol} received per 1 ${order.outputs.0.token.symbol} sold)
+          name: Limit ${order.inputs.0.token.symbol} per ${order.outputs.0.token.symbol}
+          description: |
+            Fixed limit IO ratio. Final offer is min(DIA price x multiplier, this limit)
+            (after any needed invert when selling the other side).
+          show-custom-field: true
+        - binding: oracle-price-timeout
+          name: Oracle Price Timeout
+          description: |
+            How fresh (recent) the price is.
+          show-custom-field: true
+          default: 300
+          presets:
+            - name: 5 minutes (300)
+              value: 300
+            - name: 1 hour (3600)
+              value: 3600
+            - name: 8 hour (28800)
+              value: 28800
+            - name: 3 days (259200)
+              value: 259200
       select-tokens:
-        - key: token1
-          name: Token to Buy
-          description: Select the token you want to purchase
-        - key: token2
+        - key: output
           name: Token to Sell
           description: Select the token you want to sell
-    polygon:
-      name: Polygon
-      description: Deploy a limit order on Polygon.
-      deposits:
-        - token: token2
-      fields:
-        - binding: fixed-io
-          name: ${order.inputs.0.token.symbol} per ${order.outputs.0.token.symbol}
-          description: Fixed exchange rate (${order.inputs.0.token.symbol} received per 1 ${order.outputs.0.token.symbol} sold)
-      select-tokens:
-        - key: token1
+        - key: input
           name: Token to Buy
           description: Select the token you want to purchase
-        - key: token2
-          name: Token to Sell
-          description: Select the token you want to sell
-    fixed-limit-arbitrum:
-      name: Arbitrum
-      description: Deploy a limit order on Arbitrum.
-      deposits:
-        - token: token2
-      fields:
-        - binding: fixed-io
-          name: ${order.inputs.0.token.symbol} per ${order.outputs.0.token.symbol}
-          description: Fixed exchange rate (${order.inputs.0.token.symbol} received per 1 ${order.outputs.0.token.symbol} sold)
-      select-tokens:
-        - key: token1
-          name: Token to Buy
-          description: Select the token you want to purchase
-        - key: token2
-          name: Token to Sell
-          description: Select the token you want to sell
----
-#raindex-subparser !The subparser to use.
 
-#fixed-io !The io ratio for the limit order.
-#fixed-io-output-token !The output token that the fixed io is for. If this doesn't match the runtime output then the fixed-io will be inverted.
+    base-inv:
+      name: Base DIA buy shares
+      description: >
+        Deploy a DIA-priced order on Base with an inverted feed (buy shares).
+        Offers min(inv(DIA price) x multiplier, fixed limit).
+      deposits:
+        - token: output
+      fields:
+        - binding: dia-id
+          name: Dia price feed pair
+          description: |
+            The Dia price feed pair to use for the auction.
+            This is used to determine the baseline IO ratio for the offer.
+            For example, if you are buying WETH and selling USDC then you would use the WETH/USD price feed.
+          show-custom-field: false
+          presets:
+            - name: AMZN
+              value: '"AMZN"'
+            - name: TSLA
+              value: '"TSLA"'
+            - name: NVDA
+              value: '"NVDA"'
+            - name: COIN
+              value: '"COIN"'
+            - name: MSTR
+              value: '"MSTR"'
+            - name: CEG
+              value: '"CEG"'
+            - name: TSM
+              value: '"TSM"'
+            - name: SGOV
+              value: '"SGOV"'
+        - binding: baseline-multiplier
+          name: Benchmark price multiplier
+          description: |
+            The multiplier to be applied to the inverted DIA benchmark.
+            Final IO is min(inv(DIA) x this multiplier, fixed limit).
+          show-custom-field: true
+          default: 1.001
+          presets:
+            - name: 1.001x
+              value: 1.001
+            - name: 1.005x
+              value: 1.005
+            - name: 1.0025x
+              value: 1.0025
+        - binding: fixed-io
+          name: Limit ${order.inputs.0.token.symbol} per ${order.outputs.0.token.symbol}
+          description: |
+            Fixed limit IO ratio. Final offer is min(inv(DIA price) x multiplier, this limit)
+            (with the usual fixed-io invert when selling the other side).
+          show-custom-field: true
+        - binding: oracle-price-timeout
+          name: Oracle Price Timeout
+          description: |
+            How fresh (recent) the price is.
+          show-custom-field: true
+          default: 300
+          presets:
+            - name: 5 minutes (300)
+              value: 300
+            - name: 1 hour (3600)
+              value: 3600
+            - name: 8 hour (28800)
+              value: 28800
+            - name: 3 days (259200)
+              value: 259200
+      select-tokens:
+        - key: output
+          name: Token to Sell
+          description: Select the token you want to sell
+        - key: input
+          name: Token to Buy
+          description: Select the token you want to purchase
+
+---
+#raindex-subparser !Raindex subparser.
+#subparser-0 !DiaWords subparser (dia-price).
+#dia-id !The dia id to use for the price feed.
+#baseline-fn !Function that returns the benchmark IO (e.g. dia baseline).
+#baseline-multiplier !Multiplier to apply to the DIA baseline (e.g. 1.001).
+#fixed-io !Fixed limit IO ratio.
+#fixed-io-output-token !Output token the fixed-io is denominated for. If runtime output differs, fixed-io is inverted.
+#oracle-price-timeout !Fetch price no older than for dia oracle in seconds.
+
+#dia-price-baseline
+price _: dia-price(dia-id oracle-price-timeout),
+_: price;
+
+#dia-price-baseline-inv
+price _: dia-price(dia-id oracle-price-timeout),
+_: inv(price);
 
 #calculate-io
-using-words-from raindex-subparser
-max-output: max-positive-value(),
-io: if(
+using-words-from raindex-subparser subparser-0
+market-io: mul(call<'baseline-fn>() baseline-multiplier),
+limit-io: if(
   equal-to(
     output-token()
     fixed-io-output-token
   )
   fixed-io
   inv(fixed-io)
-);
+),
+max-output: max-positive-value(),
+io: min(market-io limit-io);
 
 #handle-io
 :;
