@@ -27,6 +27,7 @@
 		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS
 	} from '$lib/services/marketOrderExecution';
+	import { createTradeError, toUserFacingTradeError } from '$lib/services/tradeError';
 
 	// Quick Trade intentionally uses a fixed 1% slippage tolerance to keep the
 	// simplified flow free of advanced order controls.
@@ -406,7 +407,10 @@
 		}
 
 		const orderSide = isBuying ? 'Buy' : 'Sell';
-		if (!tradeAnchor) return;
+		if (!tradeAnchor) {
+			tradeError = createTradeError('SWAP_QUOTE_FAILED', { stage: 'quote' }).message;
+			return;
+		}
 
 		isExecutingTrade = true;
 		tradeError = null;
@@ -433,14 +437,18 @@
 			});
 
 			if (!result.success) {
-				tradeError = result.error || 'Trade failed';
+				const userFacingError =
+					result.tradeError ?? toUserFacingTradeError(result.error, 'submission');
+				tradeError = userFacingError.message;
 				track('quick_trade_failed', {
 					token_symbol: selectedToken?.symbol,
 					direction: isBuying ? 'buy' : 'sell',
 					usdc_amount: topAmount,
 					token_amount: bottomAmount,
 					avg_price: quote?.avgPrice,
-					error: tradeError
+					error: tradeError,
+					error_code: userFacingError.code,
+					request_id: userFacingError.requestId
 				});
 			} else {
 				tradeSubmittedSuccessfully = true;
@@ -457,14 +465,17 @@
 			}
 		} catch (error) {
 			console.error('Trade error:', error);
-			tradeError = error instanceof Error ? error.message : 'Trade failed';
+			const userFacingError = toUserFacingTradeError(error, 'submission');
+			tradeError = userFacingError.message;
 			track('quick_trade_failed', {
 				token_symbol: selectedToken?.symbol,
 				direction: isBuying ? 'buy' : 'sell',
 				usdc_amount: topAmount,
 				token_amount: bottomAmount,
 				avg_price: quote?.avgPrice,
-				error: tradeError
+				error: tradeError,
+				error_code: userFacingError.code,
+				request_id: userFacingError.requestId
 			});
 		} finally {
 			isExecutingTrade = false;

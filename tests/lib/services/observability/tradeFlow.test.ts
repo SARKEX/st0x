@@ -6,6 +6,7 @@ import {
 	inferWalletFailureStage,
 	type TradeFlowContext
 } from '$lib/services/observability/tradeFlow';
+import { HttpError } from '$lib/clients/http';
 
 vi.mock('$lib/services/observability/tradeId', () => ({
 	getCurrentTradeId: vi.fn(() => 'trade-from-scope')
@@ -52,11 +53,40 @@ describe('tradeFlow Sentry reporter', () => {
 			order_type: 'limit',
 			order_side: 'buy',
 			trade_id: 'trade-explicit',
-			chain_id: '8453'
+			chain_id: '8453',
+			error_code: 'SWAP_CALLDATA_FAILED'
 		});
 		expect(options.contexts.trade_flow).toMatchObject({
 			asset_symbol: 'wtSTOX',
-			payment_symbol: 'USDC'
+			payment_symbol: 'USDC',
+			error_code: 'SWAP_CALLDATA_FAILED'
+		});
+	});
+
+	it('attaches API error code and request id to Sentry tags and context', () => {
+		const captureSpy = vi.spyOn(Sentry, 'captureException');
+		const error = new HttpError({
+			status: 502,
+			code: 'ORDERS_QUERY_FAILED',
+			requestId: 'request-42',
+			publicMessage: 'Order source unavailable',
+			retryAfter: null
+		});
+
+		captureTradeFlowError(error, { ...context, stage: 'quote' });
+
+		const options = captureSpy.mock.calls[0][1] as {
+			tags: Record<string, string>;
+			contexts: Record<string, Record<string, unknown>>;
+		};
+		expect(options.tags).toMatchObject({
+			error_code: 'ORDERS_QUERY_FAILED',
+			request_id: 'request-42',
+			error_class: 'rpc_error'
+		});
+		expect(options.contexts.trade_flow).toMatchObject({
+			error_code: 'ORDERS_QUERY_FAILED',
+			request_id: 'request-42'
 		});
 	});
 
@@ -75,6 +105,30 @@ describe('tradeFlow Sentry reporter', () => {
 		expect(
 			captureSpy.mock.calls.map((call) => (call[1] as { level?: string } | undefined)?.level)
 		).toEqual(['warning', 'warning']);
+	});
+
+	it('keeps diagnostic error class independent from the support code', () => {
+		const captureSpy = vi.spyOn(Sentry, 'captureException');
+
+		captureTradeFlowError(new Error('Stale oracle price'), {
+			...context,
+			stage: 'quote',
+			orderType: 'market'
+		});
+		captureTradeFlowError(new Error('RPC network failed'), {
+			...context,
+			stage: 'approval'
+		});
+
+		const calls = captureSpy.mock.calls.map((call) => call[1] as { tags: Record<string, string> });
+		expect(calls[0].tags).toMatchObject({
+			error_class: 'stale_oracle',
+			error_code: 'SWAP_QUOTE_FAILED'
+		});
+		expect(calls[1].tags).toMatchObject({
+			error_class: 'rpc_error',
+			error_code: 'UPSTREAM_UNAVAILABLE'
+		});
 	});
 
 	it('distinguishes signing rejection from submission failures', () => {

@@ -61,6 +61,7 @@ import {
 	executeMarketOrder,
 	oracleReferenceIoRatio
 } from '$lib/services/marketOrderExecution';
+import { HttpError } from '$lib/clients/http';
 import { TAKE_ORDERS_4_ABI } from '$lib/services/takeOrders4Abi';
 import type { ApiSwapCalldataV2Request } from '$lib/api/st0xApi';
 
@@ -571,5 +572,50 @@ describe('executeMarketOrder REST calldata execution', () => {
 		expect(result.error).toContain('unexpected token');
 		expect(mocks.sendTransaction).not.toHaveBeenCalled();
 		expect(mocks.captureTradeFlowError).toHaveBeenCalled();
+	});
+
+	it('preserves structured API error metadata for the support UI', async () => {
+		mocks.apiGetSwapCalldataV2.mockRejectedValue(
+			new HttpError({
+				status: 503,
+				code: 'UPSTREAM_UNAVAILABLE',
+				requestId: 'request-42',
+				publicMessage: 'Trading service unavailable',
+				retryAfter: null
+			})
+		);
+
+		const result = await executeMarketOrder({
+			orderSide: 'Buy',
+			amount: 1_000_000_000_000_000_000n,
+			...tokens,
+			network
+		});
+
+		expect(result.tradeError).toMatchObject({
+			code: 'UPSTREAM_UNAVAILABLE',
+			requestId: 'request-42',
+			stage: 'calldata'
+		});
+	});
+
+	it('maps wallet rejection to the signing support code', async () => {
+		mocks.sendTransaction.mockRejectedValue(new Error('User rejected request'));
+
+		const result = await executeMarketOrder({
+			orderSide: 'Buy',
+			amount: 1_000_000_000_000_000_000n,
+			...tokens,
+			network
+		});
+
+		expect(result).toMatchObject({
+			success: false,
+			errorClass: 'user_rejected',
+			tradeError: {
+				code: 'TRADE_WALLET_ACTION_REJECTED',
+				stage: 'signing'
+			}
+		});
 	});
 });

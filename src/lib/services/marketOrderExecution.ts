@@ -25,7 +25,11 @@ import {
 	sendTransaction,
 	waitForTransaction
 } from '$lib/services/walletService';
-import { classifyError } from '$lib/services/observability/classifyError';
+import {
+	toUserFacingTradeError,
+	type TradeErrorStage,
+	type UserFacingTradeError
+} from '$lib/services/tradeError';
 import {
 	addTradeFlowBreadcrumb,
 	captureTradeFlowError
@@ -76,6 +80,7 @@ export interface MarketOrderResult {
 	success: boolean;
 	error?: string;
 	errorClass?: ErrorClass;
+	tradeError?: UserFacingTradeError;
 }
 
 export function oracleReferenceIoRatio(
@@ -390,21 +395,29 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		paymentSymbol: paymentToken.symbol
 	});
 	let activeStage: 'quote' | 'calldata' | 'submission' = 'calldata';
+	let activeTradeErrorStage: TradeErrorStage = 'calldata';
 
 	const failWith = (error: unknown): MarketOrderResult => {
-		const message = error instanceof Error ? error.message : 'Unknown error occurred';
+		const rawMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+		const tradeError = toUserFacingTradeError(error, activeTradeErrorStage);
 		transactionStoreInternal.update((state) => ({
 			...state,
 			status: TransactionStatus.ERROR,
-			error: message
+			error: tradeError.message
 		}));
-		return { success: false, error: message, errorClass: classifyError(error, 'market') };
+		return {
+			success: false,
+			error: rawMessage,
+			errorClass: tradeError.errorClass,
+			tradeError
+		};
 	};
 
 	try {
 		const taker = getSignerAddress();
 		if (!taker) {
-			return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
+			activeTradeErrorStage = 'signing';
+			return failWith(new Error('Wallet not connected. Please reconnect and try again.'));
 		}
 
 		const request = buildCalldataRequest(input, taker);
@@ -423,8 +436,10 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		});
 
 		if (response.approvals.length > 0) {
+			activeTradeErrorStage = 'approval';
 			const inputTokenDecimals = orderSide === 'Buy' ? paymentToken.decimals : assetToken.decimals;
 			await submitApprovals(response.approvals, request, network, inputTokenDecimals);
+			activeTradeErrorStage = 'calldata';
 			response = await apiGetSwapCalldataV2(
 				buildApprovalRetryRequest(request, response.resolvedPriceCap)
 			);
@@ -432,6 +447,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 
 		const transaction = validateReadyCalldata(response, request, network);
 		activeStage = 'submission';
+		activeTradeErrorStage = 'signing';
 		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'started');
 		trackTradeEvent('sign_trade', {
 			order_type: 'market',
@@ -439,6 +455,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		});
 		transactionStoreInternal.awaitWalletConfirmation('Awaiting wallet confirmation...');
 		const hash = await sendTransaction(transaction);
+		activeTradeErrorStage = 'confirmation';
 		trackTradeEvent('broadcast', {
 			order_type: 'market',
 			order_side: orderSide.toLowerCase() as 'buy' | 'sell',
