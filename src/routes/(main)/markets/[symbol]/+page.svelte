@@ -1,0 +1,134 @@
+<script lang="ts">
+	import type { PageData } from './$types';
+	import Footer from '$lib/components/Footer.svelte';
+	export let data: PageData;
+
+	$: asset = data.asset;
+	$: tradeHref = `/trade/${asset.address}`;
+
+	// Breadcrumb structured data (Home › Markets › Ticker) — eligible for
+	// breadcrumb rich results. No price/offer claims, so nothing to keep in sync
+	// with live market data.
+	$: breadcrumbJsonLd = JSON.stringify({
+		'@context': 'https://schema.org',
+		'@type': 'BreadcrumbList',
+		itemListElement: [
+			{ '@type': 'ListItem', position: 1, name: 'ST0x', item: 'https://www.st0x.io/' },
+			{ '@type': 'ListItem', position: 2, name: 'Markets', item: 'https://www.st0x.io/markets' },
+			{
+				'@type': 'ListItem',
+				position: 3,
+				name: `${asset.companyName} (${asset.ticker})`,
+				item: `https://www.st0x.io/markets/${asset.slug}`
+			}
+		]
+	});
+</script>
+
+<svelte:head>
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- static JSON-LD serialized from a local const; no user input -->
+	{@html `<script type="application/ld+json">${breadcrumbJsonLd}</` + 'script>'}
+</svelte:head>
+
+<div class="relative z-10 min-h-screen">
+	<section class="px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+		<div class="mx-auto max-w-3xl">
+			<!-- Breadcrumb -->
+			<nav aria-label="Breadcrumb" class="mb-8 text-sm text-gray-500">
+				<a href="/" class="transition-colors hover:text-yellow-500">ST0x</a>
+				<span class="mx-2">/</span>
+				<a href="/markets" class="transition-colors hover:text-yellow-500">Markets</a>
+				<span class="mx-2">/</span>
+				<span class="text-gray-300">{asset.ticker}</span>
+			</nav>
+
+			<div class="mb-6 flex items-center gap-4">
+				{#if asset.logoUrl}
+					<img src={asset.logoUrl} alt="" class="h-14 w-14 flex-shrink-0 rounded-full bg-white/5" />
+				{/if}
+				<div>
+					<h1 class="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+						Trade tokenized {asset.companyName}
+					</h1>
+					<p class="mt-2 text-lg text-gray-400">
+						{asset.ticker} · {asset.exchange} · {asset.tokenSymbol} on Base
+					</p>
+				</div>
+			</div>
+
+			<div class="mb-10 flex flex-wrap gap-3">
+				<a
+					href={tradeHref}
+					class="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-gray-900 transition-colors hover:bg-yellow-400"
+				>
+					Trade {asset.ticker}
+				</a>
+				<a
+					href="/markets"
+					class="rounded-xl border border-white/10 px-6 py-3 font-semibold text-gray-200 transition-colors hover:bg-white/5"
+				>
+					All markets
+				</a>
+			</div>
+
+			<div class="space-y-8 text-gray-300">
+				<div>
+					<h2 class="mb-3 text-2xl font-semibold text-white">
+						What is tokenized {asset.ticker}?
+					</h2>
+					<p class="leading-relaxed">
+						Tokenized {asset.companyName} ({asset.ticker}) is an on-chain token that tracks the
+						underlying {asset.exchange}-listed security. Each token is backed 1:1 by shares held
+						with a regulated broker, so on-chain exposure stays aligned with the real asset. On ST0x
+						it trades as <span class="font-mono text-gray-200">{asset.tokenSymbol}</span> on the Base
+						network.
+					</p>
+				</div>
+
+				<div>
+					<h2 class="mb-3 text-2xl font-semibold text-white">How trading works on ST0x</h2>
+					<ul class="ml-6 list-disc space-y-2 leading-relaxed">
+						<li>
+							<span class="font-medium text-white">24/7 markets.</span> Trade whenever you want — not
+							just during traditional exchange hours.
+						</li>
+						<li>
+							<span class="font-medium text-white">Non-custodial.</span> Your assets stay in smart-contract
+							vaults you control; ST0x never takes custody.
+						</li>
+						<li>
+							<span class="font-medium text-white">On-chain &amp; composable.</span> Settle on Base
+							and use your tokenized {asset.ticker} across DeFi.
+						</li>
+						<li>
+							<span class="font-medium text-white">Intent-based execution.</span> Orders are placed on-chain
+							and filled by solvers when matched with liquidity.
+						</li>
+					</ul>
+				</div>
+
+				<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
+					<h2 class="mb-2 text-xl font-semibold text-white">Ready to trade {asset.ticker}?</h2>
+					<p class="mb-4 leading-relaxed text-gray-400">
+						Connect a wallet and start trading tokenized {asset.companyName} on ST0x. New to tokenized
+						assets? Read the <a href="/docs" class="text-yellow-500 hover:underline">docs</a>
+						or the <a href="/faqs" class="text-yellow-500 hover:underline">FAQs</a>.
+					</p>
+					<a
+						href={tradeHref}
+						class="inline-block rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-gray-900 transition-colors hover:bg-yellow-400"
+					>
+						Trade {asset.ticker} now
+					</a>
+				</div>
+
+				<p class="text-xs leading-relaxed text-gray-600">
+					Trading tokenized assets involves substantial risk. Past performance does not guarantee
+					future results. Regional restrictions may apply at token issuance.
+				</p>
+			</div>
+		</div>
+	</section>
+
+	<Footer />
+</div>

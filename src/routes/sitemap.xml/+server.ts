@@ -1,4 +1,5 @@
 import type { RequestHandler } from './$types';
+import { getSeoAssets } from '$lib/seo/assets';
 
 // Served dynamically (NOT prerendered): prerendering forces the server bundle
 // to initialize, and $lib/server/auth reads SESSION_SECRET from
@@ -29,16 +30,15 @@ const DOC_SLUGS = [
 ];
 
 // Public, indexable routes. App/auth-gated routes (/dashboard, /trade,
-// /strategies, /platform-metrics) are intentionally excluded.
-const ROUTES = [
-	'/',
-	'/faqs',
-	'/terms',
-	'/privacy-policy',
-	...DOC_SLUGS.map((slug) => `/docs/${slug}`)
-];
+// /strategies, /platform-metrics) are intentionally excluded. Per-asset
+// landing pages are enumerated from the token registry so new listings appear
+// automatically.
+const staticRoutes = ['/', '/faqs', '/terms', '/privacy-policy', '/markets'];
 
 export const GET: RequestHandler = () => {
+	const marketRoutes = getSeoAssets().map((a) => `/markets/${a.slug}`);
+	const ROUTES = [...staticRoutes, ...DOC_SLUGS.map((slug) => `/docs/${slug}`), ...marketRoutes];
+
 	const urls = ROUTES.map(
 		(path) => `	<url>\n		<loc>${SITE}${path}</loc>\n		<lastmod>${LASTMOD}</lastmod>\n	</url>`
 	).join('\n');
