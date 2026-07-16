@@ -130,22 +130,18 @@ function getDeploymentKey(raindexNetworkSlug: string): string {
 	}
 }
 
-/** DIA feed ids supported by `fixed-limit.rain` (DiaWords on Base). */
-const DIA_FEED_IDS = new Set(['AMZN', 'TSLA', 'NVDA', 'COIN', 'MSTR', 'CEG', 'TSM', 'SGOV']);
-
 /** Default DIA limit multiplier / oracle freshness when the UI does not override. */
-const DIA_LIMIT_BASELINE_MULTIPLIER = '1.001';
-const DIA_LIMIT_ORACLE_PRICE_TIMEOUT = '300';
+const DIA_LIMIT_BASELINE_MULTIPLIER = '1.0075';
+const DIA_LIMIT_ORACLE_PRICE_TIMEOUT = '7200';
 
 /**
  * Map an app asset symbol (e.g. wtNVDA) to the DiaWords string binding (`"NVDA"`).
+ * Strips the wt/t prefix and uppercases the underlying ticker for DIA on-chain feeds.
  */
 export function assetSymbolToDiaId(assetSymbol: string): string {
 	const feed = assetSymbol.replace(/^(wt|t)/i, '').toUpperCase();
-	if (!DIA_FEED_IDS.has(feed)) {
-		throw new Error(
-			`No DIA price feed configured for ${assetSymbol}. Supported feeds: ${[...DIA_FEED_IDS].join(', ')}`
-		);
+	if (!feed) {
+		throw new Error(`Cannot derive DIA feed id from asset symbol: ${assetSymbol}`);
 	}
 	return `"${feed}"`;
 }

@@ -213,8 +213,8 @@ export async function deployMakerLimitOrder(
 	// Strip wt/t prefix → DiaWords feed id (e.g. wtCOIN → "COIN").
 	const diaFeed = params.assetToken.symbol.replace(/^(wt|t)/i, '').toUpperCase();
 	gui.setFieldValue('dia-id', `"${diaFeed}"`);
-	gui.setFieldValue('baseline-multiplier', '1.001');
-	gui.setFieldValue('oracle-price-timeout', '300');
+	gui.setFieldValue('baseline-multiplier', '1.0075');
+	gui.setFieldValue('oracle-price-timeout', '7200');
 	gui.setFieldValue('fixed-io', sdkRatio);
 	gui.setDeposit(
 		'output',
