@@ -23,7 +23,7 @@
 	spinner instead of the doc content, defeating the point of server-rendering
 	docs for search crawlers.
 -->
-<div class="relative min-h-screen overflow-x-hidden bg-gray-900 text-white">
+<div class="relative min-h-screen overflow-x-hidden bg-surface-1 text-text">
 	<!-- Background Pattern -->
 	<div class="pointer-events-none fixed inset-0 z-0 opacity-5">
 		<div
@@ -52,12 +52,12 @@
 	>
 		<!-- Mobile Header with Menu Button -->
 		<div
-			class="flex items-center justify-between border-b border-white/10 bg-gray-800/95 p-4 backdrop-blur-lg lg:hidden"
+			class="bg-surface-2/95 flex items-center justify-between border-b border-line p-4 backdrop-blur-lg lg:hidden"
 		>
 			<Button
 				variant="ghost"
 				size="sm"
-				className="rounded-lg border border-white/10 p-2 hover:bg-white/5"
+				className="rounded-lg border border-line p-2 hover:bg-surface-2"
 				on:click={() => (mobileSidebarOpen = !mobileSidebarOpen)}
 			>
 				<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -76,7 +76,7 @@
 					class="h-8 w-8 rounded-full"
 				/>
 				<span
-					class="bg-gradient-to-r from-yellow-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
+					class="bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-500 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
 				>
 					ST0x
 				</span>

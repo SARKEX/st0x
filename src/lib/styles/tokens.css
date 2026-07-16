@@ -1,0 +1,136 @@
+/* ============================================================
+   st0x · refreshed design language — TOKENS
+   Dark is primary; light is a first-class alternate.
+   Theme is driven by [data-theme] on <html>.
+   ============================================================ */
+
+:root,
+[data-theme='dark'] {
+	color-scheme: dark;
+
+	/* — surfaces (deep blue-black, faint green undertone) — */
+	--bg: #070b11;
+	--bg-deep: #04070c;
+	--surface-1: #0c121b; /* cards */
+	--surface-2: #111a25; /* raised / inputs */
+	--surface-3: #18222f; /* hover / segmented track */
+
+	/* — hairlines & strokes — */
+	--line: rgba(255, 255, 255, 0.07);
+	--line-strong: rgba(255, 255, 255, 0.12);
+	--line-accent: rgba(45, 227, 166, 0.35);
+
+	/* — theme-aware translucent overlays (depth on cards/fields/hover that still
+	     works in light mode — translucent white in dark, translucent ink in light) — */
+	--overlay-1: rgba(255, 255, 255, 0.03);
+	--overlay-2: rgba(255, 255, 255, 0.06);
+	--overlay-strong: rgba(0, 0, 0, 0.3);
+	--overlay-hover: rgba(255, 255, 255, 0.05);
+
+	/* — text — */
+	--text: #eef3f8;
+	--text-2: #9aa9bb;
+	--text-3: #7b8a9c;
+	--text-muted: #5c6a7c;
+
+	/* — signature accent: mint-emerald — */
+	--accent: #2de3a6;
+	--accent-bright: #4af0bb;
+	--accent-deep: #15c78c;
+	--accent-ink: #042b1f; /* text on accent fills */
+	--accent-soft: rgba(45, 227, 166, 0.12);
+	--accent-line: rgba(45, 227, 166, 0.3);
+	--accent-glow: rgba(45, 227, 166, 0.45);
+
+	/* — secondary brand: iris (bridges official st0x indigo) — */
+	--iris: #7d8bff;
+	--iris-soft: rgba(125, 139, 255, 0.12);
+
+	/* — semantic — */
+	--up: #2de3a6;
+	--down: #fb6a5d;
+	--down-soft: rgba(251, 106, 93, 0.12);
+
+	/* — ambient background (canvas reads these) — */
+	--aura-a: rgba(45, 227, 166, 0.16);
+	--aura-b: rgba(125, 139, 255, 0.1);
+	--aura-c: rgba(45, 227, 166, 0.05);
+	--line-field: rgba(120, 200, 170, 0.1);
+
+	/* — elevation — */
+	--shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--shadow-2: 0 12px 40px -12px rgba(0, 0, 0, 0.7);
+	--shadow-pop: 0 24px 70px -20px rgba(0, 0, 0, 0.85);
+	--shadow-accent: 0 10px 30px -10px rgba(45, 227, 166, 0.45);
+}
+
+[data-theme='light'] {
+	color-scheme: light;
+
+	/* v2 light redesign (2026-06-11): cool Tailwind-slate neutrals, crisp white
+	   cards, mint accent deepened for AA contrast on white. Surfaces map the
+	   prototype's #070b11→#f6f8fb (page), #0c121b→#eceff4 (mid), white→raised. */
+	--bg: #f6f8fb;
+	--bg-deep: #eceff4;
+	--surface-1: #ffffff;
+	--surface-2: #eceff4;
+	--surface-3: #e2e8f0;
+
+	/* slate-ink hairlines (prototype border-white/10 → rgba(15,23,42,0.12)) */
+	--line: rgba(15, 23, 42, 0.11);
+	--line-strong: rgba(15, 23, 42, 0.16);
+	--line-accent: rgba(15, 158, 114, 0.32);
+
+	--overlay-1: rgba(15, 23, 42, 0.03);
+	--overlay-2: rgba(15, 23, 42, 0.05);
+	--overlay-strong: rgba(15, 23, 42, 0.05);
+	--overlay-hover: rgba(15, 23, 42, 0.05);
+
+	/* text → Tailwind slate scale (900/600/500/400) for cooler, higher-contrast copy */
+	--text: #0f172a;
+	--text-2: #475569;
+	--text-3: #64748b;
+	--text-muted: #94a3b8;
+
+	/* mint deepened for AA on white (emerald-400→#0f9e72, emerald-300→#0b8f63) */
+	--accent: #0f9e72;
+	--accent-bright: #14b886;
+	--accent-deep: #0b8f63;
+	--accent-ink: #ffffff;
+	--accent-soft: rgba(15, 158, 114, 0.1);
+	--accent-line: rgba(15, 158, 114, 0.28);
+	--accent-glow: rgba(15, 158, 114, 0.3);
+
+	--iris: #4f46e5;
+	--iris-soft: rgba(79, 70, 229, 0.1);
+
+	--up: #0f9e72;
+	--down: #dc2626;
+	--down-soft: rgba(220, 38, 38, 0.1);
+
+	--aura-a: rgba(15, 158, 114, 0.16);
+	--aura-b: rgba(79, 70, 229, 0.1);
+	--aura-c: rgba(15, 158, 114, 0.06);
+	--line-field: rgba(20, 140, 100, 0.1);
+
+	--shadow-1: 0 1px 2px rgba(20, 30, 50, 0.06);
+	--shadow-2: 0 18px 44px -18px rgba(30, 45, 70, 0.22);
+	--shadow-pop: 0 30px 70px -22px rgba(30, 45, 70, 0.3);
+	--shadow-accent: 0 12px 34px -12px rgba(15, 158, 114, 0.4);
+}
+
+/* — radii / type tokens — */
+:root {
+	--r-sm: 8px;
+	--r: 12px;
+	--r-lg: 16px;
+	--r-xl: 22px;
+	--r-2xl: 28px;
+	--pill: 999px;
+
+	--font-display: 'Space Grotesk', 'DM Sans', system-ui, sans-serif;
+	--font-sans: 'DM Sans', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
+}

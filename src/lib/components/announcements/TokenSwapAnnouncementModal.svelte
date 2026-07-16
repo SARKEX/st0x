@@ -47,7 +47,7 @@
 	<div class="fixed inset-0 z-[201] flex items-center justify-center p-4">
 		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 		<div
-			class="relative w-full max-w-md overflow-hidden rounded-xl border border-green-500/30 bg-gray-900 shadow-2xl"
+			class="relative w-full max-w-md overflow-hidden rounded-xl border border-green-500/30 bg-surface-1 shadow-2xl"
 			on:click|stopPropagation
 			on:keydown|stopPropagation
 			role="dialog"
@@ -60,7 +60,7 @@
 			<!-- Close button -->
 			<button
 				on:click={handleClose}
-				class="absolute right-3 top-4 rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+				class="absolute right-3 top-4 rounded-lg p-2 text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
 				aria-label="Close modal"
 			>
 				<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,11 +88,11 @@
 					</svg>
 				</div>
 
-				<h2 id="modal-title" class="mb-2 text-xl font-semibold text-white">
+				<h2 id="modal-title" class="mb-2 text-xl font-semibold text-text">
 					Token Migration Complete
 				</h2>
 
-				<p class="mb-6 text-sm text-gray-400">
+				<p class="mb-6 text-sm text-text-2">
 					The token migration has been completed. If you haven't already, remember to swap your old
 					tokens to the new wrapped versions on the site.
 				</p>
@@ -100,7 +100,7 @@
 				<div class="flex gap-3">
 					<button
 						type="button"
-						class="flex-1 rounded-lg border border-gray-600 px-4 py-2.5 font-medium text-gray-300 transition-colors hover:bg-gray-800"
+						class="flex-1 rounded-lg border border-line px-4 py-2.5 font-medium text-text-2 transition-colors hover:bg-surface-2"
 						on:click={handleClose}
 					>
 						Dismiss

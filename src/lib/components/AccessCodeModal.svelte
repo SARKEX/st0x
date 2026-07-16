@@ -154,23 +154,23 @@
 	<div class="space-y-4">
 		<!-- Connected wallet indicator -->
 		<div
-			class="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2"
+			class="flex items-center justify-between rounded-lg border border-accent-line bg-accent-soft px-3 py-2"
 		>
 			<div class="flex items-center gap-2">
-				<svg class="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+				<svg class="h-4 w-4 text-up" viewBox="0 0 20 20" fill="currentColor">
 					<path
 						fill-rule="evenodd"
 						d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.172 7.707 8.879a1 1 0 10-1.414 1.414L9 13l4.707-4.707z"
 						clip-rule="evenodd"
 					/>
 				</svg>
-				<span class="text-sm text-gray-300">
+				<span class="text-sm text-text-2">
 					{truncateAddress($walletAddress || '')}
 				</span>
 			</div>
 			<button
 				on:click={handleDisconnect}
-				class="text-xs text-gray-400 transition-colors hover:text-red-400"
+				class="text-xs text-text-2 transition-colors hover:text-down"
 				disabled={submitting}
 			>
 				Disconnect
@@ -178,26 +178,26 @@
 		</div>
 
 		{#if error}
-			<div class="rounded-md border border-red-900/40 bg-red-900/20 p-3 text-sm text-red-300">
+			<div class="rounded-md border border-down bg-down-soft p-3 text-sm text-down">
 				{error}
 			</div>
 		{/if}
 
 		<!-- Access code input -->
 		<div class="space-y-2">
-			<label for="access-code-modal" class="text-sm font-medium text-gray-300">Access Code</label>
+			<label for="access-code-modal" class="text-sm font-medium text-text-2">Access Code</label>
 			<input
 				id="access-code-modal"
 				type="text"
 				bind:value={accessCode}
 				disabled={submitting}
 				placeholder="ST0X-XXXX-XXXX"
-				class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 uppercase text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500 disabled:cursor-not-allowed disabled:opacity-50"
+				class="w-full rounded-lg border border-line-strong bg-surface-1 px-3 py-2 uppercase text-text placeholder-text-3 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
 			/>
-			<p class="text-xs text-gray-500">
+			<p class="text-xs text-text-3">
 				Don't have an access code? Contact us at <a
 					href="mailto:toby@st0x.io"
-					class="text-yellow-500 hover:underline">toby@st0x.io</a
+					class="text-accent hover:underline">toby@st0x.io</a
 				>
 			</p>
 		</div>
@@ -205,8 +205,8 @@
 		<!-- Referral code input (collapsible) -->
 		<div class="space-y-2">
 			{#if showReferralField}
-				<label for="referral-code-modal" class="text-sm font-medium text-gray-300">
-					Referral Code <span class="text-gray-500">(optional)</span>
+				<label for="referral-code-modal" class="text-sm font-medium text-text-2">
+					Referral Code <span class="text-text-3">(optional)</span>
 				</label>
 				<input
 					id="referral-code-modal"
@@ -214,18 +214,18 @@
 					bind:value={referralCode}
 					disabled={submitting}
 					placeholder="st0x-ref-xxxxxx"
-					class="w-full rounded-lg border px-3 py-2 lowercase text-white placeholder-gray-500 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {referralCodeValid
-						? 'border-gray-700 bg-gray-800 focus:border-yellow-500 focus:ring-yellow-500'
-						: 'border-red-500 bg-gray-800 focus:border-red-500 focus:ring-red-500'}"
+					class="w-full rounded-lg border px-3 py-2 lowercase text-text placeholder-text-3 focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50 {referralCodeValid
+						? 'border-line-strong bg-surface-1 focus:border-accent focus:ring-accent'
+						: 'border-down bg-surface-1 focus:border-down focus:ring-down'}"
 				/>
 				{#if !referralCodeValid}
-					<p class="text-xs text-red-400">Invalid referral code format</p>
+					<p class="text-xs text-down">Invalid referral code format</p>
 				{/if}
 			{:else}
 				<button
 					type="button"
 					on:click={() => (showReferralField = true)}
-					class="text-sm text-gray-400 hover:text-yellow-500"
+					class="text-sm text-text-2 hover:text-accent"
 				>
 					+ Add referral code
 				</button>
@@ -249,8 +249,6 @@
 			{/if}
 		</Button>
 
-		<p class="text-center text-xs text-gray-500">
-			You'll sign a message to verify wallet ownership
-		</p>
+		<p class="text-center text-xs text-text-3">You'll sign a message to verify wallet ownership</p>
 	</div>
 </Modal>

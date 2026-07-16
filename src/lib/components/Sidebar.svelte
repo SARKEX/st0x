@@ -6,6 +6,7 @@
 	import { formatUnits } from 'viem';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
+	import Icon from '$lib/components/ui/Icon.svelte';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
@@ -55,7 +56,7 @@
 {#if desktop}
 	<button
 		on:click={toggleCollapse}
-		class="fixed top-16 z-[10001] rounded-r-lg border border-l-0 border-white/10 bg-gray-900/80 px-1 py-3 text-gray-400 backdrop-blur-xl transition-all duration-300 hover:bg-gray-800 hover:pr-2 hover:text-white"
+		class="bg-surface-1/80 fixed top-16 z-[10001] rounded-r-lg border border-l-0 border-line px-1 py-3 text-text-3 backdrop-blur-xl transition-all duration-300 hover:bg-surface-2 hover:pr-2 hover:text-text"
 		class:left-64={!collapsed}
 		class:left-0={collapsed}
 		aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -76,7 +77,7 @@
 {#if !desktop && !visible}
 	<button
 		on:click={() => dispatch('open')}
-		class="fixed left-0 top-1/3 z-[10001] flex items-center gap-1 rounded-r-lg border border-l-0 border-yellow-500/40 bg-gradient-to-r from-yellow-500/20 to-yellow-500/10 px-1.5 py-4 text-yellow-400 shadow-lg shadow-yellow-500/20 backdrop-blur-xl transition-all duration-300 hover:border-yellow-500/60 hover:bg-yellow-500/30 hover:pr-2.5 hover:text-yellow-300"
+		class="fixed left-0 top-1/3 z-[10001] flex items-center gap-1 rounded-r-lg border border-l-0 border-accent-line bg-accent-soft px-1.5 py-4 text-accent shadow-lg shadow-[var(--shadow-accent)] backdrop-blur-xl transition-all duration-300 hover:pr-2.5 hover:brightness-110"
 		aria-label="Open token list"
 	>
 		<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -87,7 +88,7 @@
 
 <!-- Sidebar -->
 <div
-	class="fixed left-0 top-0 z-[10000] flex h-full transform flex-col border-r border-white/5 bg-gray-900/70 backdrop-blur-xl transition-all duration-300 ease-in-out"
+	class="bg-surface-1/70 fixed left-0 top-0 z-[10000] flex h-full transform flex-col border-r border-line backdrop-blur-xl transition-all duration-300 ease-in-out"
 	class:w-64={desktop || (!desktop && visible)}
 	class:w-0={!desktop && !visible}
 	class:max-w-[80vw]={!desktop && visible}
@@ -96,20 +97,13 @@
 >
 	<!-- Mobile header with close button -->
 	{#if !desktop}
-		<div class="flex items-center justify-end border-b border-white/5 p-2">
+		<div class="flex items-center justify-end border-b border-line p-2">
 			<button
 				on:click={() => dispatch(visible ? 'close' : 'open')}
-				class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+				class="rounded-lg p-2 text-text-3 transition-colors hover:bg-surface-2 hover:text-text"
 				aria-label={visible ? 'Close sidebar' : 'Open sidebar'}
 			>
-				<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M6 18L18 6M6 6l12 12"
-					/>
-				</svg>
+				<Icon name="close" className="h-5 w-5" />
 			</button>
 		</div>
 	{:else}
@@ -120,7 +114,7 @@
 	{#if (desktop && !collapsed) || (!desktop && visible)}
 		<!-- Assets List (scrollable) -->
 		<div class="flex-1 overflow-y-auto p-3">
-			<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-gray-600">
+			<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-text-muted">
 				Assets
 			</div>
 			<div class="space-y-0.5">
@@ -131,9 +125,9 @@
 						on:click={() => {
 							if (!desktop) dispatch('close');
 						}}
-						class="block rounded-md px-2 py-2 transition-colors hover:bg-white/5 {activePath ===
+						class="block rounded-md px-2 py-2 transition-colors hover:bg-surface-2 {activePath ===
 						`/trade/${tokenInfo?.address ?? asset.id}`
-							? 'border-l-2 border-yellow-500 bg-yellow-500/10'
+							? 'border-l-2 border-accent bg-accent-soft'
 							: ''}"
 					>
 						<div class="flex items-center justify-between gap-2">
@@ -146,24 +140,24 @@
 									/>
 								{:else}
 									<div
-										class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-700 text-xs font-bold"
+										class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-3 text-xs font-bold"
 									>
 										{asset.symbol.charAt(0)}
 									</div>
 								{/if}
 								<div class="min-w-0 flex-1">
-									<div class="truncate text-sm font-medium text-white">{asset.symbol}</div>
-									<div class="truncate text-xs text-gray-400">{asset.name}</div>
+									<div class="truncate text-sm font-medium text-text">{asset.symbol}</div>
+									<div class="truncate text-xs text-text-3">{asset.name}</div>
 								</div>
 							</div>
-							<div class="text-sm font-medium text-white">
+							<div class="text-sm font-medium text-text">
 								${asset.price > 0 ? asset.price.toFixed(2) : 'N/A'}
 							</div>
 						</div>
 					</a>
 				{/each}
 				{#if sortedAssets.length === 0}
-					<div class="py-8 text-center text-sm text-gray-400">No assets available</div>
+					<div class="py-8 text-center text-sm text-text-3">No assets available</div>
 				{/if}
 			</div>
 		</div>

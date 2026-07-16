@@ -19,6 +19,9 @@
 	import Button from './ui/Button.svelte';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
+	import QuickTradeChart from './QuickTradeChart.svelte';
+	import Icon from './ui/Icon.svelte';
+	import { goto } from '$app/navigation';
 
 	type ParseFloatHex = typeof import('$lib/utils/tokenMath').parseFloatHex;
 
@@ -841,19 +844,21 @@
 <svelte:window on:click={closeDropdown} />
 
 <div
-	class="relative w-full max-w-md rounded-2xl border border-white/10 bg-gray-900/80 p-4 shadow-2xl backdrop-blur-xl sm:p-6"
+	class="bg-surface-1/80 relative w-full rounded-2xl border border-line p-4 shadow-2xl backdrop-blur-xl sm:p-6 md:grid md:grid-cols-2 md:items-stretch md:gap-6"
 >
-	<div
-		class="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-b from-blue-500/20 via-transparent to-transparent opacity-50"
-	></div>
-
 	<div class="relative space-y-4">
+		<!-- Card header -->
+		<div class="flex items-center justify-between text-xs text-text-2">
+			<span>Quick trade</span>
+			<span>Base · {paymentToken?.symbol ?? 'USDC'}</span>
+		</div>
+
 		<!-- USDC section -->
 		<div class="space-y-1">
 			<div
-				class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
+				class="flex items-center gap-3 rounded-xl border border-line bg-overlay-strong px-3.5 py-3.5"
 			>
-				<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
+				<div class="flex items-center gap-2 rounded-full bg-overlay-2 px-3 py-1.5">
 					{#if paymentToken?.logoUrl}
 						<img
 							src={paymentToken.logoUrl}
@@ -861,7 +866,7 @@
 							class="h-6 w-6 rounded-full"
 						/>
 					{/if}
-					<span class="font-medium text-white">{paymentToken?.symbol ?? 'USDC'}</span>
+					<span class="font-medium text-text">{paymentToken?.symbol ?? 'USDC'}</span>
 				</div>
 				<div class="flex-1 text-right">
 					<input
@@ -871,12 +876,12 @@
 						value={topAmount}
 						on:input={handleTopInput}
 						on:blur={capAmountsIfNeeded}
-						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
+						class="w-full bg-transparent text-right text-xl font-medium text-text placeholder-text-3 focus:outline-none sm:text-2xl"
 					/>
 				</div>
 			</div>
 			<div class="flex items-center justify-between px-1 text-xs">
-				<span class="text-gray-500">
+				<span class="text-text-3">
 					{#if $isAuthenticated && $walletAddress}
 						Balance: {formattedUsdcBalance.toFixed(2)} {paymentToken?.symbol ?? 'USDC'}
 					{:else}
@@ -889,7 +894,7 @@
 							<button
 								type="button"
 								on:click={() => handleUsdcPercentClick(percent)}
-								class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+								class="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-text-3 transition hover:bg-surface-2 hover:text-text"
 							>
 								{percent === 100 ? 'MAX' : `${percent}%`}
 							</button>
@@ -899,7 +904,7 @@
 			</div>
 			{#if isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
 				<div
-					class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300"
+					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
 				>
 					{#if showLiquidityWarning}
 						Order capped to max available liquidity.
@@ -913,41 +918,33 @@
 			{/if}
 		</div>
 
-		<!-- Direction arrow -->
-		<div class="flex justify-center">
+		<!-- Direction arrow (overlapping swap pivot) -->
+		<div class="relative z-10 -my-3 flex justify-center">
 			<button
 				type="button"
 				on:click={handleSwapDirection}
-				class="rounded-full border border-white/10 bg-gray-800 p-2 transition hover:border-white/20 hover:bg-gray-700"
+				class="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface-1 transition hover:border-line-strong hover:bg-surface-2"
 			>
-				<svg
-					class="h-4 w-4 text-gray-400 transition-transform duration-200"
-					class:rotate-180={!isBuying}
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M19 14l-7 7m0 0l-7-7m7 7V3"
-					/>
-				</svg>
+				<Icon
+					name="arrowDown"
+					className="h-4 w-4 text-text-3 transition-transform duration-200 {!isBuying
+						? 'rotate-180'
+						: ''}"
+				/>
 			</button>
 		</div>
 
 		<!-- Token section -->
 		<div class="space-y-1">
 			<div
-				class="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3"
+				class="flex items-center gap-3 rounded-xl border border-line bg-overlay-strong px-3.5 py-3.5"
 			>
 				<!-- Token selector - completely independent -->
 				<div class="relative">
 					<button
 						type="button"
 						on:click={toggleDropdown}
-						class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5 transition hover:bg-gray-700"
+						class="flex items-center gap-2 rounded-full bg-overlay-2 px-3 py-1.5 transition hover:bg-overlay-hover"
 					>
 						{#if selectedToken}
 							<img
@@ -955,16 +952,11 @@
 								alt={selectedToken.symbol}
 								class="h-6 w-6 rounded-full"
 							/>
-							<span class="font-medium text-white">{selectedToken.symbol}</span>
+							<span class="font-medium text-text">{selectedToken.symbol}</span>
 						{:else}
-							<span class="text-gray-400">Select</span>
+							<span class="text-text-3">Select</span>
 						{/if}
-						<svg
-							class="h-4 w-4 text-gray-400"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
+						<svg class="h-4 w-4 text-text-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
 								stroke-linecap="round"
 								stroke-linejoin="round"
@@ -979,13 +971,13 @@
 						<!-- svelte-ignore a11y-no-static-element-interactions -->
 						<div
 							on:click|stopPropagation
-							class="absolute left-0 top-full z-[100] mt-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-gray-800 shadow-xl"
+							class="absolute left-0 top-full z-[100] mt-2 w-64 overflow-hidden rounded-xl border border-line bg-surface-1 shadow-xl"
 						>
 							<!-- Scroll up indicator -->
 							{#if canScrollUp}
-								<div class="flex justify-center border-b border-white/5 py-1">
+								<div class="flex justify-center border-b border-line py-1">
 									<svg
-										class="h-4 w-4 text-gray-500"
+										class="h-4 w-4 text-text-muted"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
@@ -1008,21 +1000,21 @@
 									<button
 										type="button"
 										on:click|stopPropagation={() => handleTokenSelect(token.address)}
-										class="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-white/5"
+										class="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-surface-2"
 									>
 										<img src={token.logoUrl} alt={token.symbol} class="h-6 w-6 rounded-full" />
 										<div>
-											<div class="font-medium text-white">{token.symbol}</div>
-											<div class="text-xs text-gray-500">{token.name}</div>
+											<div class="font-medium text-text">{token.symbol}</div>
+											<div class="text-xs text-text-3">{token.name}</div>
 										</div>
 									</button>
 								{/each}
 							</div>
 							<!-- Scroll down indicator -->
 							{#if canScrollDown}
-								<div class="flex justify-center border-t border-white/5 py-1">
+								<div class="flex justify-center border-t border-line py-1">
 									<svg
-										class="h-4 w-4 text-gray-500"
+										class="h-4 w-4 text-text-muted"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
@@ -1048,12 +1040,12 @@
 						value={bottomAmount}
 						on:input={handleBottomInput}
 						on:blur={capAmountsIfNeeded}
-						class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none sm:text-2xl"
+						class="w-full bg-transparent text-right text-xl font-medium text-text placeholder-text-3 focus:outline-none sm:text-2xl"
 					/>
 				</div>
 			</div>
 			<div class="flex items-center justify-between px-1 text-xs">
-				<span class="text-gray-500">
+				<span class="text-text-3">
 					{#if $isAuthenticated && $walletAddress}
 						Balance: {formattedTokenBalance.toFixed(4)} {selectedToken?.symbol ?? ''}
 					{:else if quote?.avgPrice}
@@ -1068,7 +1060,7 @@
 							<button
 								type="button"
 								on:click={() => handleTokenPercentClick(percent)}
-								class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+								class="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-text-3 transition hover:bg-surface-2 hover:text-text"
 							>
 								{percent === 100 ? 'MAX' : `${percent}%`}
 							</button>
@@ -1078,7 +1070,7 @@
 			</div>
 			{#if !isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
 				<div
-					class="mt-1 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1.5 text-xs text-yellow-300"
+					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
 				>
 					{#if showLiquidityWarning}
 						Order capped to max available liquidity.
@@ -1093,15 +1085,15 @@
 		</div>
 
 		<!-- Network info -->
-		<div class="flex items-center justify-center gap-2 text-xs text-gray-500">
+		<div class="flex items-center justify-center gap-2 text-xs text-text-3">
 			<span>Trading on</span>
 			<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
-			<span class="text-gray-400">{$currentNetwork?.displayName ?? 'Base'}</span>
+			<span class="text-text-2">{$currentNetwork?.displayName ?? 'Base'}</span>
 		</div>
 
 		<!-- Error display -->
 		{#if tradeError}
-			<div class="rounded-lg bg-red-500/10 px-3 py-2 text-center text-sm text-red-400">
+			<div class="rounded-lg bg-down-soft px-3 py-2 text-center text-sm text-down">
 				{tradeError}
 			</div>
 		{/if}
@@ -1182,6 +1174,29 @@
 				Connect wallet
 			</Button>
 		{/if}
+
+		<!-- or divider -->
+		<div class="flex items-center gap-3 text-[11px] uppercase tracking-wider text-text-muted">
+			<span class="h-px flex-1 bg-line"></span>
+			<span>or</span>
+			<span class="h-px flex-1 bg-line"></span>
+		</div>
+
+		<!-- Launch Trading Terminal (secondary) -->
+		<button
+			type="button"
+			class="w-full rounded-xl border border-line-strong bg-overlay-2 py-3 text-sm font-semibold text-text transition hover:bg-overlay-hover"
+			on:click={() => goto('/trade/0x2289249984f1fa2ce86c4e8867e7eb819ea7df95')}
+		>
+			Launch Trading Terminal
+		</button>
+	</div>
+
+	<!-- Right: ambient price chart for the selected token (md+ only) -->
+	<div class="relative hidden md:block">
+		<div class="h-full min-h-[320px] overflow-hidden rounded-xl border border-line bg-bg-deep">
+			<QuickTradeChart token={selectedToken} fallbackPrice={bestAskPrice ?? bestBidPrice} />
+		</div>
 	</div>
 </div>
 

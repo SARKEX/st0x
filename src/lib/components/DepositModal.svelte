@@ -62,7 +62,7 @@
 
 <Modal show={$showDepositModal} title="Deposit" maxWidthClass="max-w-md" onClose={handleClose}>
 	<div class="space-y-5">
-		<p class="text-sm text-gray-400">
+		<p class="text-sm text-text-2">
 			Send {paymentToken} on {networkName} to this address. Funds will appear in your st0x balance once
 			confirmed.
 		</p>
@@ -74,14 +74,12 @@
 					{#if qrCodeDataUrl}
 						<img src={qrCodeDataUrl} alt="Wallet QR Code" class="h-40 w-40" />
 					{:else if qrCodeError}
-						<div
-							class="flex h-40 w-40 items-center justify-center text-center text-sm text-gray-500"
-						>
+						<div class="flex h-40 w-40 items-center justify-center text-center text-sm text-text-3">
 							{qrCodeError}
 						</div>
 					{:else}
 						<div class="flex h-40 w-40 items-center justify-center">
-							<svg class="h-6 w-6 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+							<svg class="h-6 w-6 animate-spin text-text-2" fill="none" viewBox="0 0 24 24">
 								<circle
 									class="opacity-25"
 									cx="12"
@@ -100,13 +98,13 @@
 					{/if}
 				</div>
 			</div>
-			<p class="text-center text-xs text-gray-500">Scan with your wallet</p>
+			<p class="text-center text-xs text-text-3">Scan with your wallet</p>
 		{/if}
 
 		<!-- Wallet Address Display -->
-		<div class="rounded-lg border border-gray-700 bg-gray-800 p-4">
-			<span class="mb-2 block text-xs font-medium text-gray-400">Your wallet address</span>
-			<div class="break-all font-mono text-sm text-white">
+		<div class="rounded-lg border border-line bg-surface-2 p-4">
+			<span class="mb-2 block text-xs font-medium text-text-2">Your wallet address</span>
+			<div class="break-all font-mono text-sm text-text">
 				{$walletAddress || 'Not connected'}
 			</div>
 		</div>
@@ -163,8 +161,8 @@
 		</div>
 
 		<!-- Warning -->
-		<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
-			<p class="text-xs text-yellow-400">
+		<div class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+			<p class="text-xs text-amber-300">
 				Only send tokens on the {networkName} network. Tokens sent on other networks may be lost.
 			</p>
 		</div>

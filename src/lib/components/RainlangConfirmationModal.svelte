@@ -21,7 +21,7 @@
 
 <Modal {show} title="Deploy Strategy on chain" onClose={onCancel}>
 	<div class="space-y-4">
-		<div class="rounded-lg border border-white/10 bg-gray-900 p-4">
+		<div class="rounded-lg border border-line bg-surface-1 p-4">
 			<pre class="overflow-x-auto whitespace-pre-wrap font-mono text-sm">
 				<code bind:this={codeElement} class="language-javascript">{rainlangCode}</code>
 			</pre>

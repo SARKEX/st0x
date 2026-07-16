@@ -5,6 +5,7 @@
 	import { wagmiConfig, chainId, connected } from 'svelte-wagmi';
 	import { get } from 'svelte/store';
 	import { track } from '$lib/services/analytics';
+	import Icon from '$lib/components/ui/Icon.svelte';
 
 	let isOpen = false;
 
@@ -92,18 +93,14 @@
 <div class="network-selector relative z-[10000] inline-block shrink-0">
 	<button
 		on:click={toggleDropdown}
-		class="flex min-h-10 items-center gap-2 rounded-lg bg-transparent px-2 py-1 text-xs font-medium text-white transition-all duration-200 hover:bg-white/5 active:scale-95 sm:px-3 sm:py-2 sm:text-sm"
+		class="flex items-center gap-1.5 rounded-lg border border-line bg-overlay-1 px-2.5 py-1.5 text-sm font-medium text-text-2 transition-all duration-200 hover:bg-overlay-hover active:scale-95"
 	>
-		<div class="flex items-center gap-2">
-			<img
-				src={getChainLogo($currentNetwork)}
-				alt={$currentNetwork.displayName}
-				class="h-4 w-4"
-				class:rounded-full={$currentNetwork.chainId !== 8453}
-			/>
-			<span class="hidden sm:inline">{$currentNetwork.displayName}</span>
-		</div>
-		<span class="text-xs transition-transform duration-200" class:rotate-180={isOpen}>▼</span>
+		<span class="h-2 w-2 rounded-full bg-iris-500"></span>
+		<span class="hidden capitalize sm:inline">{$currentNetwork.name}</span>
+		<Icon
+			name="chevronDown"
+			className="h-4 w-4 text-text-3 transition-transform duration-200 {isOpen ? 'rotate-180' : ''}"
+		/>
 	</button>
 
 	{#if isOpen}
@@ -118,15 +115,15 @@
 
 		<!-- Dropdown content - responsive positioning -->
 		<div
-			class="absolute left-0 right-0 top-full z-[9999] mx-2 mt-1 min-w-[200px] rounded-lg border border-white/10 bg-gray-800/95 shadow-lg backdrop-blur-lg sm:left-auto sm:right-0 sm:top-full sm:mx-0 sm:w-auto"
+			class="bg-surface-1/95 absolute left-0 right-0 top-full z-[9999] mx-2 mt-1 min-w-[200px] rounded-lg border border-line shadow-[var(--shadow-2)] backdrop-blur-lg sm:left-auto sm:right-0 sm:top-full sm:mx-0 sm:w-auto"
 		>
 			<div class="p-1">
 				{#each networks as network}
 					<button
 						on:click={() => selectNetwork(network)}
-						class="flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm text-white transition-colors hover:bg-gray-700/80 active:bg-gray-600/80 {$currentNetwork.id ===
+						class="flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm text-text transition-colors hover:bg-surface-2 active:bg-surface-3 {$currentNetwork.id ===
 						network.id
-							? 'bg-yellow-500/20'
+							? 'bg-accent-soft'
 							: ''}"
 					>
 						<img
@@ -137,7 +134,7 @@
 						/>
 						<div class="flex flex-col items-start">
 							<span class="font-medium">{network.displayName}</span>
-							<span class="text-xs text-gray-400">{network.currencySymbol}</span>
+							<span class="text-xs text-text-3">{network.currencySymbol}</span>
 						</div>
 					</button>
 				{/each}

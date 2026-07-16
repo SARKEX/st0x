@@ -472,14 +472,14 @@
 		aria-modal="true"
 		aria-labelledby="swap-modal-title"
 	>
-		<div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gray-900 shadow-2xl">
+		<div class="relative overflow-hidden rounded-2xl border border-line bg-surface-1 shadow-2xl">
 			<!-- Header -->
-			<div class="flex items-center justify-between border-b border-white/10 px-6 py-4">
-				<h3 id="swap-modal-title" class="text-lg font-semibold text-white">Swap Legacy Tokens</h3>
+			<div class="flex items-center justify-between border-b border-line px-6 py-4">
+				<h3 id="swap-modal-title" class="text-lg font-semibold text-text">Swap Legacy Tokens</h3>
 				<button
 					type="button"
 					on:click={handleClose}
-					class="rounded-full p-1 text-gray-400 transition hover:bg-white/10 hover:text-white"
+					class="rounded-full p-1 text-text-2 transition hover:bg-surface-3 hover:text-text"
 					aria-label="Close"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -498,15 +498,13 @@
 				<div class="space-y-4">
 					<!-- What I Have (Old Token) -->
 					<div class="space-y-2">
-						<label for="swap-from-token" class="text-sm font-medium text-gray-400"
-							>What I have</label
-						>
-						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
+						<label for="swap-from-token" class="text-sm font-medium text-text-2">What I have</label>
+						<div class="rounded-xl border border-line bg-surface-2 px-4 py-3">
 							<!-- Token Dropdown -->
 							<div class="mb-3">
 								<select
 									id="swap-from-token"
-									class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-3 py-2 text-white focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+									class="w-full rounded-lg border border-line bg-surface-3 px-3 py-2 text-text focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
 									bind:value={selectedOldTokenAddress}
 									on:change={(e) => handleTokenSelect(e.currentTarget.value)}
 								>
@@ -531,7 +529,7 @@
 							<!-- Amount Input -->
 							<div class="flex items-center gap-3">
 								{#if selectedTokenData}
-									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
+									<div class="flex items-center gap-2 rounded-lg bg-surface-3 px-3 py-1.5">
 										{#if getTokenLogo(selectedTokenData.oldToken.address)}
 											<img
 												src={getTokenLogo(selectedTokenData.oldToken.address)}
@@ -539,11 +537,11 @@
 												class="h-6 w-6 rounded-full"
 											/>
 										{/if}
-										<span class="font-medium text-white">{selectedTokenData.oldToken.symbol}</span>
+										<span class="font-medium text-text">{selectedTokenData.oldToken.symbol}</span>
 									</div>
 								{:else}
-									<div class="rounded-lg bg-gray-700/50 px-3 py-1.5">
-										<span class="text-gray-400">Select token</span>
+									<div class="rounded-lg bg-surface-3 px-3 py-1.5">
+										<span class="text-text-2">Select token</span>
 									</div>
 								{/if}
 								<div class="flex-1 text-right">
@@ -555,7 +553,7 @@
 										on:input={handleAmountInput}
 										on:blur={capToLiquidity}
 										disabled={!selectedTokenData}
-										class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+										class="w-full bg-transparent text-right text-xl font-medium text-text placeholder-gray-600 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 									/>
 								</div>
 							</div>
@@ -563,7 +561,7 @@
 							<!-- Balance & Max -->
 							{#if selectedTokenData}
 								<div class="mt-2 flex items-center justify-between text-xs">
-									<span class="text-gray-500">
+									<span class="text-text-3">
 										Balance: {formatBalance(
 											selectedTokenData.balance,
 											selectedTokenData.oldToken.decimals
@@ -573,7 +571,7 @@
 									<button
 										type="button"
 										on:click={handleMaxClick}
-										class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+										class="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-text-2 transition hover:bg-gray-600 hover:text-text"
 									>
 										MAX
 									</button>
@@ -584,9 +582,9 @@
 
 					<!-- Arrow -->
 					<div class="flex justify-center">
-						<div class="rounded-full border border-white/10 bg-gray-800 p-2">
+						<div class="rounded-full border border-line bg-surface-2 p-2">
 							<svg
-								class="h-4 w-4 text-gray-400"
+								class="h-4 w-4 text-text-2"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -603,11 +601,11 @@
 
 					<!-- What I Get (New Wrapped Token) -->
 					<div class="space-y-2">
-						<span class="text-sm font-medium text-gray-400">What I get</span>
-						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
+						<span class="text-sm font-medium text-text-2">What I get</span>
+						<div class="rounded-xl border border-line bg-surface-2 px-4 py-3">
 							<div class="flex items-center gap-3">
 								{#if currentMapping}
-									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
+									<div class="flex items-center gap-2 rounded-lg bg-surface-3 px-3 py-1.5">
 										{#if getTokenLogo(currentMapping.newToken.address)}
 											<img
 												src={getTokenLogo(currentMapping.newToken.address)}
@@ -615,15 +613,15 @@
 												class="h-6 w-6 rounded-full"
 											/>
 										{/if}
-										<span class="font-medium text-white">{currentMapping.newToken.symbol}</span>
+										<span class="font-medium text-text">{currentMapping.newToken.symbol}</span>
 									</div>
 								{:else}
-									<div class="rounded-lg bg-gray-700/50 px-3 py-1.5">
-										<span class="text-gray-400">—</span>
+									<div class="rounded-lg bg-surface-3 px-3 py-1.5">
+										<span class="text-text-2">—</span>
 									</div>
 								{/if}
 								<div class="flex-1 text-right">
-									<span class="text-xl font-medium text-white">
+									<span class="text-xl font-medium text-text">
 										{parsedSwapAmount > 0
 											? formatAmountDisplay(swapAmount, currentMapping?.newToken.decimals ?? 6)
 											: '0'}
@@ -632,7 +630,7 @@
 							</div>
 
 							{#if currentMapping}
-								<div class="mt-2 text-xs text-gray-500">
+								<div class="mt-2 text-xs text-text-3">
 									{currentMapping.newToken.name}
 								</div>
 							{/if}
@@ -642,7 +640,7 @@
 					<!-- Liquidity Warning -->
 					{#if liquidityWarning}
 						<div
-							class="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2.5 text-xs text-blue-300"
+							class="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2.5 text-xs text-blue-600 dark:text-blue-300"
 						>
 							<div class="flex items-start gap-2">
 								<svg
@@ -660,7 +658,7 @@
 								</svg>
 								<div>
 									<p class="font-medium">Not enough inventory to fully swap right now.</p>
-									<p class="mt-0.5 text-blue-300/80">
+									<p class="mt-0.5 text-blue-600/80 dark:text-blue-300/80">
 										Inventory will be periodically topped up. Please swap now and come back again
 										later.
 									</p>
@@ -670,20 +668,20 @@
 					{/if}
 
 					<!-- Swap Info -->
-					<div class="rounded-lg bg-gray-800/40 px-4 py-3 text-xs text-gray-400">
+					<div class="rounded-lg bg-surface-2 px-4 py-3 text-xs text-text-2">
 						<div class="flex justify-between">
 							<span>Rate</span>
-							<span class="text-white">1:1</span>
+							<span class="text-text">1:1</span>
 						</div>
 						{#if currentMapping}
 							<div class="mt-1 flex justify-between">
 								<span>Available liquidity</span>
 								{#if $swapLiquidityQuery.isLoading || $swapLiquidityQuery.isFetching}
-									<span class="animate-pulse text-gray-500">Checking...</span>
+									<span class="animate-pulse text-text-3">Checking...</span>
 								{:else if $swapLiquidityQuery.isError}
 									<span class="text-orange-400">Failed to check — retrying...</span>
 								{:else if availableLiquidity > 0}
-									<span class="text-white"
+									<span class="text-text"
 										>{formatNumberWithDecimals(
 											availableLiquidity,
 											currentMapping.oldToken.decimals
@@ -691,7 +689,7 @@
 										{currentMapping.oldToken.symbol}</span
 									>
 								{:else}
-									<span class="text-yellow-500">No liquidity available</span>
+									<span class="text-amber-300">No liquidity available</span>
 								{/if}
 							</div>
 						{/if}

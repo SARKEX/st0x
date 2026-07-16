@@ -9,8 +9,8 @@
 	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits } from 'viem';
-	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isAuthenticated } from '$lib/stores/authStore';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { validateSelectedAmount } from '$lib/utils/validation';
@@ -477,8 +477,8 @@
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
 		orderSide === 'Buy'
-			? 'bg-green-500 hover:bg-green-600 text-white'
-			: 'bg-red-500 hover:bg-red-600 text-white';
+			? 'bg-green-500 hover:bg-green-600 text-text'
+			: 'bg-red-500 hover:bg-red-600 text-text';
 
 	$: disableDeploy =
 		!selectedAmount ||
@@ -1104,7 +1104,7 @@
 				<div>
 					<!-- Unified input with integrated toggle and token -->
 					<div
-						class="flex items-center rounded-lg border border-white/10 bg-gray-700/50 transition-colors focus-within:border-yellow-500/50"
+						class="flex items-center rounded-lg border border-line bg-surface-3 transition-colors focus-within:border-accent-line"
 					>
 						<!-- Left side: Buy/Spend or Sell toggle -->
 						{#if orderSide === 'Buy'}
@@ -1119,19 +1119,7 @@
 								class="flex items-center gap-1.5 py-3 pl-4 pr-2 text-sm font-medium text-green-400 transition-colors hover:text-green-300"
 							>
 								{inputMode === 'amount' ? 'Buy' : 'Spend'}
-								<svg
-									class="h-3 w-3 opacity-50"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M8 9l4-4 4 4m0 6l-4 4-4-4"
-									/>
-								</svg>
+								<Icon name="swap" className="h-3 w-3 opacity-50" />
 							</button>
 						{:else}
 							<span class="py-3 pl-4 pr-2 text-sm font-medium text-red-400"> Sell </span>
@@ -1163,7 +1151,7 @@
 						</div>
 
 						<!-- Right side: Token symbol -->
-						<span class="py-3 pl-2 pr-4 text-sm font-medium text-gray-300">
+						<span class="py-3 pl-2 pr-4 text-sm font-medium text-text-2">
 							{inputMode === 'spend' ? paymentTokenSymbol : displayedAssetSymbol}
 						</span>
 					</div>
@@ -1172,7 +1160,7 @@
 					     opted into the share-denominated view, scale the displayed balance
 					     by the wrap ratio and use the share symbol. Payment-token spends
 					     (USDC) are unaffected since they aren't wrapped. -->
-					<div class="mt-1.5 text-sm text-gray-400">
+					<div class="mt-1.5 text-sm text-text-2">
 						{#if spendingTokenBalanceDecimals !== null}
 							{@const balanceFormatted = parseFloat(
 								formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals)
@@ -1193,7 +1181,7 @@
 								type="button"
 								on:click={() => handlePercentageClick(percent)}
 								disabled={percentageButtonsDisabled}
-								class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-gray-700/50"
+								class="flex-1 rounded border border-line bg-surface-3 px-2 py-1 text-xs text-text-2 transition-colors hover:border-line-strong hover:bg-overlay-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:bg-surface-3"
 								title={percentageButtonsDisabled ? 'Price data unavailable' : ''}
 							>
 								{percent === 100 ? 'Max' : `${percent}%`}
@@ -1201,15 +1189,15 @@
 						{/each}
 					</div>
 					{#if percentageButtonsDisabled}
-						<p class="mt-1 text-xs text-yellow-400/80">
+						<p class="mt-1 text-xs text-amber-700 dark:text-amber-400/80">
 							Enter amount manually - price data loading
 						</p>
 					{/if}
 				</div>
 				<div>
-					<div class="mb-2 block text-sm font-medium text-gray-300">
+					<div class="mb-2 block text-sm font-medium text-text-2">
 						Market Price
-						<span class="ml-1 text-xs text-gray-500">(per {displayedAssetSymbol})</span>
+						<span class="ml-1 text-xs text-text-3">(per {displayedAssetSymbol})</span>
 					</div>
 					<div class="relative">
 						<input
@@ -1224,7 +1212,7 @@
 										? 'Price unavailable'
 										: `~${displayedMarketPrice.toFixed(2)} ${paymentTokenSymbol}`}
 							disabled
-							class="w-full rounded-md border border-white/10 bg-gray-800/50 px-3 py-2 text-gray-300 placeholder-gray-500 focus:border-yellow-400/50 focus:outline-none focus:ring-1 focus:ring-yellow-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+							class="focus:ring-accent-line/20 w-full rounded-md border border-line bg-surface-2 px-3 py-2 text-text-2 placeholder-text-3 focus:border-accent-line focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
 						/>
 						{#if isLoadingPrice && selectedAmount > 0n}
 							<div class="absolute right-3 top-1/2 -translate-y-1/2">
@@ -1233,7 +1221,11 @@
 						{/if}
 					</div>
 					{#if selectedAmount && selectedAmount > 0n && !isLoadingPrice && !priceError}
-						<p class="mt-1 text-xs {isQuoteStale ? 'text-yellow-400' : 'text-gray-500'}">
+						<p
+							class="mt-1 text-xs {isQuoteStale
+								? 'text-amber-700 dark:text-amber-400'
+								: 'text-text-3'}"
+						>
 							{#if isQuoteStale}
 								Price may be outdated ({quoteFreshnessSeconds}s ago)
 							{:else}
@@ -1254,11 +1246,13 @@
 			</div>
 
 			<!-- Order summary -->
-			<div class={containerStyles.cardBordered}>
-				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+			<div class="rounded-xl border border-line bg-overlay-1 p-4">
+				<h4 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-text-2">
+					Order Summary
+				</h4>
 				<div class="space-y-2 text-sm">
 					<div class="flex items-center justify-between">
-						<label for="market-slippage" class="text-gray-400">Slippage tolerance</label>
+						<label for="market-slippage" class="text-text-2">Slippage tolerance</label>
 						<div class="flex items-center gap-1">
 							<input
 								id="market-slippage"
@@ -1273,19 +1267,19 @@
 										e.currentTarget.blur();
 									}
 								}}
-								class="w-16 rounded border border-white/10 bg-gray-800 px-2 py-1 text-right text-sm text-gray-200 focus:border-yellow-400/50 focus:outline-none {slippageBps >
+								class="w-16 rounded border border-line bg-surface-2 px-2 py-1 text-right text-sm text-text-2 focus:border-accent-line focus:outline-none {slippageBps >
 								HIGH_SLIPPAGE_WARNING_BPS
-									? 'border-yellow-500/50 text-yellow-400'
+									? 'border-amber-500/50 text-amber-700 dark:text-amber-400'
 									: ''}"
 							/>
-							<span class="text-gray-500">%</span>
+							<span class="text-text-3">%</span>
 						</div>
 					</div>
 					{#if inputMode === 'spend'}
 						<!-- Spend mode: show spending amount first -->
 						<div class="flex justify-between">
-							<span class="text-gray-400">Spending</span>
-							<span class="font-medium">
+							<span class="text-text-2">Spending</span>
+							<span class="font-mono font-medium tabular-nums">
 								{selectedAmount
 									? parseFloat(formatUnits(selectedAmount, paymentToken?.decimals ?? 6)).toFixed(2)
 									: '0'}
@@ -1301,9 +1295,9 @@
 						     wt vs 0.01 t both round to "0.010" and the user thinks the
 						     conversion didn't happen). -->
 						<div class="flex items-start justify-between gap-3">
-							<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
+							<span class="text-text-2">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 							<div class="text-right">
-								<span class="font-medium">
+								<span class="font-mono font-medium tabular-nums">
 									{(selectedAmount
 										? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
 										: 0
@@ -1311,7 +1305,7 @@
 									{assetToken.symbol}
 								</span>
 								{#if showShareEquivalent}
-									<div class="text-[11px] text-gray-500">
+									<div class="text-[11px] text-text-3">
 										equivalent to {(
 											(selectedAmount
 												? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
@@ -1324,7 +1318,7 @@
 						</div>
 					{/if}
 					<div class="flex items-start justify-between gap-3">
-						<span class="text-gray-400">
+						<span class="text-text-2">
 							{#if !selectedAmount || selectedAmount === 0n}
 								{orderSide === 'Buy' ? 'Best ask' : 'Best bid'}
 							{:else}
@@ -1332,7 +1326,7 @@
 							{/if}
 						</span>
 						<div class="text-right">
-							<span class="font-medium">
+							<span class="font-mono font-medium tabular-nums">
 								{#if !selectedAmount || selectedAmount === 0n}
 									{bestOrderbookPrice !== null
 										? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
@@ -1351,7 +1345,7 @@
 										? displayedBestOrderbookPrice
 										: displayedMarketPrice}
 								{#if perTPrice !== null}
-									<div class="text-[11px] text-gray-500">
+									<div class="text-[11px] text-text-3">
 										equivalent to ~{perTPrice.toFixed(2)}
 										{paymentTokenSymbol} per {displayedAssetSymbol}
 									</div>
@@ -1359,10 +1353,10 @@
 							{/if}
 						</div>
 					</div>
-					<div class="mt-2 border-t border-white/10 pt-2">
+					<div class="mt-2 border-t border-line pt-2">
 						<div class="flex justify-between">
-							<span class="text-gray-400">{estimatedTradeResult.label || 'Estimated'}</span>
-							<span class={`text-lg font-semibold ${summaryAccentClass}`}>
+							<span class="text-text-2">{estimatedTradeResult.label || 'Estimated'}</span>
+							<span class={`font-mono text-lg font-semibold tabular-nums ${summaryAccentClass}`}>
 								{isLoadingPrice || priceError ? 'N/A' : estimatedTradeResult.value}
 							</span>
 						</div>
@@ -1375,7 +1369,7 @@
 						{/if}
 						{#if insufficientLiquidityWarning && !insufficientBalanceError}
 							<div
-								class="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2 text-sm text-yellow-300"
+								class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-sm text-amber-700 dark:text-amber-300"
 							>
 								There currently isn't enough orderbook liquidity to fully fill this order. Continue
 								to fill approx. {availableLiquidityFormatted}.
@@ -1421,9 +1415,9 @@
 				data-mode="market"
 				on:click={handleMarketOrder}
 				disabled={disableDeploy}
-				class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
+				class={`w-full rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
 					disableDeploy
-						? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
+						? 'cursor-not-allowed bg-line-strong text-text-2 opacity-50'
 						: actionButtonClass
 				}`}
 			>
@@ -1485,26 +1479,28 @@
 		on:click={cancelHighSlippage}
 	>
 		<div
-			class="mx-4 w-full max-w-sm rounded-lg border border-yellow-500/30 bg-gray-900 p-6 shadow-xl"
+			class="mx-4 w-full max-w-sm rounded-xl border border-amber-500/30 bg-surface-1 p-6 shadow-xl"
 			on:click|stopPropagation
 		>
-			<h3 class="mb-2 text-lg font-semibold text-yellow-400">High slippage warning</h3>
-			<p class="mb-4 text-sm text-gray-300">
+			<h3 class="mb-2 text-lg font-semibold text-amber-600 dark:text-amber-400">
+				High slippage warning
+			</h3>
+			<p class="mb-4 text-sm text-text-2">
 				You are setting slippage tolerance to
-				<span class="font-semibold text-yellow-400"
+				<span class="font-mono font-semibold tabular-nums text-amber-600 dark:text-amber-400"
 					>{pendingHighSlippageBps !== null ? (pendingHighSlippageBps / 100).toFixed(2) : ''}%</span
 				>. This means your order could execute at a price significantly worse than the current
 				market price.
 			</p>
 			<div class="flex gap-3">
 				<button
-					class="flex-1 rounded-lg border border-white/10 bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+					class="flex-1 rounded-xl border border-line bg-surface-2 px-4 py-2 text-sm text-text-2 hover:bg-surface-3"
 					on:click={cancelHighSlippage}
 				>
 					Cancel
 				</button>
 				<button
-					class="flex-1 rounded-lg bg-yellow-500/20 px-4 py-2 text-sm font-medium text-yellow-400 hover:bg-yellow-500/30"
+					class="flex-1 rounded-xl bg-amber-500/20 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-500/30 dark:text-amber-400"
 					on:click={confirmHighSlippage}
 				>
 					I understand, continue

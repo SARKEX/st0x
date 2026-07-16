@@ -16,9 +16,9 @@
 </script>
 
 {#if $currentToken}
-	<div class="max-w-8xl mt-0 w-full px-6 text-gray-100">
+	<div class="max-w-8xl mt-0 w-full px-6 text-text">
 		<Section className="mt-12 flex flex-grow flex-col shadow-lg">
-			<h3 class="mb-2 text-left text-2xl font-bold text-gray-100">{$currentToken.name} Metadata</h3>
+			<h3 class="mb-2 text-left text-2xl font-bold text-text">{$currentToken.name} Metadata</h3>
 			<ViewMetadata vault={$currentToken} {schemas} />
 		</Section>
 	</div>

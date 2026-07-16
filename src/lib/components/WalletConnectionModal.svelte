@@ -23,7 +23,12 @@
 	<div class="space-y-6">
 		<div class="flex flex-col items-center gap-4 py-4">
 			<div class="rounded-full bg-gradient-to-br from-blue-600/20 to-purple-700/20 p-6">
-				<svg class="h-12 w-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<svg
+					class="h-12 w-12 text-blue-600 dark:text-blue-400"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"
@@ -34,7 +39,7 @@
 			</div>
 
 			<div class="text-center">
-				<p class="text-gray-300">
+				<p class="text-text-2">
 					Connect your wallet to place orders and access all platform features.
 				</p>
 			</div>

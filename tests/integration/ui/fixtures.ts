@@ -146,6 +146,18 @@ export const TOKENS = {
 		decimals: 18,
 		donor: ORDERBOOK_DONOR,
 		id: '0x31C2C14134e6E3B7ef9478297F199331133Fc2d8'
+	},
+	// wtSGOV: tokenized iShares 0-3M Treasury ETF.
+	// Reads a regular on-chain Pyth feed (priceFeedId in src/lib/config/tokens.ts),
+	// NOT the off-chain st0x oracle, so it behaves like wtCOIN under the fork.
+	// Funded by impersonating the Rain Orderbook donor (same strategy as the
+	// other ST0x wrappers); if the donor holds no wtSGOV at the chosen fork
+	// block, swap `donor` for a known wtSGOV holder.
+	wtSGOV: {
+		address: '0x78c31580c97101694C70022c83D570150c11e935' as `0x${string}`,
+		decimals: 18,
+		donor: ORDERBOOK_DONOR,
+		id: '0x78c31580c97101694C70022c83D570150c11e935'
 	}
 } as const;
 

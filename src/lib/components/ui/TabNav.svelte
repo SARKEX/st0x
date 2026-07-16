@@ -48,7 +48,7 @@
 </script>
 
 <div
-	class={'flex gap-2 overflow-x-auto border-b border-white/10 ' + className}
+	class={'flex gap-2 overflow-x-auto border-b border-line ' + className}
 	role="tablist"
 	tabindex="0"
 	on:keydown={onKeydown}
@@ -62,13 +62,13 @@
 			on:click={() => setActive(tab.id)}
 			class={'flex-shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors ' +
 				(activeId === tab.id
-					? 'border-yellow-500 text-yellow-500'
-					: 'border-transparent text-gray-400 hover:text-white')}
+					? 'border-accent text-accent'
+					: 'border-transparent text-text-2 hover:text-text')}
 		>
 			{tab.label}
 			{#if tab.badge != null && tab.badge !== ''}
 				<span
-					class="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-white/10 px-1 text-[10px] text-gray-300"
+					class="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-surface-3 px-1 text-[10px] text-text-2"
 				>
 					{tab.badge}
 				</span>

@@ -53,8 +53,8 @@
 <div>
 	<div class="mb-3 flex flex-wrap items-end justify-between gap-2">
 		<div>
-			<h3 class="font-semibold text-white">Wrap Ratio History</h3>
-			<p class="mt-0.5 text-xs text-gray-400 sm:text-sm">
+			<h3 class="font-semibold text-text">Wrap Ratio History</h3>
+			<p class="mt-0.5 text-xs text-text-2 sm:text-sm">
 				Starts at <span class="font-mono">1 : 1</span>. Each snapshot records how much
 				{assetSymbol} backs 1 {wrappedSymbol} when the API samples the vault.
 				{#if onLearnMore}
@@ -85,15 +85,13 @@
 		</div>
 	{:else if events.length === 0}
 		<RatioStepChart events={[]} {wrappedSymbol} {assetSymbol} />
-		<div
-			class="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-4 text-sm text-gray-400"
-		>
+		<div class="mt-3 rounded-lg border border-line bg-surface-2 px-3 py-4 text-sm text-text-2">
 			No historical snapshots yet. The current sampled ratio is shown above.
 		</div>
 	{:else}
 		<RatioStepChart {events} {wrappedSymbol} {assetSymbol} />
 
-		<h4 class="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Snapshots</h4>
+		<h4 class="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-text-2">Snapshots</h4>
 		<ol class="relative space-y-0">
 			{#each eventsDesc as ev, idx (`${ev.blockNumber}-${ev.capturedAt}`)}
 				{@const isLatest = idx === 0}
@@ -101,12 +99,14 @@
 				{@const prev = eventsDesc[idx + 1] != null ? ratioOfEvent(eventsDesc[idx + 1]) : 1}
 				<li class="relative pl-6 pr-1">
 					<span
-						class="absolute bottom-[-4px] left-[7px] top-5 w-px bg-white/10"
+						class="absolute bottom-[-4px] left-[7px] top-5 w-px bg-surface-3"
 						aria-hidden="true"
 					/>
 					<span
 						class={'absolute left-0 top-2 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border ' +
-							(isLatest ? 'border-yellow-400/60 bg-yellow-400/20' : 'border-white/15 bg-white/5')}
+							(isLatest
+								? 'border-yellow-400/60 bg-yellow-400/20'
+								: 'border-line-strong bg-surface-2')}
 						aria-hidden="true"
 					>
 						<span
@@ -114,10 +114,10 @@
 						/>
 					</span>
 
-					<div class="border-b border-white/5 py-3">
+					<div class="border-b border-line py-3">
 						<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 							<div class="flex items-baseline gap-2">
-								<span class="text-sm font-medium text-gray-100">Snapshot</span>
+								<span class="text-sm font-medium text-text-2">Snapshot</span>
 								{#if isLatest}
 									<span
 										class="inline-flex items-center rounded-full border border-yellow-400/35 bg-yellow-400/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-yellow-200"
@@ -126,16 +126,16 @@
 									</span>
 								{/if}
 							</div>
-							<div class="flex items-baseline gap-2 text-[11px] text-gray-500">
+							<div class="flex items-baseline gap-2 text-[11px] text-text-3">
 								<span>{fmtFullDate(ev.blockTimestamp)}</span>
-								<span class="text-gray-600">·</span>
+								<span class="text-text-muted">·</span>
 								<span>{relativeFromSec(ev.blockTimestamp)}</span>
 							</div>
 						</div>
 
 						<div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-							<span class="font-mono tabular-nums text-gray-300">
-								1 : <b class="text-gray-100">{fmtRatio(newRate)}</b>
+							<span class="font-mono tabular-nums text-text-2">
+								1 : <b class="text-text-2">{fmtRatio(newRate)}</b>
 							</span>
 							{#if prev != null && newRate != null && prev !== newRate}
 								{@const pct = ((newRate - prev) / prev) * 100}
@@ -150,8 +150,8 @@
 								</span>
 							{/if}
 						</div>
-						<p class="mt-1.5 text-xs leading-relaxed text-gray-400">
-							Captured at block <span class="font-mono tabular-nums text-gray-300"
+						<p class="mt-1.5 text-xs leading-relaxed text-text-2">
+							Captured at block <span class="font-mono tabular-nums text-text-2"
 								>{ev.blockNumber}</span
 							>.
 						</p>
@@ -161,14 +161,14 @@
 
 			<li class="relative pl-6 pr-1">
 				<span
-					class="absolute left-0 top-2 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white/15 bg-white/5"
+					class="absolute left-0 top-2 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-line-strong bg-surface-2"
 					aria-hidden="true"
 				>
 					<span class="h-1.5 w-1.5 rounded-full bg-gray-500" />
 				</span>
-				<div class="border-b border-white/5 py-3">
-					<span class="text-sm font-medium text-gray-100">Deployed</span>
-					<div class="mt-1 font-mono text-xs tabular-nums text-gray-300">1 : <b>1</b></div>
+				<div class="border-b border-line py-3">
+					<span class="text-sm font-medium text-text-2">Deployed</span>
+					<div class="mt-1 font-mono text-xs tabular-nums text-text-2">1 : <b>1</b></div>
 				</div>
 			</li>
 		</ol>

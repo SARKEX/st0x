@@ -211,7 +211,7 @@
 		bind:isError
 	/>
 	{#if !compact}
-		<span class="text-left text-sm text-gray-400">
+		<span class="text-left text-sm text-text-2">
 			{#await balancePromise}
 				<span class="inline-flex items-center gap-2">
 					<LoadingSpinner variant="inline" size="sm" text="Loading balance..." />

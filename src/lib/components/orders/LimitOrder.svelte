@@ -10,8 +10,8 @@
 	import { currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
 	import { priceToIoratioString } from '$lib/utils/derivations';
 	import type { PythToken } from '$lib/types';
-	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isAuthenticated } from '$lib/stores/authStore';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
@@ -116,8 +116,8 @@
 	$: summaryAccentClass = orderSide === 'Buy' ? 'text-green-400' : 'text-red-400';
 	$: actionButtonClass =
 		orderSide === 'Buy'
-			? 'bg-green-500 hover:bg-green-600 text-white'
-			: 'bg-red-500 hover:bg-red-600 text-white';
+			? 'bg-green-500 hover:bg-green-600 text-text'
+			: 'bg-red-500 hover:bg-red-600 text-text';
 
 	// Autofill with current price if available
 	let selectedInitialRatio: string = currentPrice || '';
@@ -456,7 +456,7 @@
 			<!-- Main inputs stacked -->
 			<div class="space-y-4">
 				<div data-testid="deposit-input">
-					<div class="mb-2 block text-sm font-medium text-gray-300">Quantity</div>
+					<div class="mb-2 block text-sm font-medium text-text-2">Quantity</div>
 					<TradeAmountInput
 						bind:this={tradeAmountInputRef}
 						aria-label="Quantity"
@@ -478,7 +478,7 @@
 							<button
 								type="button"
 								on:click={() => handlePercentageClick(percent)}
-								class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50"
+								class="flex-1 rounded border border-line bg-surface-3 px-2 py-1 text-xs text-text-2 transition-colors hover:border-line-strong hover:bg-overlay-hover"
 							>
 								{percent === 100 ? 'Max' : `${percent}%`}
 							</button>
@@ -486,9 +486,9 @@
 					</div>
 				</div>
 				<div>
-					<div class="mb-2 block text-sm font-medium text-gray-300">
+					<div class="mb-2 block text-sm font-medium text-text-2">
 						Limit Price
-						<span class="ml-1 text-xs text-gray-500"
+						<span class="ml-1 text-xs text-text-3"
 							>({settlementLabel} per {displayedAssetSymbol})</span
 						>
 					</div>
@@ -506,13 +506,15 @@
 			</div>
 
 			<!-- Order summary -->
-			<div class={containerStyles.cardBordered}>
-				<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+			<div class="rounded-xl border border-line bg-overlay-1 p-4">
+				<h4 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-text-2">
+					Order Summary
+				</h4>
 				<div class="space-y-2 text-sm">
 					<div class="flex items-start justify-between gap-3">
-						<span class="text-gray-400">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
+						<span class="text-text-2">{orderSide === 'Buy' ? 'Buying' : 'Selling'}</span>
 						<div class="text-right">
-							<span class="font-medium">
+							<span class="font-mono font-medium tabular-nums">
 								{(selectedAmount
 									? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
 									: 0
@@ -520,7 +522,7 @@
 								{assetToken.symbol}
 							</span>
 							{#if showShareEquivalent}
-								<div class="text-[11px] text-gray-500">
+								<div class="text-[11px] text-text-3">
 									equivalent to {(
 										(selectedAmount
 											? parseFloat(formatUnits(selectedAmount, assetToken.decimals))
@@ -532,23 +534,23 @@
 						</div>
 					</div>
 					<div class="flex justify-between">
-						<span class="text-gray-400">At price</span>
-						<span class="font-medium">
+						<span class="text-text-2">At price</span>
+						<span class="font-mono font-medium tabular-nums">
 							{selectedInitialRatio || '0'}
 							{settlementLabel}
 						</span>
 					</div>
-					<div class="mt-2 border-t border-white/10 pt-2">
+					<div class="mt-2 border-t border-line pt-2">
 						<div class="flex justify-between">
-							<span class="text-gray-400">Total</span>
-							<span class={`text-lg font-semibold ${summaryAccentClass}`}>
+							<span class="text-text-2">Total</span>
+							<span class={`font-mono text-lg font-semibold tabular-nums ${summaryAccentClass}`}>
 								{totalCost}
 								{settlementLabel}
 							</span>
 						</div>
 						{#if belowMinTradeError}
 							<div
-								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
+								class="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-sm text-amber-700 dark:text-amber-300"
 							>
 								Minimum trade size is $1. Please increase your order amount.
 							</div>
@@ -558,45 +560,36 @@
 			</div>
 
 			<!-- Advanced Options -->
-			<div class="border-t border-white/10 pt-4">
+			<div class="border-t border-line pt-4">
 				<button
 					type="button"
 					on:click={() => (showAdvancedOptions = !showAdvancedOptions)}
-					class="flex w-full items-center justify-between text-sm text-gray-400 hover:text-gray-300"
+					class="flex w-full items-center justify-between text-sm text-text-2 hover:text-text-2"
 				>
 					<span>Advanced options</span>
-					<svg
-						class={`h-4 w-4 transform transition-transform ${
+					<Icon
+						name="chevronDown"
+						className={`h-4 w-4 transform transition-transform ${
 							showAdvancedOptions ? 'rotate-180' : ''
 						}`}
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M19 9l-7 7-7-7"
-						/>
-					</svg>
+					/>
 				</button>
 
 				{#if showAdvancedOptions}
 					<div class="mt-4 space-y-3">
 						<div>
-							<label for="receiving-vault" class="mb-2 block text-sm font-medium text-gray-300">
+							<label for="receiving-vault" class="mb-2 block text-sm font-medium text-text-2">
 								Receiving vault
 							</label>
 							<select
 								id="receiving-vault"
 								bind:value={selectedVaultOption}
-								class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+								class="w-full rounded-lg border border-line bg-surface-3 px-4 py-3 text-text transition-colors focus:border-accent-line focus:outline-none"
 							>
 								<option value="default">Default</option>
 								<option value="order-specific">Order-specific</option>
 							</select>
-							<p class="mt-1 text-xs text-gray-500">
+							<p class="mt-1 text-xs text-text-3">
 								{#if selectedVaultOption === 'default'}
 									Uses the shared default vault for receiving tokens
 								{:else}
@@ -615,9 +608,9 @@
 				data-mode="limit"
 				on:click={handleDeploy}
 				disabled={disableDeploy}
-				class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
+				class={`w-full rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
 					disableDeploy
-						? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
+						? 'cursor-not-allowed bg-line-strong text-text-2 opacity-50'
 						: actionButtonClass
 				}`}
 			>
@@ -679,9 +672,9 @@
 					type="checkbox"
 					checked={$reviewStrategyOnDeploy}
 					on:change={(e) => reviewStrategyOnDeploy.set(e.currentTarget.checked)}
-					class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-800"
+					class="h-4 w-4 rounded border-line bg-surface-3 text-accent focus:ring-accent"
 				/>
-				<span class="text-xs text-gray-400">Review strategy source code on deploy</span>
+				<span class="text-xs text-text-2">Review strategy source code on deploy</span>
 			</label>
 		</div>
 	</div>
@@ -699,22 +692,16 @@
 	onClose={cancelDeploy}
 >
 	<div class="space-y-6">
-		<div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
+		<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
 			<div class="flex gap-3">
 				<div class="flex-shrink-0">
-					<svg class="h-5 w-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-						<path
-							fill-rule="evenodd"
-							d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-							clip-rule="evenodd"
-						/>
-					</svg>
+					<Icon name="info" className="h-5 w-5 text-amber-400" />
 				</div>
 				<div>
-					<h3 class="font-semibold text-yellow-200">
+					<h3 class="font-semibold text-amber-700 dark:text-amber-200">
 						Price significantly {orderSide === 'Buy' ? 'above best offer' : 'below best bid'}
 					</h3>
-					<p class="mt-2 text-sm text-yellow-100">
+					<p class="mt-2 text-sm text-amber-800 dark:text-amber-100">
 						Your limit price is set significantly {orderSide === 'Buy' ? 'above' : 'below'} the current
 						best {orderSide === 'Buy' ? 'offer' : 'bid'}. You won't get the best possible price. We
 						recommend using a market order instead.
@@ -727,16 +714,16 @@
 			<input
 				type="checkbox"
 				bind:checked={userAcknowledgesWarning}
-				class="h-4 w-4 rounded border-gray-300 bg-gray-800 text-yellow-500 focus:ring-yellow-500"
+				class="h-4 w-4 rounded border-line bg-surface-2 text-accent focus:ring-accent"
 			/>
-			<span class="text-sm text-gray-300">I understand and wish to continue</span>
+			<span class="text-sm text-text-2">I understand and wish to continue</span>
 		</label>
 
 		<div class="flex gap-3">
 			<button
 				type="button"
 				on:click={cancelDeploy}
-				class="flex-1 rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 transition hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+				class="flex-1 rounded-xl border border-line bg-surface-2 px-4 py-2 text-sm font-medium text-text-2 transition hover:bg-surface-3 focus:outline-none focus:ring-2 focus:ring-line-strong"
 			>
 				Cancel
 			</button>
@@ -744,10 +731,10 @@
 				type="button"
 				on:click={proceedWithDeploy}
 				disabled={!userAcknowledgesWarning}
-				class={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 ${
+				class={`flex-1 rounded-xl px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 ${
 					userAcknowledgesWarning
-						? 'bg-yellow-500 text-gray-900 hover:bg-yellow-600 focus:ring-yellow-400'
-						: 'cursor-not-allowed bg-gray-600 text-gray-400 opacity-50'
+						? 'bg-emerald-500 text-[#05241a] hover:bg-emerald-400 focus:ring-accent'
+						: 'cursor-not-allowed bg-line-strong text-text-2 opacity-50'
 				}`}
 			>
 				Continue
