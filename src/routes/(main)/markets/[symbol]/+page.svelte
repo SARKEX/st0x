@@ -77,11 +77,11 @@
 						What is tokenized {asset.ticker}?
 					</h2>
 					<p class="leading-relaxed">
-						Tokenized {asset.companyName} ({asset.ticker}) is an on-chain token that tracks the
-						underlying {asset.exchange}-listed security. Each token is backed 1:1 by shares held
-						with a regulated broker, so on-chain exposure stays aligned with the real asset. On ST0x
-						it trades as <span class="font-mono text-gray-200">{asset.tokenSymbol}</span> on the Base
-						network.
+						Tokenized {asset.companyName} ({asset.ticker}) provides on-chain exposure to the
+						underlying {asset.exchange}-listed security. The issued asset token represents shares
+						held with a regulated broker. On ST0x it trades as
+						<span class="font-mono text-gray-200">{asset.tokenSymbol}</span>, a vault wrapper on
+						Base whose exchange rate to the issued token can change over time.
 					</p>
 				</div>
 

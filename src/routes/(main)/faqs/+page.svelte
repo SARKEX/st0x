@@ -15,7 +15,7 @@
 		},
 		{
 			q: 'What assets can I trade on ST0x?',
-			a: 'Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). Each token is backed 1:1 by shares held with a regulated broker such as Charles Schwab.'
+			a: 'Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). The underlying issued asset tokens represent corresponding assets held with a regulated broker such as Charles Schwab. ST0x markets trade wrapped vault shares whose exchange rate to the issued token can change over time.'
 		},
 		{
 			q: 'How is liquidity handled?',
@@ -86,8 +86,10 @@
 				<div class="border-b border-white/10 pb-8">
 					<h3 class="mb-3 text-xl font-semibold text-white">What assets can I trade on ST0x?</h3>
 					<p class="leading-relaxed text-gray-400">
-						Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). Each
-						token is backed 1:1 by shares held with a regulated broker such as Charles Schwab.
+						Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). The
+						underlying issued asset tokens represent corresponding assets held with a regulated
+						broker such as Charles Schwab. ST0x markets trade wrapped vault shares whose exchange
+						rate to the issued token can change over time.
 					</p>
 				</div>
 

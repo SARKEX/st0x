@@ -11,9 +11,9 @@
 				Tokenized markets
 			</h1>
 			<p class="mb-12 max-w-2xl text-lg leading-relaxed text-gray-400">
-				Every asset on ST0x is a DeFi-native token backed 1:1 by the underlying security and
-				tradable 24/7, fully on-chain and non-custodial. Explore the tokenized stocks, ETFs and
-				commodities available to trade.
+				Every asset on ST0x provides DeFi-native, on-chain exposure to an underlying security and is
+				available for non-custodial trading 24/7. Explore the tokenized stocks, ETFs and commodities
+				available to trade.
 			</p>
 
 			<ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

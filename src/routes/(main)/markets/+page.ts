@@ -7,5 +7,5 @@ export const load = () => ({
 	assets: getSeoAssets(),
 	title: 'Tokenized Stocks, ETFs & Commodities | ST0x Markets',
 	description:
-		'Browse every tokenized asset on ST0x — stocks, ETFs and commodities, each backed 1:1 and traded 24/7 on-chain, non-custodially, on Base.'
+		'Browse tokenized stocks, ETFs and commodities on ST0x, with 24/7 on-chain execution and non-custodial settlement on Base.'
 });

@@ -981,7 +981,6 @@
 	}
 	$: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
 	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
-	$: pageTitle = `Trade ${tokenDisplayName}`;
 	$: modalTitle = tokenDisplaySymbol
 		? `Advanced Chart — ${tokenDisplayName} (${tokenDisplaySymbol})`
 		: `Advanced Chart — ${tokenDisplayName}`;
@@ -1000,22 +999,6 @@
 		: currentRatio.toLocaleString('en-US', { maximumFractionDigits: 4 });
 </script>
 
-<svelte:head>
-	<title>{pageTitle}</title>
-	<meta
-		name="description"
-		content={`Trade ${tokenDisplayName} 24/7 on ST0x — a tokenized, on-chain asset backed 1:1 and settled non-custodially.`}
-	/>
-	<meta property="og:title" content={`${pageTitle} | ST0x`} />
-	<meta
-		property="og:description"
-		content={`Trade ${tokenDisplayName} 24/7 on ST0x — a tokenized, on-chain asset backed 1:1 and settled non-custodially.`}
-	/>
-	<meta property="og:image" content="https://www.st0x.io/og-image.png" />
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content={`${pageTitle} | ST0x`} />
-	<meta name="twitter:image" content="https://www.st0x.io/og-image.png" />
-</svelte:head>
 <svelte:window on:keydown={handleGlobalKeydown} />
 {#if $singleTokenQuery.isPending}
 	<div class="flex h-screen items-center justify-center">

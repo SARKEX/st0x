@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { getSeoAsset } from '$lib/seo/assets';
 
 // Public, indexable landing page for a single tokenized asset. Server-rendered
@@ -9,9 +9,12 @@ export const load = ({ params }) => {
 	if (!asset) {
 		throw error(404, 'Unknown market');
 	}
+	if (params.symbol !== asset.slug) {
+		throw redirect(308, `/markets/${asset.slug}`);
+	}
 
 	const title = `Trade Tokenized ${asset.companyName} (${asset.ticker}) 24/7 | ST0x`;
-	const description = `Buy and sell tokenized ${asset.companyName} (${asset.ticker}) on ST0x — a DeFi-native, on-chain token backed 1:1 by the underlying and settled non-custodially. Trade 24/7 on Base.`;
+	const description = `Buy and sell tokenized ${asset.companyName} (${asset.ticker}) on ST0x with 24/7 on-chain execution and non-custodial settlement on Base.`;
 
 	return { asset, title, description };
 };

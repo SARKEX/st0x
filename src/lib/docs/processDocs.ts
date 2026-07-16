@@ -1,11 +1,13 @@
-import { SvelteComponent } from 'svelte';
+import type { ComponentType } from 'svelte';
 import slugFromPath from './slugFromPath';
 
+type DocFileModule = {
+	default: ComponentType;
+	metadata: { published?: boolean; title?: string } & Record<string, unknown>;
+};
+
 export const getFiles = () =>
-	import.meta.glob<{ default: SvelteComponent; metadata: Record<string, unknown> }>(
-		`/src/docs/**/*.{md,svx,svelte.md}`,
-		{ eager: true }
-	);
+	import.meta.glob<DocFileModule>(`/src/docs/**/*.{md,svx,svelte.md}`, { eager: true });
 export const getCategories = () =>
 	import.meta.glob<{ category: string }>(`/src/docs/**/*.json`, {
 		eager: true
@@ -46,3 +48,11 @@ export const processDocs = (
 
 	return categorisedArticles;
 };
+
+export function getPublishedDocSlugs(docFiles: ReturnType<typeof getFiles> = getFiles()): string[] {
+	return Object.entries(docFiles)
+		.filter(([, doc]) => doc.metadata?.published)
+		.map(([path]) => slugFromPath(path))
+		.filter((slug): slug is string => Boolean(slug))
+		.sort((a, b) => a.localeCompare(b));
+}

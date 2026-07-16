@@ -59,11 +59,12 @@ export const load: PageServerLoad = async ({ params, setHeaders }) => {
 	// itself (which is not serializable and forced the old `ssr = false`), a
 	// string survives SSR + client hydration.
 	const { html } = match.default.render();
-	const title = match.metadata.title ?? 'Documentation';
+	const heading = match.metadata.title ?? 'Documentation';
+	const title = `${heading} — ST0x Docs`;
 	const description = htmlToText(html).slice(0, 155);
 
 	// Edge-cache the rendered doc — content is static per deploy.
 	setHeaders({ 'cache-control': 'public, max-age=0, s-maxage=3600' });
 
-	return { html, title, description };
+	return { slug: params.slug, heading, title, description };
 };

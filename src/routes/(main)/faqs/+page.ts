@@ -4,5 +4,5 @@
 export const load = () => ({
 	title: 'ST0x FAQs — Tokenized Stocks, Custody, Liquidity & Fees',
 	description:
-		'How ST0x works: 24/7 on-chain trading of tokenized stocks and ETFs, 1:1-backed non-custodial assets, demand-driven liquidity via the Core Bridge, wallet access and fees.'
+		'How ST0x works: 24/7 on-chain trading of tokenized stocks and ETFs, non-custodial settlement, wrapped vault shares, liquidity, wallet access and fees.'
 });
