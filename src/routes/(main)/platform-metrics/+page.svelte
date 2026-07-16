@@ -13,7 +13,7 @@
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
 	import { createTokenLookup, normalizeAddress, type TokenLookup } from '$lib/utils/tokenMath';
 	import { createRaindexClient } from '$lib/clients/raindex';
-	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/orderbook';
+	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/raindex';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { normalizeApiTokensForNetwork } from '$lib/queries/tokens';

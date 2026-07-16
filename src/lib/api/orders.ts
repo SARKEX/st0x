@@ -14,7 +14,7 @@ import {
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { PythToken } from '$lib/types';
 import { Float } from '@rainlanguage/float';
-import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
+import type { OrderV4, SgOrder } from '@rainlanguage/raindex';
 import { AbiCoder } from 'ethers';
 import {
 	type ProcessedQuote,
@@ -101,20 +101,20 @@ function convertApiOrderToProcessedQuote(
 	const sgOrderBase = {
 		orderHash: order.orderHash,
 		owner: order.owner,
-		orderbook: { id: order.orderbookId }
+		raindex: { id: order.orderbookId }
 	};
 	let sgOrder: SgOrder;
 	if (order.orderBytes) {
 		try {
 			const decoded = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], order.orderBytes);
 			orderData = normalizeOrderData(decoded[0] as OrderV4);
-			sgOrder = { ...sgOrderBase, orderBytes: order.orderBytes } as SgOrder;
+			sgOrder = { ...sgOrderBase, orderBytes: order.orderBytes } as unknown as SgOrder;
 		} catch (e) {
 			console.warn(`[orders] Failed to decode orderBytes for ${order.orderHash}:`, e);
-			sgOrder = sgOrderBase as SgOrder;
+			sgOrder = sgOrderBase as unknown as SgOrder;
 		}
 	} else {
-		sgOrder = sgOrderBase as SgOrder;
+		sgOrder = sgOrderBase as unknown as SgOrder;
 	}
 
 	// Derive correct IO indexes from decoded orderData by matching token addresses

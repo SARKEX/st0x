@@ -62,7 +62,7 @@ vi.mock('$lib/stores/transactionShared', async (importOriginal) => {
 
 // Stub `RaindexOrders` from the WASM SDK — the real class needs the Wasm bindings
 // initialized which is heavy in tests. We only need `push()` to be callable.
-vi.mock('@rainlanguage/orderbook', async (importOriginal) => {
+vi.mock('@rainlanguage/raindex', async (importOriginal) => {
 	const actual = (await importOriginal()) as object;
 	class StubRaindexOrders {
 		push() {}

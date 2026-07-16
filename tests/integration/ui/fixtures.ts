@@ -419,7 +419,7 @@ export const test = base.extend<UiFixtures>({
 		//   1. svelte-wagmi's defaultConfig builds its HTTP transport from
 		//      chain.rpcUrls.default (https://mainnet.base.org for Base) for
 		//      balance reads, contract reads, etc.
-		//   2. The Rain SDK (@rainlanguage/orderbook) has its OWN RPC client
+		//   2. The Rain SDK (@rainlanguage/raindex) has its OWN RPC client
 		//      configured via src/lib/clients/raindex.ts:SETTINGS_YAML. Its
 		//      URL is `PUBLIC_BASE_RPC_URL || 'https://base-rpc.publicnode.com'`.
 		//      In E2E we don't set PUBLIC_BASE_RPC_URL on the preview server,

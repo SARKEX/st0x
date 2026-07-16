@@ -16,7 +16,7 @@ import {
 import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 import { queryClient } from '$lib/clients/queryClient';
 import { createRaindexClient } from '$lib/clients/raindex';
-import type { RaindexVault, SgVault } from '@rainlanguage/orderbook';
+import type { RaindexVault, SgVault } from '@rainlanguage/raindex';
 
 // =============================================================================
 // SFT/Token Queries (OffchainAssetReceiptVault - the tokenized assets)
@@ -286,8 +286,8 @@ export function transformVault(vault: RaindexVault, subgraphName: string): UserV
 			symbol: vault.token.symbol,
 			decimals: vault.token.decimals.toString() as `0x${string}`
 		},
-		orderbook: {
-			id: vault.orderbook
+		raindex: {
+			id: vault.raindex
 		},
 		ordersAsOutput: vault.ordersAsOutput,
 		ordersAsInput: vault.ordersAsInput,

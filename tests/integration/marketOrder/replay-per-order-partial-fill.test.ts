@@ -37,7 +37,7 @@ vi.mock('$lib/stores/transactionShared', async (importOriginal) => {
 		})
 	};
 });
-vi.mock('@rainlanguage/orderbook', async (importOriginal) => {
+vi.mock('@rainlanguage/raindex', async (importOriginal) => {
 	const actual = (await importOriginal()) as object;
 	class StubRaindexOrders {
 		push() {}

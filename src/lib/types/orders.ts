@@ -1,5 +1,5 @@
 import type { ProcessedQuote } from '$lib/utils/orderbook';
-import type { SgTrade } from '@rainlanguage/orderbook';
+import type { SgTrade } from '@rainlanguage/raindex';
 
 // Type for unified order display across dashboard and trade pages
 export type DisplayOrder = {

@@ -5,7 +5,7 @@
 import type { Network } from '$lib/config/network';
 import type { CategorizedToken } from '$lib/config/network';
 import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
-import type { OrderV4 } from '@rainlanguage/orderbook';
+import type { OrderV4 } from '@rainlanguage/raindex';
 
 /**
  * Creates a mock Network object for testing
