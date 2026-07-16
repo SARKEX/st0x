@@ -7,9 +7,9 @@ The ST0x interface serves as a window into the on-chain activities, providing us
 
 - Tokenization Layer: the interface displays all records and transaction histories, allowing users to track their assets and past activities with ease.
 - Market View Display (“MVD”): The MVD allows users to view the order book, market depth and other relevant data that enable the monitoring of market conditions and support the identification of potential trading opportunities.	
-The interface also includes some Order Management System (“OMS”) functionalities, including an order entry interface with pre-set strategies, such as limit orders, market orders (which operate through an auction mechanism), stop-loss, and take-profit orders.		
+The interface also includes Order Management System (“OMS”) functionality for market, limit, and DCA orders. Market orders execute against available on-chain liquidity, while limit and DCA orders publish user-configured strategies to the orderbook.
 
-Importantly, the interface does not allow users to interact directly with another user's liquidity or manipulate existing orders. There is no direct route provided for users to take liquidity from other orders. Instead, each user adds their own strategy to the orderbook, which can only be executed when a solver fulfills the exact terms specified by the user.
+Users cannot modify another user's order. Limit and DCA strategies remain user-owned and can only execute according to their on-chain terms. Market orders can take available liquidity through the protocol's execution flow without changing the maker's order conditions.
 
 Users connect to the interface through their own wallets, maintaining full self-custody of their assets throughout the process. This ensures that all trades are conducted securely and independently, with each user maintaining control over their own funds and strategies.
 
@@ -32,4 +32,3 @@ With this solution, users will be able to sign in using social logins, complete 
 This approach can be an attractive solution for Web2 Fintech companies that bridges a gap between traditional financial platforms and blockchain environments, providing seamless access to on-chain trading without compromising security. 
 
 <img src="/docs/st0xinterface.png" alt="ST0x Interface" />
-

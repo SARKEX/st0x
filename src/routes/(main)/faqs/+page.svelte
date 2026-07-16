@@ -1,6 +1,59 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
+
+	// FAQPage structured data. Answers mirror the visible copy below (Google
+	// requires FAQ rich-result content to be present on the page) so this earns
+	// expandable Q&A snippets in search results.
+	const faqs = [
+		{
+			q: 'What is ST0x?',
+			a: 'ST0x is a decentralized exchange (DEX) enabling 24/7 trading of tokenized real-world equities such as Nvidia, Tesla, and ETFs on-chain. It bridges traditional finance and DeFi.'
+		},
+		{
+			q: 'How does ST0x work?',
+			a: 'ST0x operates using a dual-entity structure: S1 Issuer GmbH issues tokenized equities, and SarkX BVI Ltd manages the decentralized matching and execution engine. Users place intent-based orders on-chain, executed via solvers when matched with liquidity.'
+		},
+		{
+			q: 'What assets can I trade on ST0x?',
+			a: 'Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). The underlying issued asset tokens represent corresponding assets held with a regulated broker such as Charles Schwab. ST0x markets trade wrapped vault shares whose exchange rate to the issued token can change over time.'
+		},
+		{
+			q: 'How is liquidity handled?',
+			a: 'Liquidity is demand-driven. Arbitrageurs create or redeem tokens via the Core Bridge, aligning prices between off-chain markets and on-chain tokens.'
+		},
+		{
+			q: 'Is ST0x custodial?',
+			a: 'No. ST0x is non-custodial. Users maintain control of their assets in smart contract vaults. Custody of underlying equities is separately managed by S1 via a regulated broker.'
+		},
+		{
+			q: 'How do I access ST0x?',
+			a: 'Connect your DeFi wallet (e.g., MetaMask, WalletConnect). Regional restrictions apply at token issuance.'
+		},
+		{
+			q: 'Are there trading fees?',
+			a: 'Yes. Fees include trading fees, gas costs, and potential withdrawal fees, structured transparently.'
+		},
+		{
+			q: "What happens if I lose my wallet's private key?",
+			a: 'ST0x is non-custodial. Users are solely responsible for safeguarding their private keys.'
+		}
+	];
+
+	const faqJsonLd = JSON.stringify({
+		'@context': 'https://schema.org',
+		'@type': 'FAQPage',
+		mainEntity: faqs.map(({ q, a }) => ({
+			'@type': 'Question',
+			name: q,
+			acceptedAnswer: { '@type': 'Answer', text: a }
+		}))
+	});
 </script>
+
+<svelte:head>
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- static JSON-LD serialized from a local const; no user input -->
+	{@html `<script type="application/ld+json">${faqJsonLd}</` + 'script>'}
+</svelte:head>
 
 <div class="relative z-10 min-h-screen">
 	<section class="px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
@@ -33,8 +86,10 @@
 				<div class="border-b border-white/10 pb-8">
 					<h3 class="mb-3 text-xl font-semibold text-white">What assets can I trade on ST0x?</h3>
 					<p class="leading-relaxed text-gray-400">
-						Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). Each
-						token is backed 1:1 by shares held with a regulated broker such as Charles Schwab.
+						Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). The
+						underlying issued asset tokens represent corresponding assets held with a regulated
+						broker such as Charles Schwab. ST0x markets trade wrapped vault shares whose exchange
+						rate to the issued token can change over time.
 					</p>
 				</div>
 

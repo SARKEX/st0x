@@ -981,7 +981,6 @@
 	}
 	$: tokenDisplayName = currentToken?.name ?? currentToken?.symbol ?? 'Token';
 	$: tokenDisplaySymbol = currentToken?.symbol ?? '';
-	$: pageTitle = `Trade ${tokenDisplayName}`;
 	$: modalTitle = tokenDisplaySymbol
 		? `Advanced Chart — ${tokenDisplayName} (${tokenDisplaySymbol})`
 		: `Advanced Chart — ${tokenDisplayName}`;
@@ -1000,9 +999,6 @@
 		: currentRatio.toLocaleString('en-US', { maximumFractionDigits: 4 });
 </script>
 
-<svelte:head>
-	<title>{pageTitle}</title>
-</svelte:head>
 <svelte:window on:keydown={handleGlobalKeydown} />
 {#if $singleTokenQuery.isPending}
 	<div class="flex h-screen items-center justify-center">
