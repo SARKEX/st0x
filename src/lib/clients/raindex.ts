@@ -19,14 +19,14 @@ const PRIMARY_RPC = publicEnv.PUBLIC_BASE_RPC_URL || 'https://base-rpc.publicnod
  *  - No network fetch on client boot.
  *  - Deterministic config — we know exactly what the SDK sees.
  *
- * When adding a new chain, add a `networks`, `subgraphs`, `metaboards`, `orderbooks`,
+ * When adding a new chain, add a `networks`, `subgraphs`, `metaboards`, `raindexes`,
  * and `rainlangs` entry below.
  *
  * NOTE: RPCs here are NOT the same as in networks.ts. The Raindex SDK uses
  * multicall eth_call for quote simulation — many public RPCs (llamarpc, meowrpc,
  * blastapi, tenderly) don't support this. Use RPCs known to handle eth_call.
  */
-const SETTINGS_YAML = `version: 5
+const SETTINGS_YAML = `version: 6
 networks:
   base:
     rpcs:
@@ -38,7 +38,7 @@ subgraphs:
   base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/2026-02-05-c4ef/gn
 metaboards:
   base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn
-orderbooks:
+raindexes:
   base:
     address: 0xe522cB4a5fCb2eb31a52Ff41a4653d85A4fd7C9D
     network: base
