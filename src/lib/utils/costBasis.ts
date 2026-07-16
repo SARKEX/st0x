@@ -3,7 +3,7 @@ import { getMigrationMappingByAddress } from '$lib/config/tokenMigration';
 
 /**
  * Minimal trade shape consumed by cost basis calculation.
- * Compatible with SgTrade from @rainlanguage/orderbook but does not depend on it.
+ * Compatible with SgTrade from @rainlanguage/raindex but does not depend on it.
  * API-sourced trades can satisfy this interface directly.
  */
 export interface CostBasisTrade {

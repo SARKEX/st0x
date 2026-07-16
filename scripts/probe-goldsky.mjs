@@ -1,6 +1,6 @@
 // Capture the Raindex SDK's actual Goldsky GraphQL request+response for a known LIVE order.
 // Run with: node probe-goldsky.mjs <orderHash>
-import { RaindexClient } from '@rainlanguage/orderbook';
+import { RaindexClient } from '@rainlanguage/raindex';
 import fs from 'node:fs';
 
 const ORDER_HASH = process.argv[2];

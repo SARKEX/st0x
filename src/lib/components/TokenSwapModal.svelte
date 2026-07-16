@@ -25,7 +25,7 @@
 	import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
 	import { AbiCoder } from 'ethers';
 	import { Float } from '@rainlanguage/float';
-	import type { TakeOrdersConfigV5, TakeOrderConfigV4, OrderV4 } from '@rainlanguage/orderbook';
+	import type { TakeOrdersConfigV5, TakeOrderConfigV4, OrderV4 } from '@rainlanguage/raindex';
 	import { track } from '$lib/services/analytics';
 
 	const queryClient = useQueryClient();

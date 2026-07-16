@@ -26,7 +26,7 @@ import {
 	type TakeOrdersMode,
 	type TakeOrdersRequest,
 	type WasmEncodedResult
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import { AbiCoder } from 'ethers';
 import { formatUnits } from 'viem';
 import { Float } from '@rainlanguage/float';

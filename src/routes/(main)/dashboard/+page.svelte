@@ -1813,7 +1813,7 @@
 															<a
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
-																	vault.orderbook.id,
+																	vault.raindex.id,
 																	vault.id
 																)}
 																target="_blank"
@@ -1924,7 +1924,7 @@
 															<a
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
-																	vault.orderbook.id,
+																	vault.raindex.id,
 																	vault.id
 																)}
 																target="_blank"

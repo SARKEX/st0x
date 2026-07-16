@@ -19,7 +19,7 @@ import { get } from 'svelte/store';
 import { decodeFunctionData, erc20Abi, type Hash, type Hex } from 'viem';
 import { readContract as wagmiReadContract } from '@wagmi/core';
 import { wagmiConfig } from 'svelte-wagmi';
-import { type DeploymentTransactionArgs, type RaindexVault } from '@rainlanguage/orderbook';
+import { type DeploymentTransactionArgs, type RaindexVault } from '@rainlanguage/raindex';
 import {
 	sendTransaction as walletServiceSendTransaction,
 	waitForTransaction as walletServiceWaitForTransaction
@@ -195,7 +195,7 @@ export const handleStrategyDeployment = async (
 	// Security: Validate orderbook address BEFORE any approvals are granted
 	// This prevents a compromised orderbook from receiving token approvals
 	try {
-		validateOrderbookAddress(deploymentArgs.orderbookAddress, network);
+		validateOrderbookAddress(deploymentArgs.raindexAddress, network);
 	} catch (error) {
 		reportDeployFailure(error, eventContext, 'calldata', 'validate_orderbook', network.id);
 		return transactionError((error as Error).message as TransactionErrorMessage);
@@ -313,7 +313,7 @@ export const handleStrategyDeployment = async (
 		awaitWalletConfirmation(`Awaiting wallet confirmation to deploy your strategy...`);
 
 		hash = await sendTransaction({
-			to: deploymentArgs.orderbookAddress as `0x${string}`,
+			to: deploymentArgs.raindexAddress as `0x${string}`,
 			data: deploymentArgs.deploymentCalldata as Hex
 		});
 		if (submitContext) addTradeFlowBreadcrumb(submitContext, 'completed');
@@ -360,14 +360,14 @@ export const handleStrategyDeployment = async (
 			const client = await createRaindexClient();
 			const orders = await client.getAddOrdersForTransaction(
 				network.id,
-				deploymentArgs.orderbookAddress as `0x${string}`,
+				deploymentArgs.raindexAddress as `0x${string}`,
 				hash as `0x${string}`
 			);
 			if (orders.error || !orders.value?.length) {
 				return null;
 			}
 			const orderHash = orders.value[0].orderHash;
-			const orderbookId = orders.value[0].orderbook;
+			const orderbookId = orders.value[0].raindex;
 			return createRaindexLink(network.id, orderbookId, orderHash);
 		} catch (error) {
 			// Polling retries for up to a minute. Report the first transport failure only,
@@ -584,19 +584,21 @@ export const handleWithdraw = async (vault: RaindexVault) => {
 	if (!config) throw new Error('Wagmi config not found');
 
 	// vault.balance is already a Float instance, use it directly
-	const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
-	if (vaultWithdrawCalldata.error) throw new Error(vaultWithdrawCalldata.error.readableMsg);
+	const vaultCalldatas = await vault.getCalldatas(vault.balance);
+	if (vaultCalldatas.error || !vaultCalldatas.value) {
+		throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
+	}
 	let hash: Hash;
 	try {
 		// Security: Validate orderbook address is trusted before sending transaction
 		const network = get(currentNetwork);
-		validateOrderbookAddress(vault.orderbook, network);
+		validateOrderbookAddress(vault.raindex, network);
 
 		awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
 
 		hash = await sendTransaction({
-			to: vault.orderbook as `0x${string}`,
-			data: vaultWithdrawCalldata.value as Hex
+			to: vault.raindex as `0x${string}`,
+			data: vaultCalldatas.value.withdraw as Hex
 		});
 		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
@@ -604,7 +606,7 @@ export const handleWithdraw = async (vault: RaindexVault) => {
 
 		const $signer = get(walletAddress);
 		const raindexLink = {
-			url: getRaindexVaultUrl(network.id, vault.orderbook, vault.id),
+			url: getRaindexVaultUrl(network.id, vault.raindex, vault.id),
 			text: 'Manage your vault on Raindex'
 		};
 
@@ -812,7 +814,7 @@ export const handleRemoveOrder = async (quote: {
 					token: v.token?.symbol,
 					tokenAddress: v.token?.address,
 					balanceHex: v.balance.asHex(),
-					orderbook: v.orderbook
+					orderbook: v.raindex
 				}))
 			);
 
@@ -834,18 +836,18 @@ export const handleRemoveOrder = async (quote: {
 				const vault = vaultsWithBalance[i];
 
 				// Security: Validate orderbook address is trusted
-				validateOrderbookAddress(vault.orderbook, network);
+				validateOrderbookAddress(vault.raindex, network);
 
-				const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
-				if (vaultWithdrawCalldata.error) {
-					throw new Error(vaultWithdrawCalldata.error.readableMsg);
+				const vaultCalldatas = await vault.getCalldatas(vault.balance);
+				if (vaultCalldatas.error || !vaultCalldatas.value) {
+					throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
 				}
 
 				awaitWalletConfirmation(`Withdrawing from vault ${i + 1}/${vaultsWithBalance.length}...`);
 
 				const withdrawHash = await sendTransaction({
-					to: vault.orderbook as `0x${string}`,
-					data: vaultWithdrawCalldata.value as Hex
+					to: vault.raindex as `0x${string}`,
+					data: vaultCalldatas.value.withdraw as Hex
 				});
 
 				awaitWalletConfirmation(`Awaiting withdrawal confirmation...`);
@@ -856,7 +858,7 @@ export const handleRemoveOrder = async (quote: {
 
 		// Step 2: Deactivate/remove the order
 		// Security: Validate orderbook address is trusted
-		validateOrderbookAddress(order.orderbook, network);
+		validateOrderbookAddress(order.raindex, network);
 
 		const removeCalldata = order.getRemoveCalldata();
 		if (removeCalldata.error) {
@@ -866,7 +868,7 @@ export const handleRemoveOrder = async (quote: {
 		awaitWalletConfirmation('Awaiting wallet confirmation to cancel order...');
 
 		const hash = await sendTransaction({
-			to: order.orderbook as `0x${string}`,
+			to: order.raindex as `0x${string}`,
 			data: removeCalldata.value as Hex
 		});
 
@@ -874,7 +876,7 @@ export const handleRemoveOrder = async (quote: {
 
 		await waitForTransaction(hash);
 
-		const raindexLink = createRaindexLink(network.id, order.orderbook, quote.orderHash);
+		const raindexLink = createRaindexLink(network.id, order.raindex, quote.orderHash);
 
 		// Invalidate queries for the tokens involved in this order
 		const tokenAddresses = [
@@ -972,7 +974,7 @@ export const handleWithdrawFromOrder = async (quote: {
 			const sgOrderResult = order.convertToSgOrder();
 			if (!sgOrderResult.error && sgOrderResult.value?.active) {
 				// Security: Validate orderbook address is trusted
-				validateOrderbookAddress(order.orderbook, network);
+				validateOrderbookAddress(order.raindex, network);
 
 				const removeCalldata = order.getRemoveCalldata();
 				if (removeCalldata.error) {
@@ -982,7 +984,7 @@ export const handleWithdrawFromOrder = async (quote: {
 				awaitWalletConfirmation('Awaiting wallet confirmation to deactivate order...');
 
 				const removeHash = await sendTransaction({
-					to: order.orderbook as `0x${string}`,
+					to: order.raindex as `0x${string}`,
 					data: removeCalldata.value as Hex
 				});
 
@@ -1097,11 +1099,11 @@ export const handleWithdrawFromOrder = async (quote: {
 			const vault = vaultsWithBalance[i];
 
 			// Security: Validate orderbook address is trusted
-			validateOrderbookAddress(vault.orderbook, network);
+			validateOrderbookAddress(vault.raindex, network);
 
-			const vaultWithdrawCalldata = await vault.getWithdrawCalldata(vault.balance);
-			if (vaultWithdrawCalldata.error) {
-				throw new Error(vaultWithdrawCalldata.error.readableMsg);
+			const vaultCalldatas = await vault.getCalldatas(vault.balance);
+			if (vaultCalldatas.error || !vaultCalldatas.value) {
+				throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
 			}
 
 			awaitWalletConfirmation(
@@ -1109,8 +1111,8 @@ export const handleWithdrawFromOrder = async (quote: {
 			);
 
 			lastHash = await sendTransaction({
-				to: vault.orderbook as `0x${string}`,
-				data: vaultWithdrawCalldata.value as Hex
+				to: vault.raindex as `0x${string}`,
+				data: vaultCalldatas.value.withdraw as Hex
 			});
 
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);

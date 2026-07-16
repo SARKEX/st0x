@@ -14,7 +14,7 @@
 		type OrderType
 	} from '$lib/utils/orderbook';
 	import { createQuery } from '@tanstack/svelte-query';
-	import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
+	import type { OrderV4, SgOrder } from '@rainlanguage/raindex';
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { apiGetOrdersByOwner, type ApiOrderSummary } from '$lib/api/st0xApi';
 	import { TOKENS, type Network } from '$lib/config/network';
@@ -197,9 +197,9 @@
 			orderHash: order.orderHash,
 			owner: order.owner,
 			active: order.active,
-			orderbook: { id: order.orderbookId },
+			raindex: { id: order.orderbookId },
 			orderBytes: order.orderBytes
-		} as SgOrder;
+		} as unknown as SgOrder;
 
 		const quote: ProcessedQuote = {
 			orderHash: order.orderHash,

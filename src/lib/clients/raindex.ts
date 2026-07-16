@@ -1,4 +1,4 @@
-import { RaindexClient } from '@rainlanguage/orderbook';
+import { RaindexClient } from '@rainlanguage/raindex';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { Network } from '$lib/config/network';
 type RaindexClientInstance = RaindexClient;

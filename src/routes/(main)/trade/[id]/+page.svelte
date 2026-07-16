@@ -26,7 +26,7 @@
 	import { panelDenom } from '$lib/stores/panelDenomStore';
 	import { fly } from 'svelte/transition';
 	import Select from '$lib/components/ui/Select.svelte';
-	import type { SgTrade } from '@rainlanguage/orderbook';
+	import type { SgTrade } from '@rainlanguage/raindex';
 	// PERF-01: TokenMarketCharts is lazy-loaded — it pulls lightweight-charts
 	// (~150KB minified) and only renders when activeOnchainTab === 'market'.
 	import type {
@@ -83,7 +83,7 @@
 	import { startVaultTutorial, vaultTutorialActive } from '$lib/stores/vaultTutorialStore';
 	import VaultTutorial from '$lib/components/VaultTutorial.svelte';
 	import { isVaultTutorialHidden } from '$lib/utils/tutorialStorage';
-	import type { RaindexVault } from '@rainlanguage/orderbook';
+	import type { RaindexVault } from '@rainlanguage/raindex';
 	import transactionStore from '$lib/stores/transaction';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi } from 'viem';
@@ -1498,7 +1498,7 @@
 															.padStart(64, '0')}`}
 														{@const raindexUrl = getRaindexVaultUrl(
 															$currentNetwork?.chainId ?? 8453,
-															vault.orderbook,
+															vault.raindex,
 															vault.id
 														)}
 														<div
