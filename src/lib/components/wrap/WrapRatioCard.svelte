@@ -38,17 +38,17 @@
 <div class="mb-3 rounded-lg border border-yellow-400/25 bg-yellow-400/[0.05] p-3 sm:p-4">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div class="min-w-0">
-			<p class="text-[10px] uppercase tracking-wide text-yellow-300/80 sm:text-xs">Wrap Ratio</p>
-			<p class="mt-1 font-mono text-base font-semibold tabular-nums text-gray-100 sm:text-lg">
+			<p class="text-[10px] uppercase tracking-wide text-accent sm:text-xs">Wrap Ratio</p>
+			<p class="mt-1 font-mono text-base font-semibold tabular-nums text-text-2 sm:text-lg">
 				1 {wrappedSymbol} = {ratioLabel}
 				{assetSymbol}
 			</p>
-			<p class="mt-1 text-xs text-gray-400">
+			<p class="mt-1 text-xs text-text-2">
 				Each {wrappedSymbol} bundles {ratioLabel}
 				{assetSymbol} shares. Trades and prices on this page are shown <b>per share</b>.
 			</p>
 			{#if lastChangedRelative}
-				<p class="mt-2 text-[11px] text-gray-500">
+				<p class="mt-2 text-[11px] text-text-3">
 					Last changed {lastChangedRelative}{#if lastChangeLabel}
 						· {lastChangeLabel}{/if}
 					{#if onViewHistory}
@@ -56,7 +56,7 @@
 						<button
 							type="button"
 							on:click={onViewHistory}
-							class="inline-flex items-center gap-0.5 text-blue-300 hover:text-blue-200 hover:underline"
+							class="inline-flex items-center gap-0.5 text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
 						>
 							view history
 							<svg
@@ -81,14 +81,14 @@
 				<button
 					type="button"
 					on:click={onLearnMore}
-					class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-gray-200 transition hover:border-yellow-300/40 hover:bg-yellow-400/10"
+					class="rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-xs text-text-2 transition hover:border-yellow-300/40 hover:bg-yellow-400/10"
 				>
 					How it works
 				</button>
 			{/if}
 			<a
 				href={dashboardHref}
-				class="rounded-md border border-yellow-400/40 bg-yellow-500/20 px-2.5 py-1.5 text-xs font-medium text-yellow-200 transition hover:bg-yellow-500/30"
+				class="rounded-md border border-yellow-400/40 bg-yellow-500/20 px-2.5 py-1.5 text-xs font-medium text-accent transition hover:bg-yellow-500/30"
 			>
 				Unwrap in Dashboard <IconExternalLink width="10" height="10" class="ml-1 inline" />
 			</a>

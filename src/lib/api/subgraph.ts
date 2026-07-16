@@ -1,4 +1,4 @@
-import type { SgTrade } from '@rainlanguage/orderbook';
+import type { SgTrade } from '@rainlanguage/raindex';
 import { TOKENS } from '$lib/config/network';
 import { getTokenByAnyAddress } from '$lib/config/tokens';
 import type { Network } from '$lib/config/network';

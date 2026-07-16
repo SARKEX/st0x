@@ -23,6 +23,8 @@
 	import { formatUnits, erc20Abi } from 'viem';
 	import { readContracts, getBalance } from '@wagmi/core';
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
+	import type { CategorizedToken } from '$lib/config/network';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { transformApiTakerTradesToDisplay } from '$lib/utils/tradeTransform';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -73,7 +75,13 @@
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
 
 	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	// Default to [] (not undefined): the createQuery(derived(...)) closures below run
+	// at component init, BEFORE these reactive statements first flush. Reading
+	// ALL_TOKENS.length on an undefined value there threw an intermittent
+	// "Cannot read properties of undefined (reading 'length')" on dashboard load.
+	let ALL_TOKENS: CategorizedToken[] = [];
 	$: ALL_TOKENS = $apiTokensQuery.data ?? [];
+	let paymentTokens: CategorizedToken[] = [];
 	$: paymentTokens = ALL_TOKENS.filter((token) => token.category === 'CRYPTO');
 
 	// Set of valid token addresses (asset tokens + payment tokens) for filtering
@@ -1109,8 +1117,8 @@
 </script>
 
 <!-- Main Content -->
-<div class="relative z-10 min-h-screen text-white">
-	<PageContainer>
+<div class="relative z-10 min-h-screen text-text">
+	<PageContainer className="mx-auto max-w-5xl">
 		{#if isNetworkLoading}
 			<div class="flex flex-col items-center justify-center gap-4 py-8">
 				<LoadingSpinner
@@ -1130,19 +1138,19 @@
 				<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
 					<div>
 						<h1 class="text-2xl font-bold">My Dashboard</h1>
-						<div class="flex items-center gap-2 text-gray-400">
+						<div class="flex items-center gap-2 font-mono text-sm text-text-2">
 							<span class="sm:hidden">…{($walletAddress || '').slice(-6)}</span>
 							<span class="hidden sm:inline">{truncateAddress($walletAddress || '')}</span>
 							<!-- Copy button -->
 							<button
 								type="button"
 								on:click={copyAddress}
-								class="rounded p-1 text-gray-500 hover:bg-white/10 hover:text-gray-300"
+								class="rounded p-1 text-text-3 hover:bg-surface-2 hover:text-text-2"
 								title="Copy address"
 							>
 								{#if addressCopied}
 									<svg
-										class="h-4 w-4 text-green-400"
+										class="h-4 w-4 text-up"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
@@ -1170,31 +1178,17 @@
 								href={basescanUrl}
 								target="_blank"
 								rel="noopener noreferrer"
-								class="rounded p-1 text-gray-500 hover:bg-white/10 hover:text-gray-300"
+								class="icon-trigger rounded p-1 text-text-3 hover:bg-surface-2 hover:text-text-2"
 								title="View on Basescan"
 							>
-								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-									/>
-								</svg>
+								<Icon name="arrowUpRight" className="icon-slide-up h-3.5 w-3.5" />
 							</a>
 						</div>
 					</div>
 					<div class="flex gap-2">
 						<Button variant="primary" size="sm" on:click={() => openDepositModal()}>
 							<span class="flex items-center gap-1.5">
-								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
+								<Icon name="plus" className="h-4 w-4" />
 								Deposit
 							</span>
 						</Button>
@@ -1217,15 +1211,16 @@
 				</div>
 
 				<!-- Overview Stats -->
-				<div class="grid grid-cols-3 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+				<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 					<MetricCard
 						label="Total Value"
 						value={`$${totalValue.toFixed(2)}`}
+						cardClass="h-full border border-line bg-overlay-1"
 						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-lg font-bold sm:text-2xl"
+						valueClass="font-mono text-lg font-bold sm:text-2xl"
 					/>
-					<div class="hidden sm:block">
+					<div class="hidden h-full sm:block">
 						<MetricCard
 							label="Unrealized P&L"
 							value={$costBasisQuery?.isLoading
@@ -1233,33 +1228,36 @@
 								: totalUnrealizedPnL === 0
 									? '$0.00'
 									: `${totalUnrealizedPnL >= 0 ? '+' : ''}$${totalUnrealizedPnL.toFixed(2)}`}
+							cardClass="h-full border border-line bg-overlay-1"
 							paddingClass="p-4"
 							showGradient={false}
 							change=""
-							valueClass={`text-2xl font-bold ${
+							valueClass={`font-mono text-2xl font-bold ${
 								$costBasisQuery?.isLoading
-									? 'animate-pulse text-gray-400'
+									? 'animate-pulse text-text-2'
 									: totalUnrealizedPnL > 0
-										? 'text-green-400'
+										? 'text-up'
 										: totalUnrealizedPnL < 0
-											? 'text-red-400'
-											: 'text-gray-400'
+											? 'text-down'
+											: 'text-text-2'
 							}`}
 						/>
 					</div>
 					<MetricCard
 						label="Active Orders"
 						value={`${activeOrdersCount}`}
+						cardClass="h-full border border-line bg-overlay-1"
 						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-lg font-bold sm:text-2xl"
+						valueClass="font-mono text-lg font-bold sm:text-2xl"
 					/>
 					<MetricCard
 						label="Active Vaults"
 						value={`${activeVaultsCount}`}
+						cardClass="h-full border border-line bg-overlay-1"
 						paddingClass="p-3 sm:p-4"
 						showGradient={false}
-						valueClass="text-lg font-bold sm:text-2xl"
+						valueClass="font-mono text-lg font-bold sm:text-2xl"
 					/>
 				</div>
 			</Section>
@@ -1272,12 +1270,12 @@
 				<!-- Hide Dust Checkbox -->
 				<div class="flex justify-end px-1 pb-2 pt-1">
 					<label
-						class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm"
+						class="flex cursor-pointer items-center gap-1.5 text-xs text-text-2 sm:gap-2 sm:text-sm"
 					>
 						<input
 							type="checkbox"
 							bind:checked={hideDust}
-							class="h-3.5 w-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 sm:h-4 sm:w-4"
+							class="h-3.5 w-3.5 rounded border-line bg-surface-3 text-accent focus:ring-accent-line focus:ring-offset-surface-1 sm:h-4 sm:w-4"
 						/>
 						Hide dust
 					</label>
@@ -1290,79 +1288,83 @@
 					<!-- Funds Section (Payment Tokens) -->
 					<Section>
 						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Funds</h2>
-						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+						<p class="mb-3 hidden text-sm text-text-2 sm:mb-4 sm:block">
 							Payment tokens available for trading
 						</p>
 						{#if fundsHoldings.length > 0}
-							<div class="overflow-x-auto">
-								<Table>
-									<thead>
-										<tr>
-											<th
-												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												>Token</th
-											>
-											<th
-												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
-												>Wallet</th
-											>
-											<th
-												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
-												>Vaults</th
-											>
-											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												>Total</th
-											>
-											{#if $authMethod === 'dynamic'}
+							<div class="overflow-hidden rounded-2xl border border-line bg-overlay-1">
+								<div class="overflow-x-auto">
+									<Table>
+										<thead>
+											<tr>
 												<th
-													class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+													class="sticky left-0 z-10 bg-surface-1 px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
+													>Token</th
+												>
+												<th
+													class="hidden px-2 py-2 text-left text-xs font-medium text-text-2 sm:table-cell sm:px-4 sm:py-3"
+													>Wallet</th
+												>
+												<th
+													class="hidden px-2 py-2 text-left text-xs font-medium text-text-2 sm:table-cell sm:px-4 sm:py-3"
+													>Vaults</th
+												>
+												<th
+													class="px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
+													>Total</th
+												>
+												<th
+													class="px-2 py-2 text-right text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 												></th>
-											{/if}
-										</tr>
-									</thead>
-									<tbody>
-										{#each fundsHoldings as holding}
-											{@const isEth = holding.address === 'native'}
-											{@const paymentToken = isEth
-												? null
-												: paymentTokens.find(
-														(t) => t.address.toLowerCase() === holding.address.toLowerCase()
-													)}
-											{@const logoUrl = isEth ? '/images/ETH.svg' : paymentToken?.logoUrl}
-											{@const decimalsForDisplay = holding.decimals === 6 ? 2 : 4}
-											<tr class="hover:bg-white/5">
-												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<TokenDisplay {logoUrl} symbol={holding.symbol} name={holding.name} />
-												</td>
-												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
-													>{holding.walletBalanceNum.toFixed(decimalsForDisplay)}</td
-												>
-												<td class="hidden px-2 py-2 text-gray-300 sm:table-cell sm:px-4 sm:py-3"
-													>{holding.vaultBalanceNum.toFixed(decimalsForDisplay)}</td
-												>
-												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
-													>{holding.totalBalance.toFixed(decimalsForDisplay)}</td
-												>
-												{#if $authMethod === 'dynamic'}
-													<td class="px-2 py-2 sm:px-4 sm:py-3">
-														{#if holding.walletBalanceNum > 0}
-															<Button
-																variant="secondary"
-																size="sm"
-																on:click={() => handleWithdraw(holding)}
-															>
-																Withdraw
-															</Button>
-														{:else}
-															<span class="text-gray-500">—</span>
-														{/if}
-													</td>
-												{/if}
 											</tr>
-										{/each}
-									</tbody>
-								</Table>
+										</thead>
+										<tbody>
+											{#each fundsHoldings as holding}
+												{@const isEth = holding.address === 'native'}
+												{@const isUsdc = holding.symbol === 'USDC'}
+												{@const paymentToken = isEth
+													? null
+													: paymentTokens.find(
+															(t) => t.address.toLowerCase() === holding.address.toLowerCase()
+														)}
+												{@const logoUrl = isEth ? '/images/ETH.svg' : paymentToken?.logoUrl}
+												{@const decimalsForDisplay = holding.decimals === 6 ? 2 : 4}
+												<tr class="border-t border-line hover:bg-overlay-hover">
+													<td class="sticky left-0 bg-surface-1 px-2 py-2 sm:px-4 sm:py-3">
+														<TokenDisplay {logoUrl} symbol={holding.symbol} name={holding.name} />
+													</td>
+													<td
+														class="hidden px-2 py-2 font-mono text-text-2 sm:table-cell sm:px-4 sm:py-3"
+														>{holding.walletBalanceNum.toFixed(decimalsForDisplay)}</td
+													>
+													<td
+														class="hidden px-2 py-2 font-mono text-text-2 sm:table-cell sm:px-4 sm:py-3"
+														>{holding.vaultBalanceNum.toFixed(decimalsForDisplay)}</td
+													>
+													<td
+														class="px-2 py-2 font-mono text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
+														>{holding.totalBalance.toFixed(decimalsForDisplay)}</td
+													>
+													<td class="px-2 py-2 text-right sm:px-4 sm:py-3">
+														<div class="flex items-center justify-end gap-2">
+															{#if $authMethod === 'dynamic' && holding.walletBalanceNum > 0}
+																<Button
+																	variant="secondary"
+																	size="sm"
+																	on:click={() => handleWithdraw(holding)}
+																>
+																	Withdraw
+																</Button>
+															{:else if !isUsdc}
+																<span class="text-text-3">—</span>
+															{/if}
+														</div>
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</Table>
+								</div>
 							</div>
 						{:else}
 							<EmptyState description="No funds found in your wallet or vaults." />
@@ -1375,7 +1377,7 @@
 						<div class="mb-3 flex flex-wrap items-center justify-between gap-3 sm:mb-4">
 							<h2 class="text-base font-semibold sm:text-lg">Holdings</h2>
 							<label
-								class="inline-flex cursor-pointer items-center gap-2 text-xs text-gray-300 sm:text-sm"
+								class="inline-flex cursor-pointer items-center gap-2 text-xs text-text-2 sm:text-sm"
 							>
 								<input
 									type="checkbox"
@@ -1383,226 +1385,234 @@
 									checked={$holdingsDenom === 'unwrapped'}
 									on:change={(e) =>
 										holdingsDenom.set(e.currentTarget.checked ? 'unwrapped' : 'wrapped')}
-									class="h-3.5 w-3.5 rounded border-white/20 bg-transparent text-yellow-400 focus:ring-yellow-400/40"
+									class="h-3.5 w-3.5 rounded border-line-strong bg-transparent text-accent focus:ring-accent-line"
 								/>
 								<span>Display holdings in unwrapped equivalents</span>
 							</label>
 						</div>
-						<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+						<p class="mb-3 hidden text-sm text-text-2 sm:mb-4 sm:block">
 							Wrapped tokens combined across wallet and vaults. We recommend only using wrapped
 							tokens for DEX/DeFi usage.
 						</p>
 						{#if assetHoldings.length > 0}
-							<div class="overflow-x-auto">
-								<Table>
-									<thead>
-										<tr>
-											<th
-												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												>Token</th
-											>
-											<th
-												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
-												>Wallet</th
-											>
-											<th
-												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
-												>Vaults</th
-											>
-											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												>Holdings</th
-											>
-											<th
-												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
-												>Price</th
-											>
-											<th
-												class="hidden px-2 py-2 text-left text-xs font-medium text-gray-400 sm:table-cell sm:px-4 sm:py-3"
-												>Cost Basis</th
-											>
-											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												>Value</th
-											>
-											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-												>P&L</th
-											>
-											<th
-												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
-											></th>
-										</tr>
-									</thead>
-									<tbody>
-										{#each assetHoldings as holding}
-											{@const rowRatio = resolveHoldingRatio(holding.address)}
-											{@const rowSymbol = displayUnwrappedSymbol(holding.symbol)}
-											<tr class="hover:bg-white/5">
-												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
-													<TokenDisplay
-														logoUrl={findApiTokenByAnyAddress(ALL_TOKENS, holding.address)?.logoUrl}
-														symbol={rowSymbol}
-														name={holding.name}
-														hideNameOnMobile={true}
-													/>
-												</td>
-												<td
-													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
-													>{(holding.walletBalanceNum * rowRatio).toFixed(4)}</td
+							<div class="overflow-hidden rounded-2xl border border-line bg-overlay-1">
+								<div class="overflow-x-auto">
+									<Table>
+										<thead>
+											<tr>
+												<th
+													class="sticky left-0 z-10 bg-surface-1 px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
+													>Token</th
 												>
-												<td
-													class="hidden px-2 py-2 text-sm text-gray-300 sm:table-cell sm:px-4 sm:py-3"
-													>{(holding.vaultBalanceNum * rowRatio).toFixed(4)}</td
+												<th
+													class="hidden px-2 py-2 text-left text-xs font-medium text-text-2 sm:table-cell sm:px-4 sm:py-3"
+													>Wallet</th
 												>
-												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
-													>{(holding.totalBalance * rowRatio).toFixed(4)}</td
+												<th
+													class="hidden px-2 py-2 text-left text-xs font-medium text-text-2 sm:table-cell sm:px-4 sm:py-3"
+													>Vaults</th
 												>
-												<td class="hidden px-2 py-2 text-sm sm:table-cell sm:px-4 sm:py-3"
-													>${(holding.price / rowRatio).toFixed(2)}</td
+												<th
+													class="px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
+													>Holdings</th
 												>
-												<td class="hidden px-2 py-2 text-sm sm:table-cell sm:px-4 sm:py-3">
-													{#if $costBasisQuery?.isLoading}
-														<span class="animate-pulse text-gray-400">Loading...</span>
-													{:else}
-														<div class="flex items-center gap-1">
-															{#if holding.avgCostBasis !== null}
-																<span>${(holding.avgCostBasis / rowRatio).toFixed(2)}</span>
-															{:else}
-																<span class="text-gray-500">—</span>
+												<th
+													class="hidden px-2 py-2 text-left text-xs font-medium text-text-2 sm:table-cell sm:px-4 sm:py-3"
+													>Price</th
+												>
+												<th
+													class="hidden px-2 py-2 text-left text-xs font-medium text-text-2 sm:table-cell sm:px-4 sm:py-3"
+													>Cost Basis</th
+												>
+												<th
+													class="px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
+													>Value</th
+												>
+												<th
+													class="px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
+													>P&L</th
+												>
+												<th
+													class="px-2 py-2 text-center text-xs font-medium text-text-2 sm:px-4 sm:py-3"
+												></th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each assetHoldings as holding}
+												{@const rowRatio = resolveHoldingRatio(holding.address)}
+												{@const rowSymbol = displayUnwrappedSymbol(holding.symbol)}
+												<tr class="border-t border-line hover:bg-overlay-hover">
+													<td class="sticky left-0 bg-surface-1 px-2 py-2 sm:px-4 sm:py-3">
+														<div class="flex items-center gap-2">
+															<TokenDisplay
+																logoUrl={findApiTokenByAnyAddress(ALL_TOKENS, holding.address)
+																	?.logoUrl}
+																symbol={rowSymbol}
+																name={holding.name}
+																hideNameOnMobile={true}
+															/>
+														</div>
+													</td>
+													<td
+														class="hidden px-2 py-2 font-mono text-sm text-text-2 sm:table-cell sm:px-4 sm:py-3"
+														>{(holding.walletBalanceNum * rowRatio).toFixed(4)}</td
+													>
+													<td
+														class="hidden px-2 py-2 font-mono text-sm text-text-2 sm:table-cell sm:px-4 sm:py-3"
+														>{(holding.vaultBalanceNum * rowRatio).toFixed(4)}</td
+													>
+													<td
+														class="px-2 py-2 font-mono text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
+														>{(holding.totalBalance * rowRatio).toFixed(4)}</td
+													>
+													<td
+														class="hidden px-2 py-2 font-mono text-sm sm:table-cell sm:px-4 sm:py-3"
+														>${(holding.price / rowRatio).toFixed(2)}</td
+													>
+													<td class="hidden px-2 py-2 text-sm sm:table-cell sm:px-4 sm:py-3">
+														{#if $costBasisQuery?.isLoading}
+															<span class="animate-pulse text-text-2">Loading...</span>
+														{:else}
+															<div class="flex items-center gap-1">
+																{#if holding.avgCostBasis !== null}
+																	<span class="font-mono"
+																		>${(holding.avgCostBasis / rowRatio).toFixed(2)}</span
+																	>
+																{:else}
+																	<span class="text-text-3">—</span>
+																{/if}
+																{#if holding.untrackedBalance > 0.0001}
+																	<button
+																		type="button"
+																		on:click={() => openCostBasisModal(holding)}
+																		class="ml-1 rounded p-0.5 text-text-2 transition hover:bg-surface-2 hover:text-accent"
+																		title={holding.manualEntry
+																			? `Edit cost basis for ${holding.untrackedBalance.toFixed(
+																					4
+																				)} untracked tokens`
+																			: `Add cost basis for ${holding.untrackedBalance.toFixed(
+																					4
+																				)} untracked tokens`}
+																	>
+																		<svg
+																			class="h-3.5 w-3.5"
+																			fill="none"
+																			stroke="currentColor"
+																			viewBox="0 0 24 24"
+																		>
+																			<path
+																				stroke-linecap="round"
+																				stroke-linejoin="round"
+																				stroke-width="2"
+																				d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+																			/>
+																		</svg>
+																	</button>
+																{/if}
+															</div>
+															{#if holding.untrackedBalance > 0.0001 && !holding.manualEntry}
+																<div class="mt-0.5 text-xs text-text-3">
+																	{holding.untrackedBalance.toFixed(2)} untracked
+																</div>
 															{/if}
-															{#if holding.untrackedBalance > 0.0001}
+														{/if}
+													</td>
+													<td
+														class="px-2 py-2 font-mono text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
+														>${holding.value.toFixed(2)}</td
+													>
+													<td class="px-2 py-2 font-mono text-sm sm:px-4 sm:py-3">
+														{#if $costBasisQuery?.isLoading}
+															<span class="animate-pulse text-text-2">Loading...</span>
+														{:else if holding.unrealizedPnL !== null}
+															<div class={holding.unrealizedPnL >= 0 ? 'text-up' : 'text-down'}>
+																<div class="font-medium">
+																	{holding.unrealizedPnLPercent !== null
+																		? `${
+																				holding.unrealizedPnLPercent >= 0 ? '+' : ''
+																			}${holding.unrealizedPnLPercent.toFixed(1)}%`
+																		: '—'}
+																</div>
+																<div class="hidden text-xs opacity-75 sm:block">
+																	{holding.unrealizedPnL >= 0
+																		? '+'
+																		: ''}${holding.unrealizedPnL.toFixed(2)}
+																</div>
+															</div>
+														{:else if holding.untrackedBalance > 0.0001}
+															<button
+																type="button"
+																on:click={() => openCostBasisModal(holding)}
+																class="text-accent underline decoration-dotted underline-offset-2 transition hover:text-accent"
+															>
+																Add cost basis
+															</button>
+														{:else}
+															<span class="text-text-3">—</span>
+														{/if}
+													</td>
+													<td class="px-2 py-2 sm:px-4 sm:py-3">
+														<div class="flex justify-center gap-2">
+															<Button
+																size="sm"
+																variant="primary"
+																on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
+															>
+															{#if getWrappingMappingByWrappedAddress(holding.address) && holding.walletBalanceNum > 0}
+																<Button
+																	size="sm"
+																	variant="secondary"
+																	on:click={() => handleUnwrapToken(holding)}
+																>
+																	Unwrap
+																</Button>
+															{/if}
+															{#if $authMethod === 'dynamic' && holding.walletBalanceNum > 0}
+																<Button
+																	size="sm"
+																	variant="secondary"
+																	on:click={() => handleWithdraw(holding)}
+																>
+																	Transfer
+																</Button>
+															{/if}
+															{#if !isEmbeddedWallet}
 																<button
 																	type="button"
-																	on:click={() => openCostBasisModal(holding)}
-																	class="ml-1 rounded p-0.5 text-gray-400 transition hover:bg-white/10 hover:text-yellow-400"
-																	title={holding.manualEntry
-																		? `Edit cost basis for ${holding.untrackedBalance.toFixed(
-																				4
-																			)} untracked tokens`
-																		: `Add cost basis for ${holding.untrackedBalance.toFixed(
-																				4
-																			)} untracked tokens`}
+																	on:click={() =>
+																		addTokenToWallet({
+																			address: holding.address,
+																			symbol: holding.symbol,
+																			decimals: holding.decimals,
+																			image: findApiTokenByAnyAddress(ALL_TOKENS, holding.address)
+																				?.logoUrl
+																		})}
+																	class="inline-flex items-center justify-center rounded-md border border-line bg-surface-2 p-1.5 text-text-2 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-300"
+																	title="Track in Wallet"
+																	aria-label="Track in Wallet"
 																>
 																	<svg
-																		class="h-3.5 w-3.5"
+																		class="h-4 w-4"
+																		viewBox="0 0 24 24"
 																		fill="none"
 																		stroke="currentColor"
-																		viewBox="0 0 24 24"
+																		stroke-width="2"
 																	>
 																		<path
+																			d="M12 5v14M5 12h14"
 																			stroke-linecap="round"
 																			stroke-linejoin="round"
-																			stroke-width="2"
-																			d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
 																		/>
 																	</svg>
 																</button>
 															{/if}
 														</div>
-														{#if holding.untrackedBalance > 0.0001 && !holding.manualEntry}
-															<div class="mt-0.5 text-xs text-yellow-500/70">
-																{holding.untrackedBalance.toFixed(2)} untracked
-															</div>
-														{/if}
-													{/if}
-												</td>
-												<td class="px-2 py-2 text-xs font-medium sm:px-4 sm:py-3 sm:text-sm"
-													>${holding.value.toFixed(2)}</td
-												>
-												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3">
-													{#if $costBasisQuery?.isLoading}
-														<span class="animate-pulse text-gray-400">Loading...</span>
-													{:else if holding.unrealizedPnL !== null}
-														<div
-															class={holding.unrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}
-														>
-															<div class="font-medium">
-																{holding.unrealizedPnLPercent !== null
-																	? `${
-																			holding.unrealizedPnLPercent >= 0 ? '+' : ''
-																		}${holding.unrealizedPnLPercent.toFixed(1)}%`
-																	: '—'}
-															</div>
-															<div class="hidden text-xs opacity-75 sm:block">
-																{holding.unrealizedPnL >= 0
-																	? '+'
-																	: ''}${holding.unrealizedPnL.toFixed(2)}
-															</div>
-														</div>
-													{:else if holding.untrackedBalance > 0.0001}
-														<button
-															type="button"
-															on:click={() => openCostBasisModal(holding)}
-															class="text-yellow-500/70 underline decoration-dotted underline-offset-2 transition hover:text-yellow-400"
-														>
-															Add cost basis
-														</button>
-													{:else}
-														<span class="text-gray-500">—</span>
-													{/if}
-												</td>
-												<td class="px-2 py-2 sm:px-4 sm:py-3">
-													<div class="flex justify-center gap-2">
-														<Button
-															size="sm"
-															variant="primary"
-															on:click={() => goto(`/trade/${holding.id}`)}>Trade</Button
-														>
-														{#if getWrappingMappingByWrappedAddress(holding.address) && holding.walletBalanceNum > 0}
-															<Button
-																size="sm"
-																variant="secondary"
-																on:click={() => handleUnwrapToken(holding)}
-															>
-																Unwrap
-															</Button>
-														{/if}
-														{#if $authMethod === 'dynamic' && holding.walletBalanceNum > 0}
-															<Button
-																size="sm"
-																variant="secondary"
-																on:click={() => handleWithdraw(holding)}
-															>
-																Transfer
-															</Button>
-														{/if}
-														{#if !isEmbeddedWallet}
-															<button
-																type="button"
-																on:click={() =>
-																	addTokenToWallet({
-																		address: holding.address,
-																		symbol: holding.symbol,
-																		decimals: holding.decimals,
-																		image: findApiTokenByAnyAddress(ALL_TOKENS, holding.address)
-																			?.logoUrl
-																	})}
-																class="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/5 p-1.5 text-gray-300 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-300"
-																title="Track in Wallet"
-																aria-label="Track in Wallet"
-															>
-																<svg
-																	class="h-4 w-4"
-																	viewBox="0 0 24 24"
-																	fill="none"
-																	stroke="currentColor"
-																	stroke-width="2"
-																>
-																	<path
-																		d="M12 5v14M5 12h14"
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																	/>
-																</svg>
-															</button>
-														{/if}
-													</div>
-												</td>
-											</tr>
-										{/each}
-									</tbody>
-								</Table>
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</Table>
+								</div>
 							</div>
 						{:else}
 							<EmptyState description="No asset holdings found in your wallet or vaults." />
@@ -1612,10 +1622,10 @@
 					<!-- Unwrapped Tokens Section -->
 					{#if unwrappedHoldings.length > 0}
 						<Section>
-							<h2 class="mb-3 text-base font-semibold text-yellow-500 sm:mb-4 sm:text-lg">
+							<h2 class="mb-3 text-base font-semibold text-text sm:mb-4 sm:text-lg">
 								Unwrapped Tokens
 							</h2>
-							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+							<p class="mb-3 hidden text-sm text-text-2 sm:mb-4 sm:block">
 								Unwrapped tokens are always redeemable for 1 unit of off-chain equity. We recommend
 								wrapping them for safe use with DEX/DeFi protocols.
 							</p>
@@ -1624,26 +1634,26 @@
 									<thead>
 										<tr>
 											<th
-												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="sticky left-0 z-10 bg-surface-1 px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 												>Token</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 												>Balance</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 												>Value</th
 											>
 											<th
-												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="px-2 py-2 text-center text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 											></th>
 										</tr>
 									</thead>
 									<tbody>
 										{#each unwrappedHoldings as token (token.address)}
-											<tr class="hover:bg-white/5">
-												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
+											<tr class="hover:bg-surface-2">
+												<td class="sticky left-0 bg-surface-1 px-2 py-2 sm:px-4 sm:py-3">
 													<span class="font-medium">{token.symbol}</span>
 												</td>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
@@ -1688,10 +1698,10 @@
 					<!-- Legacy Tokens Section -->
 					{#if legacyHoldings.length > 0}
 						<Section>
-							<h2 class="mb-3 text-base font-semibold text-yellow-500 sm:mb-4 sm:text-lg">
+							<h2 class="mb-3 text-base font-semibold text-text sm:mb-4 sm:text-lg">
 								Legacy Tokens
 							</h2>
-							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+							<p class="mb-3 hidden text-sm text-text-2 sm:mb-4 sm:block">
 								Legacy tokens maintain full equity backing and right of redemption, but should be
 								swapped ASAP to receive dividends, stock splits, and be compatible with DeFi
 								protocols.
@@ -1701,26 +1711,26 @@
 									<thead>
 										<tr>
 											<th
-												class="sticky left-0 z-10 px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="sticky left-0 z-10 bg-surface-1 px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 												>Token</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 												>Balance</th
 											>
 											<th
-												class="px-2 py-2 text-left text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="px-2 py-2 text-left text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 												>Value</th
 											>
 											<th
-												class="px-2 py-2 text-center text-xs font-medium text-gray-400 sm:px-4 sm:py-3"
+												class="px-2 py-2 text-center text-xs font-medium text-text-2 sm:px-4 sm:py-3"
 											></th>
 										</tr>
 									</thead>
 									<tbody>
 										{#each legacyHoldings as token (token.address)}
-											<tr class="hover:bg-white/5">
-												<td class="sticky left-0 px-2 py-2 sm:px-4 sm:py-3">
+											<tr class="hover:bg-surface-2">
+												<td class="sticky left-0 bg-surface-1 px-2 py-2 sm:px-4 sm:py-3">
 													<span class="font-medium">{token.symbol}</span>
 												</td>
 												<td class="px-2 py-2 text-sm sm:px-4 sm:py-3"
@@ -1732,7 +1742,6 @@
 														<Button
 															size="sm"
 															variant="primary"
-															className="bg-yellow-500 hover:bg-yellow-400"
 															on:click={() => handleSwapLegacyToken(token)}
 														>
 															Swap
@@ -1776,11 +1785,11 @@
 						<!-- Default Vaults Section -->
 						<div class="mb-6 sm:mb-8">
 							<h2 class="mb-2 text-base font-semibold sm:text-lg">Default Vaults</h2>
-							<p class="mb-3 hidden text-sm text-gray-400 sm:mb-4 sm:block">
+							<p class="mb-3 hidden text-sm text-text-2 sm:mb-4 sm:block">
 								Your primary vault for each token
 							</p>
 							{#if defaultVaults.length === 0}
-								<div class="py-4 text-sm text-gray-500">
+								<div class="py-4 text-sm text-text-3">
 									No default vaults found. Default vaults are created automatically when you make a
 									limit or DCA order.
 								</div>
@@ -1788,7 +1797,7 @@
 								<div class="overflow-x-auto">
 									<table class="w-full text-sm">
 										<thead>
-											<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
+											<tr class="text-left text-xs uppercase tracking-wide text-text-2">
 												<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Token</th>
 												<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Balance</th>
 												<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4"
@@ -1804,21 +1813,21 @@
 												{@const balanceNum = parseFloat(formatUnits(balance, decimals))}
 												{@const ordersCount =
 													(vault.ordersAsInput?.length ?? 0) + (vault.ordersAsOutput?.length ?? 0)}
-												<tr class="hover:bg-white/5">
+												<tr class="hover:bg-surface-2">
 													<td class="py-2 pr-2 sm:py-3 sm:pr-4">
 														<div class="flex items-center gap-2">
-															<span class="text-xs text-gray-200 sm:text-sm"
+															<span class="text-xs text-text-2 sm:text-sm"
 																>{vault.token.symbol}</span
 															>
 															<a
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
-																	vault.orderbook.id,
+																	vault.raindex.id,
 																	vault.id
 																)}
 																target="_blank"
 																rel="noopener noreferrer"
-																class="text-blue-400 hover:text-blue-300"
+																class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 																title="View on Raindex"
 															>
 																<svg
@@ -1838,10 +1847,10 @@
 															</a>
 														</div>
 													</td>
-													<td class="py-2 pr-2 text-xs text-gray-300 sm:py-3 sm:pr-4 sm:text-sm"
+													<td class="py-2 pr-2 text-xs text-text-2 sm:py-3 sm:pr-4 sm:text-sm"
 														>{balanceNum.toFixed(4)}</td
 													>
-													<td class="hidden py-2 pr-2 text-gray-400 sm:table-cell sm:py-3 sm:pr-4"
+													<td class="hidden py-2 pr-2 text-text-2 sm:table-cell sm:py-3 sm:pr-4"
 														>{ordersCount}</td
 													>
 													<td class="py-2 sm:py-3">
@@ -1853,7 +1862,7 @@
 																>Withdraw</Button
 															>
 														{:else}
-															<span class="text-gray-500">—</span>
+															<span class="text-text-3">—</span>
 														{/if}
 													</td>
 												</tr>
@@ -1870,18 +1879,18 @@
 								<div class="mb-3 flex items-center justify-between sm:mb-4">
 									<div>
 										<h2 class="text-base font-semibold sm:text-lg">Other Vaults</h2>
-										<p class="hidden text-sm text-gray-400 sm:block">
+										<p class="hidden text-sm text-text-2 sm:block">
 											Additional vaults with custom IDs
 										</p>
 									</div>
 									{#if dustVaultsCount > 0 || showDustVaults}
 										<label
-											class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm"
+											class="flex cursor-pointer items-center gap-1.5 text-xs text-text-2 sm:gap-2 sm:text-sm"
 										>
 											<input
 												type="checkbox"
 												bind:checked={showDustVaults}
-												class="h-3.5 w-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900 sm:h-4 sm:w-4"
+												class="h-3.5 w-3.5 rounded border-line bg-surface-3 text-accent focus:ring-accent-line focus:ring-offset-surface-1 sm:h-4 sm:w-4"
 											/>
 											<span class="sm:hidden">Dust ({dustVaultsCount})</span>
 											<span class="hidden sm:inline"
@@ -1894,7 +1903,7 @@
 									<div class="overflow-x-auto">
 										<table class="w-full text-sm">
 											<thead>
-												<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
+												<tr class="text-left text-xs uppercase tracking-wide text-text-2">
 													<th class="pb-2 pr-2 font-medium sm:pb-3 sm:pr-4">Token</th>
 													<th class="hidden pb-2 pr-2 font-medium sm:table-cell sm:pb-3 sm:pr-4"
 														>Vault ID</th
@@ -1914,9 +1923,9 @@
 													{@const ordersCount =
 														(vault.ordersAsInput?.length ?? 0) +
 														(vault.ordersAsOutput?.length ?? 0)}
-													<tr class="hover:bg-white/5">
+													<tr class="hover:bg-surface-2">
 														<td class="py-2 pr-2 sm:py-3 sm:pr-4">
-															<span class="text-xs text-gray-200 sm:text-sm"
+															<span class="text-xs text-text-2 sm:text-sm"
 																>{vault.token.symbol}</span
 															>
 														</td>
@@ -1924,21 +1933,21 @@
 															<a
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
-																	vault.orderbook.id,
+																	vault.raindex.id,
 																	vault.id
 																)}
 																target="_blank"
 																rel="noopener noreferrer"
-																class="font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline"
+																class="font-mono text-xs text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
 																title={vault.vaultId}
 															>
 																{vault.vaultId.slice(0, 10)}...{vault.vaultId.slice(-6)}
 															</a>
 														</td>
-														<td class="py-2 pr-2 text-xs text-gray-300 sm:py-3 sm:pr-4 sm:text-sm"
+														<td class="py-2 pr-2 text-xs text-text-2 sm:py-3 sm:pr-4 sm:text-sm"
 															>{balanceNum.toFixed(4)}</td
 														>
-														<td class="hidden py-2 pr-2 text-gray-400 sm:table-cell sm:py-3 sm:pr-4"
+														<td class="hidden py-2 pr-2 text-text-2 sm:table-cell sm:py-3 sm:pr-4"
 															>{ordersCount}</td
 														>
 														<td class="py-2 sm:py-3">
@@ -1950,7 +1959,7 @@
 																	>Withdraw</Button
 																>
 															{:else}
-																<span class="text-gray-500">—</span>
+																<span class="text-text-3">—</span>
 															{/if}
 														</td>
 													</tr>
@@ -1959,7 +1968,7 @@
 										</table>
 									</div>
 								{:else}
-									<div class="py-4 text-sm text-gray-500">
+									<div class="py-4 text-sm text-text-3">
 										All other vaults contain only dust amounts.
 									</div>
 								{/if}
@@ -2023,13 +2032,13 @@
 							<div class="mb-3 flex items-center justify-between sm:mb-4">
 								<div>
 									<h2 class="text-base font-semibold sm:text-lg">Transaction History</h2>
-									<p class="text-sm text-gray-400">Raw blockchain transactions from your wallet</p>
+									<p class="text-sm text-text-2">Raw blockchain transactions from your wallet</p>
 								</div>
 								<a
 									href={basescanUrl}
 									target="_blank"
 									rel="noopener noreferrer"
-									class="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
+									class="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 								>
 									View all on Basescan
 									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2042,8 +2051,8 @@
 									</svg>
 								</a>
 							</div>
-							<div class="rounded-lg border border-gray-700 bg-gray-800/50 p-6 text-center">
-								<p class="text-sm text-gray-400">
+							<div class="rounded-lg border border-line bg-surface-2 p-6 text-center">
+								<p class="text-sm text-text-2">
 									Transaction history is available on Basescan. Click the link above to view all
 									your wallet transactions.
 								</p>
@@ -2070,26 +2079,26 @@
 	>
 		<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 		<div
-			class="mx-4 w-full max-w-md rounded-xl border border-white/10 bg-gray-900 p-6 shadow-2xl"
+			class="mx-4 w-full max-w-md rounded-xl border border-line bg-surface-1 p-6 shadow-2xl"
 			on:click|stopPropagation
 			on:keydown|stopPropagation
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="cost-basis-modal-title"
 		>
-			<h3 id="cost-basis-modal-title" class="mb-4 text-lg font-semibold text-white">
+			<h3 id="cost-basis-modal-title" class="mb-4 text-lg font-semibold text-text">
 				{costBasisEditToken.existingEntry ? 'Edit' : 'Add'} Cost Basis for {costBasisEditToken.symbol}
 			</h3>
 
-			<p class="mb-4 text-sm text-gray-400">
-				You have <span class="font-medium text-yellow-400"
+			<p class="mb-4 text-sm text-text-2">
+				You have <span class="font-medium text-accent"
 					>{costBasisEditToken.untrackedBalance.toFixed(4)}</span
 				> tokens without trade history. Enter the cost basis for these tokens.
 			</p>
 
 			<div class="space-y-4">
 				<div>
-					<label for="cb-quantity" class="mb-1 block text-sm font-medium text-gray-300">
+					<label for="cb-quantity" class="mb-1 block text-sm font-medium text-text-2">
 						Quantity
 					</label>
 					<input
@@ -2099,16 +2108,16 @@
 						min="0"
 						max={costBasisEditToken.untrackedBalance}
 						bind:value={costBasisInputQuantity}
-						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						class="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-text placeholder-text-3 focus:border-accent-line focus:outline-none focus:ring-1 focus:ring-accent-line"
 						placeholder="0.0000"
 					/>
-					<p class="mt-1 text-xs text-gray-500">
+					<p class="mt-1 text-xs text-text-3">
 						Max: {costBasisEditToken.untrackedBalance.toFixed(4)}
 					</p>
 				</div>
 
 				<div>
-					<label for="cb-price" class="mb-1 block text-sm font-medium text-gray-300">
+					<label for="cb-price" class="mb-1 block text-sm font-medium text-text-2">
 						Cost per Token (USD)
 					</label>
 					<input
@@ -2117,29 +2126,29 @@
 						step="any"
 						min="0"
 						bind:value={costBasisInputPrice}
-						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						class="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-text placeholder-text-3 focus:border-accent-line focus:outline-none focus:ring-1 focus:ring-accent-line"
 						placeholder="0.00 (use 0 for gifts/airdrops)"
 					/>
 				</div>
 
 				<div>
-					<label for="cb-note" class="mb-1 block text-sm font-medium text-gray-300">
-						Note <span class="text-gray-500">(optional)</span>
+					<label for="cb-note" class="mb-1 block text-sm font-medium text-text-2">
+						Note <span class="text-text-3">(optional)</span>
 					</label>
 					<input
 						id="cb-note"
 						type="text"
 						bind:value={costBasisInputNote}
-						class="w-full rounded-lg border border-white/10 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+						class="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-text placeholder-text-3 focus:border-accent-line focus:outline-none focus:ring-1 focus:ring-accent-line"
 						placeholder="e.g., Gift, Purchased on Coinbase"
 					/>
 				</div>
 
 				{#if costBasisInputQuantity && costBasisInputPrice}
-					<div class="rounded-lg bg-gray-800/50 p-3">
+					<div class="rounded-lg bg-surface-2 p-3">
 						<div class="flex justify-between text-sm">
-							<span class="text-gray-400">Total Cost:</span>
-							<span class="font-medium text-white">
+							<span class="text-text-2">Total Cost:</span>
+							<span class="font-medium text-text">
 								${(parseFloat(costBasisInputQuantity) * parseFloat(costBasisInputPrice)).toFixed(2)}
 							</span>
 						</div>
@@ -2161,14 +2170,14 @@
 				<button
 					type="button"
 					on:click={closeCostBasisModal}
-					class="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:bg-white/5"
+					class="rounded-lg border border-line px-4 py-2 text-sm font-medium text-text-2 transition hover:bg-surface-2"
 				>
 					Cancel
 				</button>
 				<button
 					type="button"
 					on:click={saveCostBasisEntry}
-					class="rounded-lg bg-yellow-500 px-4 py-2 text-sm font-medium text-black transition hover:bg-yellow-400"
+					class="rounded-lg bg-gradient-to-b from-accent-bright to-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:brightness-105"
 				>
 					Save
 				</button>

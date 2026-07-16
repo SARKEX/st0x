@@ -35,7 +35,7 @@
 
 {#if !mappedMetaV1.length}
 	<div class="flex h-full w-full flex-col" data-testid="no-deposits">
-		<p class="text-pretty text-white dark:text-white">No metadata has been added</p>
+		<p class="text-pretty text-text dark:text-text">No metadata has been added</p>
 	</div>
 {:else}
 	<div in:fade>

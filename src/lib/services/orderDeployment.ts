@@ -6,7 +6,7 @@
  *
  * This service layer:
  * - Loads order GUIs from the rain.strategies registry
- * - Configures DotrainOrderGui with user inputs
+ * - Configures RaindexOrderBuilder with user inputs
  * - Generates deployment transaction arguments
  * - Accepts most parameters directly (wallet address read from authStore)
  */
@@ -17,7 +17,7 @@ import type { Token } from '$lib/types';
 import type { Network } from '$lib/config/network';
 import type { Hex } from 'viem';
 import { formatUnits } from 'viem';
-import type { DeploymentTransactionArgs } from '@rainlanguage/orderbook';
+import type { DeploymentTransactionArgs } from '@rainlanguage/raindex';
 import { getPeriodInSeconds } from '$lib/utils/derivations';
 import { walletAddress } from '$lib/stores/authStore';
 import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
@@ -50,7 +50,7 @@ export interface DeployEventContext {
 /** Lazily resolve DotrainRegistry from the WASM-based orderbook package. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getDotrainRegistry(): Promise<{ new: (url: string) => Promise<any> }> {
-	const orderbookModule = await import('@rainlanguage/orderbook');
+	const orderbookModule = await import('@rainlanguage/raindex');
 	const Registry =
 		(orderbookModule as { DotrainRegistry?: unknown }).DotrainRegistry ??
 		(
@@ -59,13 +59,13 @@ async function getDotrainRegistry(): Promise<{ new: (url: string) => Promise<any
 			}
 		).default?.DotrainRegistry;
 	if (!Registry) {
-		throw new Error('DotrainRegistry not available from @rainlanguage/orderbook');
+		throw new Error('DotrainRegistry not available from @rainlanguage/raindex');
 	}
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return Registry as { new: (url: string) => Promise<any> };
 }
 type DotrainRegistryInstance = {
-	getGui: (
+	getOrderBuilder: (
 		orderKey: string,
 		deploymentKey: string
 	) => Promise<{
@@ -73,7 +73,7 @@ type DotrainRegistryInstance = {
 		value: {
 			setSelectToken: (key: string, address: string) => Promise<unknown>;
 			setFieldValue: (key: string, value: string) => unknown;
-			setDeposit: (key: string, value: string) => unknown;
+			setDeposit: (key: string, value: string) => Promise<unknown>;
 			setVaultId: (type: 'input' | 'output', key: string, vaultId: Hex) => unknown;
 			getComposedRainlang: () => Promise<{ error?: { readableMsg: string }; value: string }>;
 			getDeploymentTransactionArgs: (
@@ -84,14 +84,13 @@ type DotrainRegistryInstance = {
 };
 
 /**
- * Registry URL for rain.strategies. Vendored under static/registry/ and served
- * via the dynamic endpoint at src/routes/registry/manifest/+server.ts (which
- * emits absolute URLs derived from the request origin — DotrainRegistry.new
- * in @rainlanguage/orderbook does NOT resolve relative URLs against the
- * manifest URL itself, so the manifest body MUST contain absolute URLs).
+ * Public strategy registry URL. By default the same-origin endpoint resolves
+ * the REST API's active registry source commit to its immutable public
+ * st0x.registry manifest. DotrainRegistry.new requires an absolute entry URL,
+ * so resolveRegistryUrl prepends the browser origin to this default path.
  *
- * Set PUBLIC_REGISTRY_URL only for staging tests against an alternate registry.
- * Refresh procedure: see 03-RUNBOOK.md "Registry Refresh".
+ * Set PUBLIC_REGISTRY_URL only for staging tests against an alternate public
+ * registry.
  */
 const REGISTRY_URL_RAW = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
 
@@ -167,20 +166,20 @@ async function getRegistry(): Promise<DotrainRegistryInstance> {
 }
 
 /**
- * Loads the registry and returns a DotrainOrderGui for the given order and network.
+ * Loads the registry and returns a RaindexOrderBuilder for the given order and network.
  * Use this for all order types so strategy and settings stay in sync with the registry.
  * Optional `deploymentKeyOverride` selects a specific GUI deployment (e.g. base-inv for buy limits).
  */
-async function getGuiFromRegistry(
+async function getOrderBuilderFromRegistry(
 	orderKey: string,
 	raindexNetworkSlug: string,
 	deploymentKeyOverride?: string
 ) {
 	const registry = await getRegistry();
 	const deploymentKey = deploymentKeyOverride ?? getDeploymentKey(raindexNetworkSlug);
-	const guiResult = await registry.getGui(orderKey, deploymentKey);
-	if (guiResult.error) throw new Error(guiResult.error.readableMsg);
-	return guiResult.value;
+	const builderResult = await registry.getOrderBuilder(orderKey, deploymentKey);
+	if (builderResult.error) throw new Error(builderResult.error.readableMsg);
+	return builderResult.value;
 }
 
 // Default input vault ID for DCA and limit orders (32 bytes, padded)
@@ -230,7 +229,7 @@ export const getDcaDeploymentArgs = async (
 	args: DcaDeploymentArgs,
 	eventContext: DeployEventContext
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
-	const gui = await getGuiFromRegistry('auction-dca', network.raindexNetworkSlug);
+	const gui = await getOrderBuilderFromRegistry('auction-dca', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('output', args.outputToken.address);
 	await gui.setSelectToken('input', args.inputToken.address);
@@ -257,7 +256,7 @@ export const getDcaDeploymentArgs = async (
 
 	gui.setFieldValue('initial-io', args.kickoff);
 
-	gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
+	await gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
 	const $walletAddress = get(walletAddress);
 	if (!$walletAddress) throw new Error('Wallet address not found');
@@ -307,8 +306,9 @@ export const getLimitOrderDeploymentArgs = async (
 	eventContext: DeployEventContext
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
 	// Buy (bid): inverted DIA baseline. Sell (ask): direct DIA baseline.
-	const deploymentKey = eventContext.order_side === 'buy' ? 'base-inv' : 'base';
-	const gui = await getGuiFromRegistry('fixed-limit', network.raindexNetworkSlug, deploymentKey);
+	const deploymentKey =
+		eventContext.order_side === 'buy' ? 'base-dia-limit-inv' : 'base-dia-limit';
+	const gui = await getOrderBuilderFromRegistry('dia-limit', network.raindexNetworkSlug, deploymentKey);
 
 	await gui.setSelectToken('input', args.inputToken.address);
 	await gui.setSelectToken('output', args.outputToken.address);
@@ -318,7 +318,7 @@ export const getLimitOrderDeploymentArgs = async (
 	gui.setFieldValue('oracle-price-timeout', DIA_LIMIT_ORACLE_PRICE_TIMEOUT);
 	gui.setFieldValue('fixed-io', args.ioRatio);
 
-	gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
+	await gui.setDeposit('output', formatUnits(args.depositAmount, args.outputToken.decimals));
 
 	const $walletAddress = get(walletAddress);
 	if (!$walletAddress) throw new Error('Wallet address not found');
@@ -375,7 +375,7 @@ export const getMarketMakingDeploymentArgs = async (
 	network: Network,
 	args: MarketMakingDeploymentArgs
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
-	const gui = await getGuiFromRegistry('dynamic-spread', network.raindexNetworkSlug);
+	const gui = await getOrderBuilderFromRegistry('dynamic-spread', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.token1.address);
 	await gui.setSelectToken('token2', args.token2.address);
@@ -395,8 +395,8 @@ export const getMarketMakingDeploymentArgs = async (
 	gui.setFieldValue('cost-basis-multiplier', args.costBasisMultiplier || '1');
 	gui.setFieldValue('time-per-epoch', args.timePerEpoch || '3600');
 
-	gui.setDeposit('token1', formatUnits(args.depositAmountToken1, args.token1.decimals));
-	gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
+	await gui.setDeposit('token1', formatUnits(args.depositAmountToken1, args.token1.decimals));
+	await gui.setDeposit('token2', formatUnits(args.depositAmountToken2, args.token2.decimals));
 
 	const $walletAddress = get(walletAddress);
 	if (!$walletAddress) throw new Error('Wallet address not found');
@@ -465,7 +465,7 @@ export const getFolioDeploymentArgs = async (
 	network: Network,
 	args: FolioDeploymentArgs
 ): Promise<{ composedRainlang: string; deploymentArgs: DeploymentTransactionArgs }> => {
-	const gui = await getGuiFromRegistry('folio', network.raindexNetworkSlug);
+	const gui = await getOrderBuilderFromRegistry('folio', network.raindexNetworkSlug);
 
 	await gui.setSelectToken('token1', args.selectedToken1.address);
 	await gui.setSelectToken('token2', args.selectedToken2.address);
@@ -487,13 +487,13 @@ export const getFolioDeploymentArgs = async (
 		gui.setFieldValue('fee', '0.003');
 	}
 
-	gui.setDeposit('token1', formatUnits(args.depositAmount1, args.selectedToken1.decimals));
-	gui.setDeposit('token2', formatUnits(args.depositAmount2, args.selectedToken2.decimals));
-	gui.setDeposit('token3', formatUnits(args.depositAmount3, args.selectedToken3.decimals));
-	gui.setDeposit('token4', formatUnits(args.depositAmount4, args.selectedToken4.decimals));
-	gui.setDeposit('token5', formatUnits(args.depositAmount5, args.selectedToken5.decimals));
-	gui.setDeposit('token6', formatUnits(args.depositAmount6, args.selectedToken6.decimals));
-	gui.setDeposit('token7', formatUnits(args.depositAmount7, args.selectedToken7.decimals));
+	await gui.setDeposit('token1', formatUnits(args.depositAmount1, args.selectedToken1.decimals));
+	await gui.setDeposit('token2', formatUnits(args.depositAmount2, args.selectedToken2.decimals));
+	await gui.setDeposit('token3', formatUnits(args.depositAmount3, args.selectedToken3.decimals));
+	await gui.setDeposit('token4', formatUnits(args.depositAmount4, args.selectedToken4.decimals));
+	await gui.setDeposit('token5', formatUnits(args.depositAmount5, args.selectedToken5.decimals));
+	await gui.setDeposit('token6', formatUnits(args.depositAmount6, args.selectedToken6.decimals));
+	await gui.setDeposit('token7', formatUnits(args.depositAmount7, args.selectedToken7.decimals));
 
 	const $walletAddress = get(walletAddress);
 	if (!$walletAddress) throw new Error('Wallet address not found');

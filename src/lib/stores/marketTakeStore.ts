@@ -25,7 +25,7 @@ import {
 	type TakeOrdersConfigV5,
 	type TakeOrdersMode,
 	type TakeOrdersRequest
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import { Float } from '@rainlanguage/float';
 import {
 	sendTransaction as walletServiceSendTransaction,
@@ -428,7 +428,7 @@ export const pollAndFinalizeTakeOrders = async (
 
 	const raindexLink = createRaindexLink(
 		network.id,
-		primaryOrder.orderbook.id,
+		primaryOrder.raindex.id,
 		primaryOrder.orderHash,
 		'View order on Raindex'
 	);
@@ -489,7 +489,7 @@ export const handleAggregatedTakeOrdersCalldata = async (
 	const network = get(currentNetwork) as Network;
 
 	try {
-		validateOrderbookAddress(primaryOrder.orderbook.id, network);
+		validateOrderbookAddress(primaryOrder.raindex.id, network);
 	} catch (error) {
 		transactionError((error as Error).message as TransactionErrorMessage);
 		return true;
@@ -561,19 +561,19 @@ export const handleAggregatedTakeOrdersCalldata = async (
 	}
 
 	try {
-		validateOrderbookAddress(result.takeOrdersInfo.orderbook as string, network);
+		validateOrderbookAddress(result.takeOrdersInfo.raindex as string, network);
 	} catch (error) {
 		transactionError((error as Error).message as TransactionErrorMessage);
 		return true;
 	}
 
-	const { calldata, orderbook } = result.takeOrdersInfo;
-	console.log(`${TX_LOG_PREFIX} sending aggregated takeOrders tx`, { orderbook });
+	const { calldata, raindex } = result.takeOrdersInfo;
+	console.log(`${TX_LOG_PREFIX} sending aggregated takeOrders tx`, { raindex });
 
 	try {
 		awaitWalletConfirmation(`Awaiting wallet confirmation...`);
 		const hash = await sendTransaction({
-			to: orderbook as `0x${string}`,
+			to: raindex as `0x${string}`,
 			data: calldata as Hex
 		});
 		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
@@ -632,7 +632,7 @@ export const handleOracleOrders = async (
 	const network = get(currentNetwork) as Network;
 
 	try {
-		validateOrderbookAddress(primaryOrder.orderbook.id, network);
+		validateOrderbookAddress(primaryOrder.raindex.id, network);
 	} catch (error) {
 		return transactionError((error as Error).message as TransactionErrorMessage);
 	}
@@ -904,12 +904,12 @@ export const handleOracleOrders = async (
 			);
 		}
 
-		const { calldata, orderbook } = result.takeOrdersInfo;
+		const { calldata, raindex } = result.takeOrdersInfo;
 
 		try {
 			awaitWalletConfirmation(`Awaiting wallet confirmation to take order${batchLabel}...`);
 			const hash = await sendTransaction({
-				to: orderbook as `0x${string}`,
+				to: raindex as `0x${string}`,
 				data: calldata as Hex
 			});
 
@@ -995,7 +995,7 @@ export const handleTakeOrders = async (
 	// Security: Validate orderbook address BEFORE any approvals are granted
 	// This prevents a compromised orderbook from receiving token approvals
 	try {
-		validateOrderbookAddress(raindexOrder.orderbook.id, network);
+		validateOrderbookAddress(raindexOrder.raindex.id, network);
 	} catch (error) {
 		return transactionError((error as Error).message as TransactionErrorMessage);
 	}
@@ -1293,7 +1293,7 @@ export const handleTakeOrders = async (
 			);
 
 			hash = await sendTransaction({
-				to: readyCalldataResult.value.takeOrdersInfo.orderbook as `0x${string}`,
+				to: readyCalldataResult.value.takeOrdersInfo.raindex as `0x${string}`,
 				data: readyCalldataResult.value.takeOrdersInfo.calldata as Hex
 			});
 

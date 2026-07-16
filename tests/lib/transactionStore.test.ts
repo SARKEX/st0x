@@ -150,7 +150,7 @@ function createMockDeploymentArgs(overrides = {}) {
 		composedRainlang: 'mock rainlang code',
 		deploymentArgs: {
 			deploymentCalldata: '0xabcdef',
-			orderbookAddress: '0x1234',
+			raindexAddress: '0x1234',
 			approvals: [
 				{
 					calldata: '0xapproval',
@@ -183,7 +183,7 @@ describe('transactionStore tests', () => {
 			...(approvalCount > 1 && {
 				deploymentArgs: {
 					deploymentCalldata: '0xabcdef',
-					orderbookAddress: '0x1234',
+					raindexAddress: '0x1234',
 					approvals: Array.from({ length: approvalCount }, (_, i) => ({
 						calldata: approvalCount === 2 ? `0xapproval${i}` : '0xapproval',
 						token: approvalCount === 2 ? `0xtoken${i}` : `0xtoken${i}`,

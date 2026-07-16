@@ -12,7 +12,7 @@
 </script>
 
 <select
-	class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+	class="bg-surface-3/50 w-full rounded-lg border border-line px-4 py-3 text-text transition-colors focus:border-accent-line focus:outline-none"
 	bind:value={selected}
 	{id}
 	aria-labelledby={ariaLabelledby}

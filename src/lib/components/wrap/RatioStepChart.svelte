@@ -120,10 +120,9 @@
 </script>
 
 <div
-	class="rounded-lg border border-white/10 p-2 sm:p-3"
-	style="background: radial-gradient(60% 80% at 30% 30%, rgba(250,204,21,0.06), transparent 60%), linear-gradient(180deg, #0e1422 0%, #0a0f1c 100%);"
+	class="rounded-lg border border-line bg-surface-1 p-2 sm:p-3 dark:bg-[linear-gradient(180deg,#0e1422_0%,#0a0f1c_100%)]"
 >
-	<div class="mb-1 flex items-center justify-between px-1 text-[11px] text-gray-500">
+	<div class="mb-1 flex items-center justify-between px-1 text-[11px] text-text-3">
 		<span>Wrap ratio over time</span>
 		<span class="font-mono tabular-nums">1 {wrappedSymbol} : N {assetSymbol}</span>
 	</div>
@@ -140,7 +139,7 @@
 				x2={w - padR}
 				y1={ty(v, yMin, yMax)}
 				y2={ty(v, yMin, yMax)}
-				stroke={v === 1 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)'}
+				stroke={v === 1 ? 'var(--line-strong)' : 'var(--line)'}
 				stroke-dasharray={v === 1 ? '0' : '2 3'}
 			/>
 			<text
@@ -148,7 +147,7 @@
 				y={ty(v, yMin, yMax) + 3}
 				text-anchor="end"
 				font-size="10"
-				fill={v === 1 ? 'rgba(229,231,235,0.85)' : 'rgba(156,163,175,0.7)'}
+				fill={v === 1 ? 'var(--text-2)' : 'var(--text-3)'}
 				class="font-mono"
 			>
 				{fmtTick(v)}
@@ -156,7 +155,7 @@
 		{/each}
 
 		{#if stepPath}
-			<path d={stepPath} fill="none" stroke="#facc15" stroke-width="1.75" />
+			<path d={stepPath} fill="none" stroke="#2de3a6" stroke-width="1.75" />
 		{/if}
 
 		{#each pts as p}
@@ -164,8 +163,8 @@
 				cx={tx(p.ev.blockTimestamp * 1000)}
 				cy={ty(p.rate, yMin, yMax)}
 				r="3.5"
-				fill="#facc15"
-				stroke="#0e1422"
+				fill="#2de3a6"
+				stroke="var(--surface-1)"
 				stroke-width="1.5"
 			>
 				<title>{`${fmtDateShort(p.ev.blockTimestamp)} — 1 : ${p.rate}`}</title>
@@ -177,19 +176,13 @@
 			x2={w - padR}
 			y1={padT}
 			y2={padT + innerH}
-			stroke="rgba(255,255,255,0.15)"
+			stroke="var(--line-strong)"
 			stroke-dasharray="2 2"
 		/>
-		<text x={w - padR - 2} y={padT + 9} text-anchor="end" font-size="9" fill="rgba(156,163,175,0.7)"
+		<text x={w - padR - 2} y={padT + 9} text-anchor="end" font-size="9" fill="var(--text-3)"
 			>now</text
 		>
-		<line
-			x1={padL}
-			x2={w - padR}
-			y1={padT + innerH}
-			y2={padT + innerH}
-			stroke="rgba(255,255,255,0.1)"
-		/>
+		<line x1={padL} x2={w - padR} y1={padT + innerH} y2={padT + innerH} stroke="var(--line)" />
 
 		{#each pts as p, i (p.ev.blockTimestamp + '-' + i)}
 			{#if pts.length <= 4 || i === 0 || i === pts.length - 1 || i % Math.ceil(pts.length / 4) === 0}
@@ -198,7 +191,7 @@
 					y={h - 6}
 					text-anchor="middle"
 					font-size="9"
-					fill="rgba(156,163,175,0.65)"
+					fill="var(--text-3)"
 				>
 					{fmtDateShort(p.ev.blockTimestamp)}
 				</text>

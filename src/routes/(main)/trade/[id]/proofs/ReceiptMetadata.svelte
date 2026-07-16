@@ -32,14 +32,12 @@
 			</Button>
 		</div>
 		<pre
-			class="max-h-96 overflow-auto rounded border border-white/10 bg-gray-900 p-3 text-xs text-gray-200">{JSON.stringify(
+			class="max-h-96 overflow-auto rounded border border-line bg-bg p-3 text-xs text-text-2">{JSON.stringify(
 				data,
 				null,
 				2
 			)}</pre>
 	</Section>
 {:else}
-	<div class="rounded border border-red-500/30 bg-red-900/30 p-3 text-sm text-red-300">
-		No Metadata Found
-	</div>
+	<div class="rounded border border-down bg-down-soft p-3 text-sm text-down">No Metadata Found</div>
 {/if}

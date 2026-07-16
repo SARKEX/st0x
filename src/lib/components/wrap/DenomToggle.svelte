@@ -31,12 +31,12 @@
 
 <div class="inline-flex items-center gap-2">
 	{#if showPrefix}
-		<span class="hidden text-[11px] uppercase tracking-wide text-gray-500 sm:inline">Show as</span>
+		<span class="hidden text-[11px] uppercase tracking-wide text-text-3 sm:inline">Show as</span>
 	{/if}
 	<div
 		role="tablist"
 		aria-label={ariaLabel}
-		class="inline-flex items-center rounded-lg border border-white/10 bg-white/5 p-0.5 text-xs"
+		class="inline-flex items-center rounded-lg border border-line bg-surface-2 p-0.5 text-xs"
 	>
 		<button
 			type="button"
@@ -45,8 +45,8 @@
 			on:click={() => set('unwrapped')}
 			class={'rounded-md px-2.5 py-1 font-medium transition ' +
 				(value === 'unwrapped'
-					? 'bg-yellow-400/15 text-yellow-200 ring-1 ring-yellow-400/30'
-					: 'text-gray-400 hover:text-gray-200')}
+					? 'bg-yellow-400/15 text-accent ring-1 ring-yellow-400/30'
+					: 'text-text-2 hover:text-text-2')}
 		>
 			Shares ({assetSymbol})
 		</button>
@@ -57,8 +57,8 @@
 			on:click={() => set('wrapped')}
 			class={'rounded-md px-2.5 py-1 font-medium transition ' +
 				(value === 'wrapped'
-					? 'bg-yellow-400/15 text-yellow-200 ring-1 ring-yellow-400/30'
-					: 'text-gray-400 hover:text-gray-200')}
+					? 'bg-yellow-400/15 text-accent ring-1 ring-yellow-400/30'
+					: 'text-text-2 hover:text-text-2')}
 		>
 			Tokens ({wrappedSymbol})
 		</button>

@@ -11,7 +11,6 @@
 	import transactionStore from '$lib/stores/transaction';
 	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
 	import { currentNetwork, oracleQuotes, reviewStrategyOnDeploy } from '$lib/stores';
-	import { containerStyles } from '$lib/styles/utils';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
@@ -34,8 +33,8 @@
 
 	$: actionButtonClass =
 		orderSide === 'Buy'
-			? 'bg-green-500 hover:bg-green-600 text-white'
-			: 'bg-red-500 hover:bg-red-600 text-white';
+			? 'bg-green-500 hover:bg-green-600 text-text'
+			: 'bg-red-500 hover:bg-red-600 text-text';
 
 	export let assetToken: PythToken | undefined; // The token we're accumulating
 	/** Share-denominated display toggle — see MarketOrder for the contract. */
@@ -310,9 +309,9 @@
 		<!-- Target Amount and Period -->
 		<div class="space-y-4">
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">
+				<div class="mb-2 block text-sm font-medium text-text-2">
 					{orderSide === 'Buy' ? 'Purchase Budget' : 'Amount to Sell'}
-					<span class="ml-1 text-xs text-gray-500"
+					<span class="ml-1 text-xs text-text-3"
 						>({orderSide === 'Buy' ? settlementLabel : displayedAssetSymbol})</span
 					>
 				</div>
@@ -336,7 +335,7 @@
 						<button
 							type="button"
 							on:click={() => handlePercentageClick(percent)}
-							class="flex-1 rounded border border-white/10 bg-gray-700/50 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-white/20 hover:bg-gray-600/50"
+							class="flex-1 rounded border border-line bg-surface-3 px-2 py-1 text-xs text-text-2 transition-colors hover:border-line-strong hover:bg-overlay-hover"
 						>
 							{percent === 100 ? 'Max' : `${percent}%`}
 						</button>
@@ -344,7 +343,7 @@
 				</div>
 			</div>
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">{periodLabel}</div>
+				<div class="mb-2 block text-sm font-medium text-text-2">{periodLabel}</div>
 				<div class="flex gap-2">
 					<div class="flex-grow">
 						<Input
@@ -369,7 +368,7 @@
 		<!-- Price Settings -->
 		<div class="space-y-4">
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">Start Price</div>
+				<div class="mb-2 block text-sm font-medium text-text-2">Start Price</div>
 				<Input
 					aria-label="Start Price"
 					type="number"
@@ -380,7 +379,7 @@
 				/>
 			</div>
 			<div>
-				<div class="mb-2 block text-sm font-medium text-gray-300">
+				<div class="mb-2 block text-sm font-medium text-text-2">
 					{orderSide === 'Buy' ? 'Ceiling Price' : 'Floor Price'}
 				</div>
 				<Input
@@ -395,11 +394,13 @@
 		</div>
 
 		<!-- Order Summary -->
-		<div class={containerStyles.cardBordered}>
-			<h4 class="mb-3 text-sm font-medium text-gray-300">Order Summary</h4>
+		<div class="rounded-xl border border-line bg-overlay-1 p-4">
+			<h4 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-text-2">
+				Order Summary
+			</h4>
 			<div class="space-y-2 text-sm">
 				<div class="flex justify-between">
-					<span class="text-gray-400">Target Amount</span>
+					<span class="text-text-2">Target Amount</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
 							{selectedAmount
@@ -415,14 +416,14 @@
 					</span>
 				</div>
 				<div class="flex justify-between">
-					<span class="text-gray-400">{periodLabel}</span>
+					<span class="text-text-2">{periodLabel}</span>
 					<span class="font-medium">
 						{selectedPeriod || '0'}
 						{selectedPeriodUnit.toLowerCase()}
 					</span>
 				</div>
 				<div class="flex justify-between">
-					<span class="text-gray-400">Average per period</span>
+					<span class="text-text-2">Average per period</span>
 					<span class="font-medium">
 						{#if orderSide === 'Buy'}
 							~{avgPricePerPeriod} {settlementLabel}
@@ -432,7 +433,7 @@
 					</span>
 				</div>
 				<div class="flex justify-between">
-					<span class="text-gray-400">Min trade size</span>
+					<span class="text-text-2">Min trade size</span>
 					<span class="text-xs font-medium">
 						{#if orderSide === 'Buy'}
 							{minTradeAmount ? formatUnits(minTradeAmount, selectedOutputToken.decimals) : '0'}
@@ -444,7 +445,7 @@
 					</span>
 				</div>
 				<div class="flex justify-between">
-					<span class="text-gray-400">Max trade size</span>
+					<span class="text-text-2">Max trade size</span>
 					<span class="text-xs font-medium">
 						{#if orderSide === 'Buy'}
 							{maxTradeAmount ? formatUnits(maxTradeAmount, selectedOutputToken.decimals) : '0'}
@@ -466,11 +467,11 @@
 		</div>
 
 		<!-- Advanced Options -->
-		<div class="border-t border-white/10 pt-4">
+		<div class="border-t border-line pt-4">
 			<button
 				type="button"
 				on:click={() => (showAdvancedOptions = !showAdvancedOptions)}
-				class="flex w-full items-center justify-between text-sm text-gray-400 hover:text-gray-300"
+				class="flex w-full items-center justify-between text-sm text-text-2 hover:text-text-2"
 			>
 				<span>Advanced options</span>
 				<svg
@@ -493,18 +494,18 @@
 			{#if showAdvancedOptions}
 				<div class="mt-4 space-y-3">
 					<div>
-						<label for="receiving-vault-dca" class="mb-2 block text-sm font-medium text-gray-300">
+						<label for="receiving-vault-dca" class="mb-2 block text-sm font-medium text-text-2">
 							Receiving vault
 						</label>
 						<select
 							id="receiving-vault-dca"
 							bind:value={selectedVaultOption}
-							class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-4 py-3 text-white transition-colors focus:border-yellow-500/50 focus:outline-none"
+							class="w-full rounded-lg border border-line bg-surface-3 px-4 py-3 text-text transition-colors focus:border-yellow-500/50 focus:outline-none"
 						>
 							<option value="default">Default</option>
 							<option value="order-specific">Order-specific</option>
 						</select>
-						<p class="mt-1 text-xs text-gray-500">
+						<p class="mt-1 text-xs text-text-3">
 							{#if selectedVaultOption === 'default'}
 								Uses the shared default vault for receiving tokens
 							{:else}
@@ -521,9 +522,7 @@
 			on:click={handleDcaDeploy}
 			disabled={disableDeploy}
 			class={`w-full rounded-md px-4 py-3 text-sm font-semibold transition-all ${
-				disableDeploy
-					? 'cursor-not-allowed bg-gray-600 text-gray-300 opacity-50'
-					: actionButtonClass
+				disableDeploy ? 'cursor-not-allowed bg-surface-3 text-text-3 opacity-50' : actionButtonClass
 			}`}
 		>
 			{#if disableDeploy}
@@ -551,9 +550,9 @@
 				type="checkbox"
 				checked={$reviewStrategyOnDeploy}
 				on:change={(e) => reviewStrategyOnDeploy.set(e.currentTarget.checked)}
-				class="h-4 w-4 rounded border-gray-600 bg-gray-700 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-800"
+				class="h-4 w-4 rounded border-line bg-surface-3 text-accent focus:ring-accent-line focus:ring-offset-surface-1"
 			/>
-			<span class="text-xs text-gray-400">Review strategy source code on deploy</span>
+			<span class="text-xs text-text-2">Review strategy source code on deploy</span>
 		</label>
 	</div>
 {:else}

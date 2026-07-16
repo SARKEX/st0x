@@ -48,7 +48,10 @@
 				symbols: symbols.map((s) => ({ proName: s.proName, title: s.title })),
 				showSymbolLogo: true,
 				colorTheme: 'dark',
-				isTransparent: true,
+				// isTransparent:true makes TradingView's ticker-tape paint a white
+				// canvas (the transparent flag isn't honoured for this widget), which
+				// shows as a white strip on our dark page. false => native dark bg.
+				isTransparent: false,
 				displayMode: 'adaptive',
 				locale: 'en'
 			});

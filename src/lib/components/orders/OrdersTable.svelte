@@ -14,7 +14,7 @@
 		type OrderType
 	} from '$lib/utils/orderbook';
 	import { createQuery } from '@tanstack/svelte-query';
-	import type { OrderV4, SgOrder } from '@rainlanguage/orderbook';
+	import type { OrderV4, SgOrder } from '@rainlanguage/raindex';
 	import type { DisplayOrder } from '$lib/types/orders';
 	import { apiGetOrdersByOwner, type ApiOrderSummary } from '$lib/api/st0xApi';
 	import { TOKENS, type Network } from '$lib/config/network';
@@ -197,9 +197,9 @@
 			orderHash: order.orderHash,
 			owner: order.owner,
 			active: order.active,
-			orderbook: { id: order.orderbookId },
+			raindex: { id: order.orderbookId },
 			orderBytes: order.orderBytes
-		} as SgOrder;
+		} as unknown as SgOrder;
 
 		const quote: ProcessedQuote = {
 			orderHash: order.orderHash,
@@ -364,7 +364,7 @@
 			<select
 				bind:value={selectedOrdersFilter}
 				disabled={!$isAuthenticated && selectedOrdersFilter === 'my'}
-				class="rounded-md border border-white/10 bg-gray-800 px-2 py-1.5 text-xs font-medium text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+				class="rounded-md border border-line bg-surface-2 px-2 py-1.5 text-xs font-medium text-text-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 			>
 				<option value="my">My Orders</option>
 				<option value="all">All Orders</option>
@@ -374,7 +374,7 @@
 		{#if showTypeFilter}
 			<select
 				bind:value={selectedOrderTypeFilter}
-				class="rounded-md border border-white/10 bg-gray-800 px-2 py-1.5 text-xs font-medium text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+				class="rounded-md border border-line bg-surface-2 px-2 py-1.5 text-xs font-medium text-text-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 			>
 				<option value="all">All Types</option>
 				<option value="limit">Limit</option>
@@ -386,7 +386,7 @@
 
 		<select
 			bind:value={selectedDirectionFilter}
-			class="rounded-md border border-white/10 bg-gray-800 px-2 py-1.5 text-xs font-medium text-gray-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+			class="rounded-md border border-line bg-surface-2 px-2 py-1.5 text-xs font-medium text-text-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 		>
 			<option value="all">All Directions</option>
 			<option value="Buy">Buy</option>
@@ -398,9 +398,9 @@
 				<input
 					type="checkbox"
 					bind:checked={showClosedOrders}
-					class="h-3.5 w-3.5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+					class="h-3.5 w-3.5 rounded border-line bg-surface-3 text-blue-600 focus:ring-blue-500 focus:ring-offset-surface-1 dark:text-blue-500"
 				/>
-				<span class="text-xs text-gray-400">Closed</span>
+				<span class="text-xs text-text-2">Closed</span>
 				{#if showClosedOrders && $closedOrdersQuery.isLoading}
 					<LoadingSpinner variant="inline" size="sm" />
 				{/if}
@@ -418,15 +418,15 @@
 			Error loading orders: {errorMessage}
 		</div>
 	{:else if filteredOrders.length === 0}
-		<div class="py-8 text-center text-sm text-gray-400">
+		<div class="py-8 text-center text-sm text-text-2">
 			{selectedOrdersFilter === 'my' ? 'You have no orders' : 'No orders found'}
 		</div>
 	{:else}
 		<!-- Orders table -->
 		<div class="overflow-x-auto">
 			<table class="w-full text-sm">
-				<thead class="border-b border-white/10">
-					<tr class="text-left text-xs uppercase tracking-wide text-gray-400">
+				<thead class="border-b border-line">
+					<tr class="text-left text-xs uppercase tracking-wide text-text-2">
 						<th class="pb-3 pr-4 font-medium">Type</th>
 						<th class="pb-3 pr-4 font-medium">Time</th>
 						{#if showTokenColumn}
@@ -437,21 +437,21 @@
 						<th class="pb-3 pr-4 font-medium">
 							Remaining
 							{#if denomination === 'unwrapped'}
-								<span class="ml-1 normal-case text-gray-500">(shares)</span>
+								<span class="ml-1 normal-case text-text-3">(shares)</span>
 							{/if}
 						</th>
 						<th class="pb-3 pr-4 font-medium">
 							Filled
 							{#if denomination === 'unwrapped'}
-								<span class="ml-1 normal-case text-gray-500">(shares)</span>
+								<span class="ml-1 normal-case text-text-3">(shares)</span>
 							{/if}
 						</th>
 						<th class="pb-3 pr-4 font-medium">
 							Price
 							{#if denomination === 'unwrapped'}
-								<span class="ml-1 normal-case text-gray-500">/ share</span>
+								<span class="ml-1 normal-case text-text-3">/ share</span>
 							{:else if wrapRatio !== 1}
-								<span class="ml-1 normal-case text-gray-500">/ token</span>
+								<span class="ml-1 normal-case text-text-3">/ token</span>
 							{/if}
 						</th>
 						<th class="pb-3 pr-4 font-medium">
@@ -471,7 +471,7 @@
 							{@const txHash = order.txHash || trade?.tradeEvent?.transaction?.id || ''}
 							<!-- For market orders: outputAmount = asset received (Buy), inputAmount = asset given (Sell) -->
 							{@const amount = order.side === 'Buy' ? order.outputAmount : order.inputAmount}
-							<tr class="border-b border-white/5 hover:bg-white/5">
+							<tr class="border-b border-line hover:bg-surface-2">
 								<td class="py-3 pr-4">
 									<span
 										class="rounded bg-purple-500/20 px-2 py-0.5 text-xs font-medium text-purple-400"
@@ -480,13 +480,13 @@
 									</span>
 								</td>
 								<td
-									class="py-3 pr-4 text-xs text-gray-400"
+									class="py-3 pr-4 text-xs text-text-2"
 									title={order.timestamp ? new Date(order.timestamp * 1000).toLocaleString() : ''}
 								>
 									{formatLocalTime(order.timestamp)}
 								</td>
 								{#if showTokenColumn}
-									<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
+									<td class="py-3 pr-4 text-text-2">{order.tokenSymbol}</td>
 								{/if}
 								<td class="py-3 pr-4">
 									<span
@@ -504,8 +504,8 @@
 										Executed
 									</span>
 								</td>
-								<td class="py-3 pr-4 text-gray-300">—</td>
-								<td class="py-3 pr-4 text-gray-300">
+								<td class="py-3 pr-4 text-text-2">—</td>
+								<td class="py-3 pr-4 text-text-2">
 									{#if amount}
 										{@const converted = displayAmount(Number(amount))}
 										{converted != null ? converted.toFixed(3) : '—'}
@@ -514,7 +514,7 @@
 									{/if}
 									{displaySymbol(order.tokenSymbol)}
 								</td>
-								<td class="py-3 pr-4 text-gray-300">
+								<td class="py-3 pr-4 text-text-2">
 									{#if order.price !== undefined && Number.isFinite(order.price)}
 										{@const px = displayPrice(order.price)}
 										{px != null ? px.toFixed(3) : '—'}
@@ -529,7 +529,7 @@
 											href={`${$currentNetwork?.blockExplorer}/tx/${txHash}`}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="hidden font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline sm:inline"
+											class="hidden font-mono text-xs text-blue-600 hover:text-blue-700 hover:underline sm:inline dark:text-blue-400 dark:hover:text-blue-300"
 											title={txHash}
 										>
 											{txHash.slice(0, 8)}...{txHash.slice(-6)}
@@ -539,7 +539,7 @@
 											href={`${$currentNetwork?.blockExplorer}/tx/${txHash}`}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="inline-flex items-center justify-center text-blue-400 hover:text-blue-300 sm:hidden"
+											class="inline-flex items-center justify-center text-blue-600 hover:text-blue-700 sm:hidden dark:text-blue-400 dark:hover:text-blue-300"
 											title="View transaction"
 										>
 											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -556,7 +556,7 @@
 									{/if}
 								</td>
 								{#if selectedOrdersFilter === 'my'}
-									<td class="py-3 text-gray-500">—</td>
+									<td class="py-3 text-text-3">—</td>
 								{/if}
 							</tr>
 						{:else}
@@ -592,22 +592,22 @@
 								order.type === 'dca'
 									? 'bg-green-500/20 text-green-400'
 									: order.type === 'custom'
-										? 'bg-yellow-500/20 text-yellow-400'
-										: 'bg-blue-500/20 text-blue-400'}
-							<tr class="border-b border-white/5 hover:bg-white/5">
+										? 'bg-yellow-500/20 text-accent'
+										: 'bg-blue-500/20 text-blue-600 dark:text-blue-400'}
+							<tr class="border-b border-line hover:bg-surface-2">
 								<td class="py-3 pr-4">
 									<span class={`rounded px-2 py-0.5 text-xs font-medium ${typeClass}`}>
 										{typeLabel}
 									</span>
 								</td>
 								<td
-									class="py-3 pr-4 text-xs text-gray-400"
+									class="py-3 pr-4 text-xs text-text-2"
 									title={order.timestamp ? new Date(order.timestamp * 1000).toLocaleString() : ''}
 								>
 									{formatLocalTime(order.timestamp)}
 								</td>
 								{#if showTokenColumn}
-									<td class="py-3 pr-4 text-gray-300">{order.tokenSymbol}</td>
+									<td class="py-3 pr-4 text-text-2">{order.tokenSymbol}</td>
 								{/if}
 								<td class="py-3 pr-4">
 									<span class={`text-xs font-medium ${isBuy ? 'text-green-400' : 'text-red-400'}`}>
@@ -617,7 +617,7 @@
 								<td class="py-3 pr-4">
 									{#if isFilled && isActive}
 										<span
-											class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400"
+											class="rounded bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400"
 										>
 											Filled
 										</span>
@@ -628,14 +628,12 @@
 											Active
 										</span>
 									{:else}
-										<span
-											class="rounded bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400"
-										>
+										<span class="rounded bg-overlay-2 px-2 py-0.5 text-xs font-medium text-text-2">
 											Closed
 										</span>
 									{/if}
 								</td>
-								<td class="py-3 pr-4 text-gray-300">
+								<td class="py-3 pr-4 text-text-2">
 									{#if remainingAmount === '—' || remainingAmount === 'n/a' || remainingAmount === '0'}
 										{remainingAmount}
 									{:else}
@@ -644,7 +642,7 @@
 									{/if}
 									{displaySymbol(order.tokenSymbol)}
 								</td>
-								<td class="py-3 pr-4 text-gray-300">
+								<td class="py-3 pr-4 text-text-2">
 									{#if order.filled !== undefined && order.filled > 0}
 										{@const conv = displayAmount(order.filled)}
 										{(conv ?? order.filled).toFixed(3)}
@@ -653,7 +651,7 @@
 										—
 									{/if}
 								</td>
-								<td class="py-3 pr-4 text-gray-300">
+								<td class="py-3 pr-4 text-text-2">
 									{#if order.price !== undefined && order.price !== null && Number.isFinite(order.price)}
 										{@const px = displayPrice(order.price)}
 										{px != null ? px.toFixed(3) : '—'}
@@ -673,7 +671,7 @@
 											href={raindexUrl}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="hidden font-mono text-xs text-blue-400 hover:text-blue-300 hover:underline sm:inline"
+											class="hidden font-mono text-xs text-blue-600 hover:text-blue-700 hover:underline sm:inline dark:text-blue-400 dark:hover:text-blue-300"
 											title={quote.orderHash}
 										>
 											{quote.orderHash.slice(0, 8)}...{quote.orderHash.slice(-6)}
@@ -683,7 +681,7 @@
 											href={raindexUrl}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="inline-flex items-center justify-center text-blue-400 hover:text-blue-300 sm:hidden"
+											class="inline-flex items-center justify-center text-blue-600 hover:text-blue-700 sm:hidden dark:text-blue-400 dark:hover:text-blue-300"
 											title="View on Raindex"
 										>
 											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -758,8 +756,8 @@
 						type="button"
 						class={`h-8 w-8 rounded-md text-sm font-medium transition ${
 							pageNum === currentPage
-								? 'bg-blue-500 text-white'
-								: 'bg-white/5 text-gray-400 hover:bg-white/10'
+								? 'bg-blue-500 text-text'
+								: 'bg-surface-2 text-text-2 hover:bg-surface-2'
 						}`}
 						on:click={() => {
 							currentPage = pageNum;

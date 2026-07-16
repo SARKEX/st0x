@@ -2,7 +2,7 @@
  * Transaction parameter types for type-safe interaction with transactionStore
  */
 
-import type { OrderV4 } from '@rainlanguage/orderbook';
+import type { OrderV4 } from '@rainlanguage/raindex';
 import type { WalkQuotesResult } from '$lib/utils/orderbook';
 import type { MinimalToken } from '$lib/types/orderPerspective';
 

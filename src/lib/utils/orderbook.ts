@@ -7,7 +7,7 @@
  * - Quote processing and data normalization
  */
 
-import type { OrderV4, SgOrder, SignedContextV1, RaindexOrder } from '@rainlanguage/orderbook';
+import type { OrderV4, SgOrder, SignedContextV1, RaindexOrder } from '@rainlanguage/raindex';
 import { normalizeAddress, type MarketSide, parseFloatHex } from '$lib/utils/tokenMath';
 import { parseUnits } from 'viem';
 

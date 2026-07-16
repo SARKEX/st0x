@@ -1,7 +1,7 @@
 import { formatUnits } from 'viem';
 import { parseFloatHex } from '$lib/utils/tokenMath';
 import { TOKENS, getTokenByAnyAddress } from '$lib/config/tokens';
-import type { SgTrade } from '@rainlanguage/orderbook';
+import type { SgTrade } from '@rainlanguage/raindex';
 import type { DisplayOrder } from '$lib/types/orders';
 import type { ApiTradeByAddress } from '$lib/api/st0xApi';
 

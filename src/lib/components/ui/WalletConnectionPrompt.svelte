@@ -22,9 +22,9 @@
 	{#if showSection}
 		<Section>
 			<div class="flex flex-col items-center justify-center gap-6 px-6 {containerClasses}">
-				<div class="rounded-full bg-gradient-to-br from-blue-600/20 to-purple-700/20 p-6">
+				<div class="rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-700/20 p-6">
 					<svg
-						class="h-10 w-10 text-blue-400 sm:h-12 sm:w-12"
+						class="h-10 w-10 text-blue-600 sm:h-12 sm:w-12 dark:text-blue-400"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -40,7 +40,7 @@
 
 				<div class="text-center">
 					<h2 class="mb-2 text-xl font-bold sm:text-2xl">{title}</h2>
-					<p class="max-w-md text-sm text-gray-400 sm:text-base">
+					<p class="max-w-md text-sm text-text-2 sm:text-base">
 						{defaultDescription}
 					</p>
 				</div>
@@ -56,7 +56,7 @@
 		<div class="flex flex-col items-center justify-center gap-6 px-6 {containerClasses}">
 			<div class="rounded-full bg-gradient-to-br from-blue-600/20 to-purple-700/20 p-6">
 				<svg
-					class="h-10 w-10 text-blue-400 sm:h-12 sm:w-12"
+					class="h-10 w-10 text-blue-600 sm:h-12 sm:w-12 dark:text-blue-400"
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
@@ -72,7 +72,7 @@
 
 			<div class="text-center">
 				<h2 class="mb-2 text-xl font-bold sm:text-2xl">{title}</h2>
-				<p class="max-w-md text-sm text-gray-400 sm:text-base">
+				<p class="max-w-md text-sm text-text-2 sm:text-base">
 					{defaultDescription}
 				</p>
 			</div>

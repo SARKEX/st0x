@@ -100,14 +100,14 @@
 				± {priceData.confidence.toFixed(5)}
 			{/if}
 		</td>
-		<td class="px-2 py-1 text-right text-gray-400">
+		<td class="px-2 py-1 text-right text-text-2">
 			{#if quotePrice !== null}
 				${quotePrice.toFixed(5)}
 			{/if}
 		</td>
 	{:else}
 		<td class="px-2 py-1" colspan="4">
-			<div class="text-sm text-gray-400">Oracle data unavailable</div>
+			<div class="text-sm text-text-2">Oracle data unavailable</div>
 		</td>
 	{/if}
 </tr>

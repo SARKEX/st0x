@@ -1,7 +1,7 @@
 import { redirect, error } from '@sveltejs/kit';
-import type { PageLoad } from './[slug]/$types';
+import type { PageServerLoad } from './$types';
 
-export const load: PageLoad = async (event) => {
+export const load: PageServerLoad = async (event) => {
 	const { parent } = event;
 
 	// Waiting for the layout to get the Articles

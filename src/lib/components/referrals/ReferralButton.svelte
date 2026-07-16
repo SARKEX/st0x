@@ -82,7 +82,7 @@
 
 		<!-- Inner background -->
 		<span
-			class="pointer-events-none absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-gray-900 via-purple-950/60 to-gray-900 transition-all group-hover:from-gray-800 group-hover:via-purple-900/70 group-hover:to-gray-800"
+			class="pointer-events-none absolute inset-[1px] z-0 rounded-[7px] bg-gradient-to-r from-bg via-iris-500/60 to-bg transition-all group-hover:from-surface-1 group-hover:via-iris-500/70 group-hover:to-surface-1"
 		></span>
 
 		<!-- Animated users icon -->
@@ -90,7 +90,7 @@
 			<!-- Glow behind icon -->
 			<span class="icon-glow absolute"></span>
 			<svg
-				class="relative h-4 w-4 text-purple-300 transition-all group-hover:scale-110 group-hover:text-purple-200"
+				class="relative h-4 w-4 text-iris transition-all group-hover:scale-110 group-hover:text-iris"
 				fill="none"
 				stroke="currentColor"
 				viewBox="0 0 24 24"
@@ -106,23 +106,21 @@
 
 		{#if $referralLoading}
 			<div
-				class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-gray-500 border-t-purple-400"
+				class="relative z-10 h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-iris"
 			></div>
-			<span class="relative z-10 text-gray-400">Loading...</span>
+			<span class="relative z-10 text-text-2">Loading...</span>
 		{:else if $referralProfile && $referralPerformance}
 			<div class="relative z-10 flex items-center gap-2">
-				<span class="font-semibold text-white">Referral</span>
-				<span class="text-xs font-medium text-yellow-300">
+				<span class="font-semibold text-text">Referral</span>
+				<span class="text-xs font-medium text-accent">
 					{formatPoints($referralPerformance.totalPoints)} pts
 				</span>
 			</div>
 		{:else}
 			<!-- Join CTA - more prominent -->
 			<div class="relative z-10 flex items-center gap-2">
-				<span class="font-semibold text-white">Referral</span>
-				<span
-					class="join-badge rounded-md bg-purple-500/30 px-2 py-0.5 text-xs font-bold text-purple-200"
-				>
+				<span class="font-semibold text-text">Referral</span>
+				<span class="join-badge rounded-md bg-iris-500/30 px-2 py-0.5 text-xs font-bold text-iris">
 					Join Now
 				</span>
 			</div>
@@ -132,26 +130,25 @@
 	<!-- Hover Tooltip -->
 	{#if showTooltip && $referralProfile && $referralPerformance}
 		<div
-			class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-gray-700 bg-gray-800 p-3 shadow-xl"
+			class="absolute right-0 top-full z-[200] mt-2 w-52 rounded-lg border border-line-strong bg-surface-1 p-3 shadow-xl"
 		>
 			<div class="space-y-2 text-sm">
 				<div class="flex justify-between">
-					<span class="text-gray-400">Wallets Referred</span>
-					<span class="font-medium text-white">{$referralPerformance.walletsReferred}</span>
+					<span class="text-text-2">Wallets Referred</span>
+					<span class="font-medium text-text">{$referralPerformance.walletsReferred}</span>
 				</div>
 				<div class="flex justify-between">
-					<span class="text-gray-400">Points</span>
-					<span class="font-medium text-yellow-300"
+					<span class="text-text-2">Points</span>
+					<span class="font-medium text-accent"
 						>{formatPoints($referralPerformance.totalPoints)}</span
 					>
 				</div>
 				<div class="flex justify-between">
-					<span class="text-gray-400">Est. Reward</span>
-					<span class="font-medium text-green-400"
-						>{formatUsd($referralPerformance.projectedRewards)}</span
+					<span class="text-text-2">Est. Reward</span>
+					<span class="font-medium text-up">{formatUsd($referralPerformance.projectedRewards)}</span
 					>
 				</div>
-				<div class="border-t border-gray-700 pt-2 text-xs text-gray-500">
+				<div class="border-t border-line-strong pt-2 text-xs text-text-3">
 					Earn rewards when your friends invest
 				</div>
 			</div>

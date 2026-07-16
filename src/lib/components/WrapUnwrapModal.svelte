@@ -272,14 +272,14 @@
 		aria-modal="true"
 		aria-labelledby="wrap-unwrap-modal-title"
 	>
-		<div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gray-900 shadow-2xl">
+		<div class="relative overflow-hidden rounded-2xl border border-line bg-surface-1 shadow-2xl">
 			<!-- Header -->
-			<div class="flex items-center justify-between border-b border-white/10 px-6 py-4">
-				<h3 id="wrap-unwrap-modal-title" class="text-lg font-semibold text-white">{modalTitle}</h3>
+			<div class="flex items-center justify-between border-b border-line px-6 py-4">
+				<h3 id="wrap-unwrap-modal-title" class="text-lg font-semibold text-text">{modalTitle}</h3>
 				<button
 					type="button"
 					on:click={handleClose}
-					class="rounded-full p-1 text-gray-400 transition hover:bg-white/10 hover:text-white"
+					class="rounded-full p-1 text-text-2 transition hover:bg-surface-3 hover:text-text"
 					aria-label="Close"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -298,15 +298,13 @@
 				<div class="space-y-4">
 					<!-- From Section -->
 					<div class="space-y-2">
-						<label for="wrap-from-token" class="text-sm font-medium text-gray-400"
-							>{fromLabel}</label
-						>
-						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
+						<label for="wrap-from-token" class="text-sm font-medium text-text-2">{fromLabel}</label>
+						<div class="rounded-xl border border-line bg-surface-2 px-4 py-3">
 							<!-- Token Dropdown -->
 							<div class="mb-3">
 								<select
 									id="wrap-from-token"
-									class="w-full rounded-lg border border-white/10 bg-gray-700/50 px-3 py-2 text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+									class="w-full rounded-lg border border-line bg-surface-3 px-3 py-2 text-text focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 									bind:value={selectedTokenAddress}
 									on:change={(e) => handleTokenSelect(e.currentTarget.value)}
 								>
@@ -330,7 +328,7 @@
 							<!-- Amount Input -->
 							<div class="flex items-center gap-3">
 								{#if selectedTokenData}
-									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
+									<div class="flex items-center gap-2 rounded-lg bg-surface-3 px-3 py-1.5">
 										{#if getTokenLogo(selectedTokenData.address)}
 											<img
 												src={getTokenLogo(selectedTokenData.address)}
@@ -338,11 +336,11 @@
 												class="h-6 w-6 rounded-full"
 											/>
 										{/if}
-										<span class="font-medium text-white">{selectedTokenData.symbol}</span>
+										<span class="font-medium text-text">{selectedTokenData.symbol}</span>
 									</div>
 								{:else}
-									<div class="rounded-lg bg-gray-700/50 px-3 py-1.5">
-										<span class="text-gray-400">Select token</span>
+									<div class="rounded-lg bg-surface-3 px-3 py-1.5">
+										<span class="text-text-2">Select token</span>
 									</div>
 								{/if}
 								<div class="flex-1 text-right">
@@ -353,7 +351,7 @@
 										value={amount}
 										on:input={handleAmountInput}
 										disabled={!selectedTokenData}
-										class="w-full bg-transparent text-right text-xl font-medium text-white placeholder-gray-600 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+										class="w-full bg-transparent text-right text-xl font-medium text-text placeholder-gray-600 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 									/>
 								</div>
 							</div>
@@ -361,14 +359,14 @@
 							<!-- Balance & Max -->
 							{#if selectedTokenData}
 								<div class="mt-2 flex items-center justify-between text-xs">
-									<span class="text-gray-500">
+									<span class="text-text-3">
 										Balance: {selectedTokenData.balanceFormatted.toFixed(4)}
 										{selectedTokenData.symbol}
 									</span>
 									<button
 										type="button"
 										on:click={handleMaxClick}
-										class="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-400 transition hover:bg-gray-600 hover:text-white"
+										class="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-text-2 transition hover:bg-gray-600 hover:text-text"
 									>
 										MAX
 									</button>
@@ -379,9 +377,9 @@
 
 					<!-- Arrow -->
 					<div class="flex justify-center">
-						<div class="rounded-full border border-white/10 bg-gray-800 p-2">
+						<div class="rounded-full border border-line bg-surface-2 p-2">
 							<svg
-								class="h-4 w-4 text-gray-400"
+								class="h-4 w-4 text-text-2"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -398,14 +396,14 @@
 
 					<!-- To Section -->
 					<div class="space-y-2">
-						<span class="text-sm font-medium text-gray-400">{toLabel}</span>
-						<div class="rounded-xl border border-white/5 bg-gray-800/60 px-4 py-3">
+						<span class="text-sm font-medium text-text-2">{toLabel}</span>
+						<div class="rounded-xl border border-line bg-surface-2 px-4 py-3">
 							<div class="flex items-center gap-3">
 								{#if currentMapping}
 									{@const targetToken = isWrapMode
 										? currentMapping.wrappedToken
 										: currentMapping.unwrappedToken}
-									<div class="flex items-center gap-2 rounded-lg bg-gray-700/50 px-3 py-1.5">
+									<div class="flex items-center gap-2 rounded-lg bg-surface-3 px-3 py-1.5">
 										{#if getTokenLogo(targetToken.address)}
 											<img
 												src={getTokenLogo(targetToken.address)}
@@ -413,15 +411,15 @@
 												class="h-6 w-6 rounded-full"
 											/>
 										{/if}
-										<span class="font-medium text-white">{targetToken.symbol}</span>
+										<span class="font-medium text-text">{targetToken.symbol}</span>
 									</div>
 								{:else}
-									<div class="rounded-lg bg-gray-700/50 px-3 py-1.5">
-										<span class="text-gray-400">-</span>
+									<div class="rounded-lg bg-surface-3 px-3 py-1.5">
+										<span class="text-text-2">-</span>
 									</div>
 								{/if}
 								<div class="flex-1 text-right">
-									<span class="text-xl font-medium text-white">
+									<span class="text-xl font-medium text-text">
 										{previewAmount
 											? parseFloat(previewAmount).toFixed(6)
 											: parsedAmount > 0
@@ -435,7 +433,7 @@
 								{@const targetToken = isWrapMode
 									? currentMapping.wrappedToken
 									: currentMapping.unwrappedToken}
-								<div class="mt-2 text-xs text-gray-500">
+								<div class="mt-2 text-xs text-text-3">
 									{targetToken.name}
 								</div>
 							{/if}
@@ -443,12 +441,12 @@
 					</div>
 
 					<!-- Info -->
-					<div class="rounded-lg bg-gray-800/40 px-4 py-3 text-xs text-gray-400">
+					<div class="rounded-lg bg-surface-2 px-4 py-3 text-xs text-text-2">
 						<div class="flex justify-between">
 							<span>Exchange Rate</span>
-							<span class="text-white">1:1</span>
+							<span class="text-text">1:1</span>
 						</div>
-						<div class="mt-1 text-gray-500">
+						<div class="mt-1 text-text-3">
 							{isWrapMode
 								? 'Wrap your underlying tokens into the ERC4626 vault for trading.'
 								: 'Unwrap your vault shares back to the underlying tokens.'}

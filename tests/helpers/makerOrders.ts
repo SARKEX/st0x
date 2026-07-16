@@ -1,7 +1,7 @@
 // Maker-order deployment helper.
 //
 // Deploys a fixed-limit order to the orderbook on anvil using the production Rain
-// SDK (DotrainRegistry + DotrainOrderGui) — same path as the UI's
+// SDK (DotrainRegistry + RaindexOrderBuilder) — same path as the UI's
 // `src/lib/services/orderDeployment.ts`. The only thing we do differently is
 // (a) point the SDK's RPC at anvil instead of LIVE Base, and (b) submit
 // transactions via a viem walletClient bound to a maker private key so the
@@ -32,15 +32,14 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
-import { DotrainRegistry, type OrderV4 } from '@rainlanguage/orderbook';
+import { DotrainRegistry, type OrderV4 } from '@rainlanguage/raindex';
 import type { AnvilTestClient } from './anvilControl';
 
 const ANVIL_RPC = 'http://127.0.0.1:8545';
 
 // The deployed orderbook on Base mainnet — same address the fork inherits.
 // Source: src/lib/clients/raindex.ts:SETTINGS_YAML / src/lib/config/networks.ts.
-export const ORDERBOOK_ADDRESS =
-	'0xe522cB4a5fCb2eb31a52Ff41a4653d85A4fd7C9D' as `0x${string}`;
+export const ORDERBOOK_ADDRESS = '0xe522cB4a5fCb2eb31a52Ff41a4653d85A4fd7C9D' as `0x${string}`;
 
 // OrderV4 ABI from src/lib/utils/orderbook.ts:67-70. Mirrored verbatim — the
 // shape must match what the orderbook contract expects and what the subgraph
@@ -134,12 +133,15 @@ export interface DeployedMakerOrder {
 // (slow). The registry is read-only.
 let registryPromise: Promise<unknown> | null = null;
 type RegistryInstance = {
-	getGui: (orderKey: string, deploymentKey: string) => Promise<{
+	getOrderBuilder: (
+		orderKey: string,
+		deploymentKey: string
+	) => Promise<{
 		error?: { readableMsg: string };
 		value?: {
 			setSelectToken: (key: string, address: string) => Promise<unknown>;
 			setFieldValue: (key: string, value: string) => unknown;
-			setDeposit: (key: string, value: string) => unknown;
+			setDeposit: (key: string, value: string) => Promise<unknown>;
 			generateAddOrderCalldata: () => Promise<{
 				error?: { readableMsg: string };
 				value?: `0x${string}`;
@@ -149,7 +151,7 @@ type RegistryInstance = {
 				value?: {
 					approvals: { token: `0x${string}`; calldata: `0x${string}`; symbol: string }[];
 					deploymentCalldata: `0x${string}`;
-					orderbookAddress: `0x${string}`;
+					raindexAddress: `0x${string}`;
 				};
 			}>;
 		};
@@ -158,9 +160,13 @@ type RegistryInstance = {
 async function getRegistry(registryUrl: string): Promise<RegistryInstance> {
 	if (!registryPromise) {
 		registryPromise = (async () => {
-			const r = await (DotrainRegistry as unknown as {
-				new: (url: string) => Promise<{ error?: { readableMsg: string }; value?: RegistryInstance }>;
-			}).new(registryUrl);
+			const r = await (
+				DotrainRegistry as unknown as {
+					new: (
+						url: string
+					) => Promise<{ error?: { readableMsg: string }; value?: RegistryInstance }>;
+				}
+			).new(registryUrl);
 			if (r.error || !r.value) {
 				throw new Error(`DotrainRegistry.new failed: ${r.error?.readableMsg ?? 'no value'}`);
 			}
@@ -185,10 +191,8 @@ export async function deployMakerLimitOrder(
 	// Buy  (Bid): maker gives payment (OUTPUT), takes asset (INPUT). UI's "price" is
 	//             payment/asset, but the deployed ratio inverts to asset/payment = 1/price.
 	const orderType: 'ask' | 'bid' = params.side === 'sell' ? 'ask' : 'bid';
-	const sdkInputToken =
-		orderType === 'ask' ? params.paymentToken : params.assetToken;
-	const sdkOutputToken =
-		orderType === 'ask' ? params.assetToken : params.paymentToken;
+	const sdkInputToken = orderType === 'ask' ? params.paymentToken : params.assetToken;
+	const sdkOutputToken = orderType === 'ask' ? params.assetToken : params.paymentToken;
 	const sdkRatio =
 		orderType === 'ask'
 			? params.pricePaymentPerAsset
@@ -197,12 +201,12 @@ export async function deployMakerLimitOrder(
 	const registry = await getRegistry(
 		params.registryUrl ?? 'http://127.0.0.1:4173/registry/manifest'
 	);
-	// Sell (ask) → base (DIA direct); buy (bid) → base-inv (DIA inverted).
-	const deploymentKey = orderType === 'ask' ? 'base' : 'base-inv';
-	const guiResult = await registry.getGui('fixed-limit', deploymentKey);
+	// Sell (ask) → base-dia-limit (DIA direct); buy (bid) → base-dia-limit-inv (DIA inverted).
+	const deploymentKey = orderType === 'ask' ? 'base-dia-limit' : 'base-dia-limit-inv';
+	const guiResult = await registry.getOrderBuilder('dia-limit', deploymentKey);
 	if (guiResult.error || !guiResult.value) {
 		throw new Error(
-			`registry.getGui(fixed-limit, ${deploymentKey}) failed: ${guiResult.error?.readableMsg ?? 'no value'}`
+			`registry.getOrderBuilder(dia-limit, ${deploymentKey}) failed: ${guiResult.error?.readableMsg ?? 'no value'}`
 		);
 	}
 	const gui = guiResult.value;
@@ -216,10 +220,7 @@ export async function deployMakerLimitOrder(
 	gui.setFieldValue('baseline-multiplier', '1.0075');
 	gui.setFieldValue('oracle-price-timeout', '7200');
 	gui.setFieldValue('fixed-io', sdkRatio);
-	gui.setDeposit(
-		'output',
-		formatUnits(params.depositAmount, sdkOutputToken.decimals)
-	);
+	await gui.setDeposit('output', formatUnits(params.depositAmount, sdkOutputToken.decimals));
 
 	// Deployment calldata: multicall(approvals + deposit + addOrder). Approvals are
 	// listed separately for the UX flow; we execute them one by one then submit the
@@ -250,7 +251,9 @@ export async function deployMakerLimitOrder(
 		}
 		const wait = 1500 * (attempt + 1);
 		console.log(
-			`[makerOrders] getDeploymentTransactionArgs transient failure (attempt ${attempt + 1}): ${lastErr}; retrying in ${wait}ms`
+			`[makerOrders] getDeploymentTransactionArgs transient failure (attempt ${
+				attempt + 1
+			}): ${lastErr}; retrying in ${wait}ms`
 		);
 		await new Promise((r) => setTimeout(r, wait));
 	}
@@ -269,7 +272,7 @@ export async function deployMakerLimitOrder(
 	}
 
 	const txHash = await wallet.sendTransaction({
-		to: args.orderbookAddress,
+		to: args.raindexAddress,
 		data: args.deploymentCalldata
 	});
 	const receipt = await params.testClient.waitForTransactionReceipt({ hash: txHash });
@@ -283,9 +286,8 @@ export async function deployMakerLimitOrder(
 	// addOrder calldata since (a) the orderbook uses a custom function
 	// selector and (b) the event payload is the source of truth for what was
 	// actually added on-chain.
-	const orderbookAddrLower = args.orderbookAddress.toLowerCase();
-	const ADD_ORDER_V3_TOPIC =
-		'0x87491344dfbcf91f6cbbc610cbbeedc85313d37a02df0c93527f7ea5f8db717f';
+	const orderbookAddrLower = args.raindexAddress.toLowerCase();
+	const ADD_ORDER_V3_TOPIC = '0x87491344dfbcf91f6cbbc610cbbeedc85313d37a02df0c93527f7ea5f8db717f';
 	let orderHash: `0x${string}` | null = null;
 	let orderV4: OrderV4 | null = null;
 	let decodeErr: string | null = null;
@@ -309,7 +311,7 @@ export async function deployMakerLimitOrder(
 	}
 	if (!orderHash || !orderV4) {
 		throw new Error(
-			`maker deploy tx ${txHash}: AddOrderV3 log found from ${args.orderbookAddress} but decode failed. ` +
+			`maker deploy tx ${txHash}: AddOrderV3 log found from ${args.raindexAddress} but decode failed. ` +
 				`decodeErr=${decodeErr ?? 'none'}`
 		);
 	}
@@ -341,7 +343,7 @@ export async function deployMakerLimitOrder(
 		orderBytes,
 		owner: account.address,
 		chainId: base.id,
-		orderbookAddress: args.orderbookAddress,
+		orderbookAddress: args.raindexAddress,
 		inputToken: sdkInputToken,
 		outputToken: sdkOutputToken,
 		inputVaultId,

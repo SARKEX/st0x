@@ -9,6 +9,7 @@ import { scrubSentryEvent } from '$lib/observability/scrub';
 import { CSP_DIRECTIVES } from '$lib/server/csp';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
+import { injectTradeSeoHead } from '$lib/seo/trade';
 
 // =============================================================================
 // Sentry Server Init (OBS-01)
@@ -480,7 +481,13 @@ const existingHandle: Handle = async ({ event, resolve }) => {
 	}
 
 	if (debug) console.log('[auth] allowing path', path);
-	const response = await resolve(event);
+	// Trade pages intentionally remain client-rendered because the trading UI
+	// depends on browser-only wallet and chart libraries. Inject route-specific
+	// metadata into that HTML shell so link unfurlers and crawlers still receive
+	// a title, description, canonical URL, and social card without executing JS.
+	const response = await resolve(event, {
+		transformPageChunk: ({ html }) => injectTradeSeoHead(html, path)
+	});
 	return addSecurityAndCorsHeaders(response, origin, path);
 };
 

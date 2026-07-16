@@ -5,27 +5,29 @@
 <div class="relative z-10 min-h-screen">
 	<section class="px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 		<div class="mx-auto max-w-3xl">
-			<h1 class="mb-6 text-4xl font-bold tracking-tight text-white sm:text-5xl">Privacy Policy</h1>
+			<h1 class="mb-6 text-4xl font-bold tracking-tight text-text sm:text-5xl">Privacy Policy</h1>
 
-			<p class="mb-8 text-gray-400">
+			<p class="mb-8 text-text-2">
 				In the following, we would like to inform you about what happens to your personal data when
 				you visit our website and use the services offered on the website.
 			</p>
 
-			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">
+			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">
 				1. Name and contact details of the responsible body
 			</h2>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				The person responsible for the processing of personal data on this website is:
 			</p>
-			<div class="mb-6 text-gray-400">
-				<p class="font-semibold text-white">SARK X (BVI) Ltd</p>
+			<div class="mb-6 text-text-2">
+				<p class="font-semibold text-text">SARK X (BVI) Ltd</p>
 				<p>represented by the managing directors</p>
 				<p>Toby Meller and Nicholas Magliocchetti</p>
 				<p>Craigmuir Chambers, Road Town, Tortola</p>
 				<p>VG 1110, British Virgin Islands</p>
 				<p>
-					E-Mail: <a href="mailto:toby@st0x.io" class="text-blue-400 underline hover:text-blue-300"
+					E-Mail: <a
+						href="mailto:toby@st0x.io"
+						class="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 						>toby@st0x.io</a
 					>
 				</p>
@@ -34,24 +36,25 @@
 						href="https://st0x.io"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="text-blue-400 underline hover:text-blue-300">www.st0x.io</a
+						class="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+						>www.st0x.io</a
 					>
 				</p>
 			</div>
 
-			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">
+			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">
 				2. Purpose and legal basis of data processing
 			</h2>
 
-			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">(1) Accessing the website</h3>
-			<p class="mb-4 text-gray-400">
+			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">(1) Accessing the website</h3>
+			<p class="mb-4 text-text-2">
 				When you access our website, information is automatically provided to the server of our
 				website, depending on the browser used on your device. The website is hosted by an external
 				service provider, so that the data is stored on the hoster's servers. We will not use the
 				information to draw conclusions about your person. The following information is
 				automatically recorded in a log file and stored there until automated deletion:
 			</p>
-			<ul class="mb-4 ml-6 list-disc space-y-1 text-gray-400">
+			<ul class="mb-4 ml-6 list-disc space-y-1 text-text-2">
 				<li>the date and time of the call,</li>
 				<li>Name and URL of the retrieved file/page,</li>
 				<li>IP address and hostname of the accessing computer,</li>
@@ -59,7 +62,7 @@
 				<li>Browser type and version, operating system used</li>
 				<li>and the name of your access provider.</li>
 			</ul>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				The aforementioned information is used to provide a smooth and comfortable use of the
 				website, to evaluate system security and stability, and for other administrative purposes.
 				The legal basis for this data processing is Art. 6 (1) (f) GDPR. Our legitimate interest
@@ -71,21 +74,21 @@
 				website. You can find more detailed explanations in this privacy policy.
 			</p>
 
-			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">(2) Cookies</h3>
-			<p class="mb-4 text-gray-400">
+			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">(2) Cookies</h3>
+			<p class="mb-4 text-text-2">
 				We use cookies on our site. These are small files that are automatically created by your
 				browser and stored on your device (laptop, tablet, smartphone, etc.) and contain information
 				about the data of your visit. However, the use of cookies does not give us direct knowledge
 				of your identity. The cookies are used to make your use of our website more pleasant. We
 				also use cookies to evaluate the surfing behaviour of our users.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				The legal bases for the setting of cookies are legitimate interests under Art. 6 (1) (f)
 				GDPR and, if applicable, your consent in accordance with Art. 6 (1) (a) GDPR in conjunction
 				with. &sect; 25 TTDSG. In the case of the initiation of a contract or an ongoing contractual
 				relationship, the legal basis also follows from Art. 6 (1) (b) GDPR.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				When you enter our website for the first time, you have the option of customizing the
 				setting of cookies. Most browsers are also automatically preset for the use of cookies.
 				However, you can set your browser so that no cookies are stored on your computer at all or
@@ -93,8 +96,8 @@
 				disable the use of cookies, you may not be able to use all the features of our website.
 			</p>
 
-			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">(3) Contact us</h3>
-			<p class="mb-4 text-gray-400">
+			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">(3) Contact us</h3>
+			<p class="mb-4 text-text-2">
 				If you contact us via the options provided on the website to make an enquiry, we will
 				process the data you provide in connection with the inquiry to process your inquiry. The
 				legal basis for this data processing is our legitimate interest in processing such enquiries
@@ -103,15 +106,15 @@
 				we cannot respond to your request without your contact details and information about your
 				request.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				After your enquiry is done, the data provided will be deleted unless it is required for a
 				following contractual relationship, or it must be kept due to mandatory retention
 				obligations. You can also request deleting your data at any time. You are also entitled to
 				further rights in accordance with this declaration.
 			</p>
 
-			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">(4) Social media</h3>
-			<p class="mb-4 text-gray-400">
+			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">(4) Social media</h3>
+			<p class="mb-4 text-text-2">
 				We operate a company profile on X (formerly Twitter), offered by X Corp., San Francisco,
 				USA. If you access our profile there or interact with us via X (e.g. through comments, likes
 				or direct messages), X processes personal data about you, e.g: IP address, device
@@ -123,7 +126,7 @@
 				and data protection as well as privacy settings can be found on the website of the operator
 				of the X platform.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				The operators of X can provide us with usage statistics in summarized and anonymized form
 				(so-called insights data). We have no influence on the creation of usage statistics. It is
 				not possible for us to assign your person to this data. The aggregated statistics may
@@ -131,7 +134,7 @@
 				defined period, reach and interaction of certain posts, actions on the company website,
 				number of page views, post performances, shared content.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				We operate a public information channel on the Telegram messaging service. When you access
 				the channel or communicate with us there, Telegram processes personal data, including your
 				IP address, usage data, possibly your Telegram user name and communication content. If you
@@ -141,18 +144,18 @@
 				data may also be processed outside the EU. Further information can be found in Telegram's
 				privacy policy.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				The platforms listed above are for general information purposes only. For support requests
 				and confidential communication, please use the secure channels provided for this purpose.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				The contact person for exercising your rights on the above-mentioned platforms is generally
 				the respective operator, as they have the power of disposal over the data stored on the
 				platform, possess all detailed and unencrypted information and can therefore take the
 				necessary measures and provide information. The respective contact persons can be found in
 				the data guidelines of the platform operator.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				The data processing described above is based on our legitimate interest in communication and
 				information (Art. 6 (1) (f) GDPR). This consists of constantly optimising our information
 				offering and our content to be able to respond to our target group in the best possible way.
@@ -166,10 +169,10 @@
 				data policy of the operator of the respective social media platform.
 			</p>
 
-			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">
+			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">
 				3. Disclosure of personal data to third parties
 			</h2>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				Within the scope of the processing purposes stated above, service providers and vicarious
 				agents (e.g. technical service providers) employed by us may receive data. The disclosure of
 				your personal data will be limited to what is necessary. The service providers commissioned
@@ -185,13 +188,13 @@
 				GDPR.
 			</p>
 
-			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">4. Rights of the persons concerned</h2>
+			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">4. Rights of the persons concerned</h2>
 
-			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">
+			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">
 				(1) Right to information, rectification, deletion as well as rights to restriction of
 				processing or transfer of your data to another body
 			</h3>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				You have the right to request information (Art. 15 GDPR) about your personal data and
 				related information. In addition, you can request the rectification (Art. 16 GDPR) and
 				erasure (Art. 17 (1) GDPR) of your personal data. You can also request that the processing
@@ -200,10 +203,10 @@
 				controller (Art. 20 GDPR).
 			</p>
 
-			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">
+			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">
 				(2) Revocation of consent to data processing
 			</h3>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				You can revoke your consent in accordance with Art. 6 (1) sentence 1 (a) GDPR at any time
 				with immediate effect in accordance with Art. 7 (3) sentence 1 GDPR. Please note that data
 				processing that took place before the revocation is not affected by the revocation and is
@@ -211,13 +214,13 @@
 				revocation, a simple notification to the person listed under no. 1.
 			</p>
 
-			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">
+			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">
 				(3) Objection to profiling and direct marketing
 			</h3>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				In certain cases, you also have the right to object (Art. 21 GDPR) to the data processing.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				In particular, you have the right to object at any time to the processing of your data (in
 				particular in the case of so-called profiling) based on Art. 6 (1) (f) GDPR (data processing
 				on the basis of a balancing of interests) or Art. 6 (1) (e) GDPR (data processing in the
@@ -226,23 +229,23 @@
 				for the processing which override the interests, rights and freedoms of the data subject, or
 				the processing serves to establish, exercise or defend legal claims.
 			</p>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				If your personal data is processed for direct marketing, you can also object to the
 				processing of your data for the purpose of direct marketing at any time in accordance with
 				Art. 21 (2) GDPR, including profiling, insofar as it is related to such direct marketing. If
 				you object, your personal data will no longer be used for these direct marketing purposes.
 			</p>
 
-			<h3 class="mb-3 mt-6 text-xl font-semibold text-white">
+			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">
 				(4) Right to lodge a complaint with the competent data protection supervisory authority
 			</h3>
-			<p class="mb-4 text-gray-400">
+			<p class="mb-4 text-text-2">
 				If you believe that we have not complied with data protection regulations when processing
 				your data, you can submit a complaint to the supervisory authority responsible for us.
 			</p>
 
-			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">5. Data integrity</h2>
-			<p class="mb-4 text-gray-400">
+			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">5. Data integrity</h2>
+			<p class="mb-4 text-text-2">
 				To ensure data security on our website, we encrypt it using the SSL method in accordance
 				with the current state of the art. We use appropriate technical and organizational measures
 				to prevent accidental or intentional manipulation, partial or total loss, destruction or
@@ -252,10 +255,10 @@
 				appropriate measures in accordance with the current state of the art to prevent the risks.
 			</p>
 
-			<h2 class="mb-4 mt-8 text-2xl font-bold text-white">
+			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">
 				6. Up-to-dateness and modification of this privacy policy
 			</h2>
-			<p class="text-gray-400">
+			<p class="text-text-2">
 				Due to the further development of our website and offers or due to changes in legal or
 				official requirements, it may become necessary to change this data protection declaration.
 				The current data protection declaration can be accessed and printed by you at any time on

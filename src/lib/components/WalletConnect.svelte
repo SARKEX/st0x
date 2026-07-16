@@ -28,7 +28,7 @@
 		</div>
 	{:else}
 		<div class="flex items-center gap-1.5" data-testid="connected">
-			<svg class="h-4 w-4 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+			<svg class="h-4 w-4 text-accent" viewBox="0 0 20 20" fill="currentColor">
 				<path
 					fill-rule="evenodd"
 					d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.172 7.707 8.879a1 1 0 10-1.414 1.414L9 13l4.707-4.707z"
