@@ -1,7 +1,6 @@
 <script lang="ts">
 	import '../../app.css';
 	import { onMount } from 'svelte';
-	import { initTokenSwapAnnouncement } from '$lib/stores/announcementStore';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
 	import TickerTape from '$lib/components/TickerTape.svelte';
@@ -11,21 +10,10 @@
 	import { browser } from '$app/environment';
 	import { rainlangConfirmationModal, tradePanelOpen } from '$lib/stores';
 	import { navCollapsed } from '$lib/stores/uiStore';
-	import { checkAndStoreAccessCodeFromUrl } from '$lib/utils/accessCodeStorage';
-	// Note: Access check is handled by accessStore's subscription to walletAddress
 
 	type TransactionModalComponent = typeof import('$lib/components/TransactionModal.svelte').default;
 	type RainlangConfirmationModalComponent =
 		typeof import('$lib/components/RainlangConfirmationModal.svelte').default;
-	type TokenSwapAnnouncementModalComponent =
-		typeof import('$lib/components/announcements/TokenSwapAnnouncementModal.svelte').default;
-	type ReferralJoinModalComponent =
-		typeof import('$lib/components/referrals/ReferralJoinModal.svelte').default;
-	type ReferralDashboardModalComponent =
-		typeof import('$lib/components/referrals/ReferralDashboardModal.svelte').default;
-	type ReferralLeaderboardModalComponent =
-		typeof import('$lib/components/referrals/ReferralLeaderboardModal.svelte').default;
-	type AccessCodeModalComponent = typeof import('$lib/components/AccessCodeModal.svelte').default;
 	type WalletConnectionModalComponent =
 		typeof import('$lib/components/WalletConnectionModal.svelte').default;
 	type TutorialComponent = typeof import('$lib/components/Tutorial.svelte').default;
@@ -34,11 +22,6 @@
 
 	let TransactionModal: TransactionModalComponent | null = null;
 	let RainlangConfirmationModal: RainlangConfirmationModalComponent | null = null;
-	let TokenSwapAnnouncementModal: TokenSwapAnnouncementModalComponent | null = null;
-	let ReferralJoinModal: ReferralJoinModalComponent | null = null;
-	let ReferralDashboardModal: ReferralDashboardModalComponent | null = null;
-	let ReferralLeaderboardModal: ReferralLeaderboardModalComponent | null = null;
-	let AccessCodeModal: AccessCodeModalComponent | null = null;
 	let WalletConnectionModal: WalletConnectionModalComponent | null = null;
 	let Tutorial: TutorialComponent | null = null;
 	let LowFundsBanner: LowFundsBannerComponent | null = null;
@@ -48,11 +31,6 @@
 		const [
 			transactionModal,
 			rainlangConfirmationModalComponent,
-			tokenSwapAnnouncementModal,
-			referralJoinModal,
-			referralDashboardModal,
-			referralLeaderboardModal,
-			accessCodeModal,
 			walletConnectionModal,
 			tutorial,
 			lowFundsBanner,
@@ -60,11 +38,6 @@
 		] = await Promise.all([
 			import('$lib/components/TransactionModal.svelte'),
 			import('$lib/components/RainlangConfirmationModal.svelte'),
-			import('$lib/components/announcements/TokenSwapAnnouncementModal.svelte'),
-			import('$lib/components/referrals/ReferralJoinModal.svelte'),
-			import('$lib/components/referrals/ReferralDashboardModal.svelte'),
-			import('$lib/components/referrals/ReferralLeaderboardModal.svelte'),
-			import('$lib/components/AccessCodeModal.svelte'),
 			import('$lib/components/WalletConnectionModal.svelte'),
 			import('$lib/components/Tutorial.svelte'),
 			import('$lib/components/LowFundsBanner.svelte'),
@@ -73,21 +46,13 @@
 
 		TransactionModal = transactionModal.default;
 		RainlangConfirmationModal = rainlangConfirmationModalComponent.default;
-		TokenSwapAnnouncementModal = tokenSwapAnnouncementModal.default;
-		ReferralJoinModal = referralJoinModal.default;
-		ReferralDashboardModal = referralDashboardModal.default;
-		ReferralLeaderboardModal = referralLeaderboardModal.default;
-		AccessCodeModal = accessCodeModal.default;
 		WalletConnectionModal = walletConnectionModal.default;
 		Tutorial = tutorial.default;
 		LowFundsBanner = lowFundsBanner.default;
 		OldTokensBanner = oldTokensBanner.default;
 	}
 
-	// Check for access code in URL params on mount
 	onMount(() => {
-		checkAndStoreAccessCodeFromUrl();
-		initTokenSwapAnnouncement();
 		void loadDeferredLayoutComponents();
 	});
 
@@ -212,25 +177,7 @@
 		{/if}
 	</div>
 
-	{#if TokenSwapAnnouncementModal}
-		<svelte:component this={TokenSwapAnnouncementModal} />
-	{/if}
-
-	<!-- Referral Modals -->
-	{#if ReferralJoinModal}
-		<svelte:component this={ReferralJoinModal} />
-	{/if}
-	{#if ReferralDashboardModal}
-		<svelte:component this={ReferralDashboardModal} />
-	{/if}
-	{#if ReferralLeaderboardModal}
-		<svelte:component this={ReferralLeaderboardModal} />
-	{/if}
-
-	<!-- Access/Connection Modals -->
-	{#if AccessCodeModal}
-		<svelte:component this={AccessCodeModal} />
-	{/if}
+	<!-- Connection Modal -->
 	{#if WalletConnectionModal}
 		<svelte:component this={WalletConnectionModal} />
 	{/if}

@@ -37,10 +37,7 @@ import { join } from 'node:path';
 // subsequent run replays from disk and never touches upstream, so the suite
 // is immune to mid-day rate-limit blowups. Cache files are committed to the
 // repo so CI has a warm start too. Bust the cache by deleting the directory.
-const GOLDSKY_CACHE_DIR = join(
-	process.cwd(),
-	'tests/integration/ui/__fixtures__/goldsky-cache'
-);
+const GOLDSKY_CACHE_DIR = join(process.cwd(), 'tests/integration/ui/__fixtures__/goldsky-cache');
 const goldskyCache = new Map<string, { status: number; body: string }>();
 
 function goldskyCacheKeyHash(key: string): string {
@@ -259,13 +256,10 @@ export const test = base.extend<UiFixtures>({
 				(globalThis as any).Date = Patched;
 			}, pinMs);
 		}
-		// Pre-dismiss one-time announcement modals — they auto-open on fresh
-		// browser sessions (no localStorage entry) and intercept pointer events
-		// on the page under test. The modal logic lives in
-		// src/lib/stores/announcementStore.ts; the localStorage key is the
-		// production-facing one (do NOT change without updating both sides).
+		// Pre-dismiss one-time onboarding modals — they auto-open on fresh browser
+		// sessions (no localStorage entry) and intercept pointer events on the page
+		// under test.
 		await page.addInitScript(() => {
-			window.localStorage.setItem('st0x_token_swap_announcement_seen', 'true');
 			// Pre-dismiss the vault tutorial. The trade page (src/routes/(main)/trade/[id]/+page.svelte:336-348)
 			// auto-fires a vault tutorial on the FIRST switch to `panelStrategy = 'limit'`
 			// or `'dca'`, and that handler CLOSES the trade panel (line 345) before
@@ -291,18 +285,6 @@ export const test = base.extend<UiFixtures>({
 			//    flag, so reconnect() silently skips it and no autoConnect fires.
 			window.localStorage.setItem('wagmi.recentConnectorId', '"injected"');
 			window.localStorage.setItem('wagmi.injected.connected', 'true');
-		});
-		// Stub the wallet-registration check so the trade panel opens without
-		// hitting the live access-control API. Production code path:
-		// src/lib/stores/accessStore.ts → checkWalletAccess() → GET
-		// /api/access/check?address=… Without this, openTradePanel() returns
-		// early at the !$walletRegistered guard and the panel never opens.
-		await page.route('**/api/access/check**', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ registered: true })
-			});
 		});
 		// Cache Goldsky GraphQL responses across tests in this worker. The Raindex
 		// SDK in the browser hits the Goldsky subgraph during the hydration step
@@ -343,7 +325,9 @@ export const test = base.extend<UiFixtures>({
 				}
 			}
 			console.log(
-				`[goldsky-cache] ${cached ? `HIT(${source})` : 'MISS'} ${req.method()} body-len=${body.length}`
+				`[goldsky-cache] ${cached ? `HIT(${source})` : 'MISS'} ${req.method()} body-len=${
+					body.length
+				}`
 			);
 			if (cached) {
 				await route.fulfill({
@@ -396,7 +380,9 @@ export const test = base.extend<UiFixtures>({
 				const sideParam = url.searchParams.get('side') as 'input' | 'output' | null;
 				const resp = buildSyntheticOrdersResponse(tokenAddr, sideParam ?? undefined);
 				console.log(
-					`[orders-synth] token=${tokenAddr} side=${sideParam ?? 'both'} orders=${resp.orders.length}`
+					`[orders-synth] token=${tokenAddr} side=${sideParam ?? 'both'} orders=${
+						resp.orders.length
+					}`
 				);
 				await route.fulfill({
 					status: 200,
@@ -470,7 +456,9 @@ export async function clickModeTab(
 	page: import('@playwright/test').Page,
 	mode: 'market' | 'limit' | 'dca'
 ): Promise<void> {
-	await page.waitForSelector(`[data-testid="mode-tab"][data-mode="${mode}"]`, { state: 'attached' });
+	await page.waitForSelector(`[data-testid="mode-tab"][data-mode="${mode}"]`, {
+		state: 'attached'
+	});
 	await page.evaluate((m) => {
 		const el = document.querySelector(
 			`[data-testid="mode-tab"][data-mode="${m}"]`
@@ -483,12 +471,12 @@ export async function clickModeTab(
 /**
  * Open the trade panel with a retry-until-mounted guard.
  *
- * `openTradePanel()` on the trade page returns early when `walletRegistered`
- * is still `null` (the auto-check fired by walletAddress.subscribe hasn't
- * resolved yet). The first click after `page.goto()` races with the
- * background `/api/access/check` fetch and intermittently drops on the floor
- * — the button gets focus, but the panel never opens, and the next
- * `clickModeTab()` call times out waiting for `mode-tab`.
+ * `openTradePanel()` on the trade page returns early when the wallet isn't
+ * connected yet (the wagmi auto-connect fired by `page.goto()` hasn't
+ * resolved). The first click after `page.goto()` races with that init and
+ * intermittently drops on the floor — the button gets focus, but the panel
+ * never opens, and the next `clickModeTab()` call times out waiting for
+ * `mode-tab`.
  *
  * This helper retries the click until either:
  *   1. The mode-tab buttons (gated on showTradePanel) are in the DOM, or
@@ -506,12 +494,11 @@ export async function openTradePanel(
 	const panelReadySelector = `[data-testid="mode-tab"][data-mode="market"]`;
 	await page.waitForSelector(openSelector, { state: 'visible', timeout: 60_000 });
 	// Wait for the "My Dashboard ...XXXX" button to render — Header.svelte only
-	// renders it once ALL THREE of $isAuthenticated && $walletAddress &&
-	// $walletRegistered are truthy. That gates the entire openTradePanel()
-	// auto-return chain: clicking before this button exists means
-	// openTradePanel calls promptWalletConnection/promptLogin and never sets
-	// showTradePanel = true. Wait deterministically rather than racing the
-	// click against the wagmi-init + access-check fetch.
+	// renders it once both $isAuthenticated && $walletAddress are truthy. That
+	// gates the entire openTradePanel() auto-return chain: clicking before this
+	// button exists means openTradePanel calls promptWalletConnection and never
+	// sets showTradePanel = true. Wait deterministically rather than racing the
+	// click against wagmi-init.
 	await page
 		.getByRole('button', { name: /My Dashboard\s+\.\.\./i })
 		.first()

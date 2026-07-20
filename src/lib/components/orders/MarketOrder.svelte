@@ -12,7 +12,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isAuthenticated } from '$lib/stores/authStore';
-	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
+	import { promptWalletConnection } from '$lib/stores/accessStore';
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
@@ -879,11 +879,6 @@
 		// Check if user is connected
 		if (!$isAuthenticated) {
 			promptWalletConnection();
-			return;
-		}
-		// Check if user is registered (access code modal shows automatically after connecting)
-		if (!$walletRegistered) {
-			promptLogin();
 			return;
 		}
 

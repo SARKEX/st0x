@@ -16,36 +16,19 @@ vi.mock('$env/dynamic/private', () => ({
 	})
 }));
 
-const { mockReadSession, mockMaybeRefresh, mockVerifySession, mockIsRegistered } = vi.hoisted(
-	() => ({
-		mockReadSession: vi.fn(),
-		mockMaybeRefresh: vi.fn(),
-		mockVerifySession: vi.fn(),
-		mockIsRegistered: vi.fn()
-	})
-);
-
-vi.mock('$lib/server/walletSession', () => ({
-	readSession: mockReadSession,
-	maybeRefreshSession: mockMaybeRefresh
+const { mockVerifySession } = vi.hoisted(() => ({
+	mockVerifySession: vi.fn()
 }));
 
 vi.mock('$lib/server/auth', () => ({
 	verifySessionToken: mockVerifySession
 }));
 
-vi.mock('$lib/server/accessCodes', () => ({
-	isWalletRegistered: mockIsRegistered
-}));
-
 describe('hooks.server CORS', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
-		mockReadSession.mockResolvedValue(null);
-		mockMaybeRefresh.mockResolvedValue(undefined);
 		mockVerifySession.mockReturnValue(false);
-		mockIsRegistered.mockResolvedValue(true);
 		delete process.env.VERCEL_URL;
 	});
 

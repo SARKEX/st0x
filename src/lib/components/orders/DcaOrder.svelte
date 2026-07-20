@@ -12,7 +12,7 @@
 	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
 	import { currentNetwork, oracleQuotes, reviewStrategyOnDeploy } from '$lib/stores';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-	import { walletRegistered, promptWalletConnection, promptLogin } from '$lib/stores/accessStore';
+	import { promptWalletConnection } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
 	import { onMount } from 'svelte';
 	import { trackTradeEvent } from '$lib/services/observability/tradeEvents';
@@ -183,12 +183,7 @@
 			promptWalletConnection();
 			return;
 		}
-		// Check if user is registered
-		if (!$walletRegistered) {
-			promptLogin();
-			return;
-		}
-		if (!($isAuthenticated && $walletRegistered)) return;
+		if (!$isAuthenticated) return;
 
 		await withTradeId(async (tradeId) => {
 			try {

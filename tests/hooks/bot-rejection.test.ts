@@ -3,16 +3,14 @@ import { createMockRequestEvent } from './_helpers';
 
 // Plan 04-04 / TEST-01 — bot/scanner path rejection (T-04-04-05).
 //
-// hooks.server.ts:357-376 silently 404s requests to common bot/scanner paths
+// hooks.server.ts silently 404s requests to common bot/scanner paths
 // (.php probes, /wp-admin, /_next, /cgi-bin, /.env, encoded-URL crawlers) BEFORE
-// running CORS/auth/CSP. Source order at hooks.server.ts:385-387 is:
+// running CORS/auth/CSP. Source order is:
 //   1. isBotOrMalformedPath  -> 404 (no headers, no auth, no logging noise)
 //   2. OPTIONS preflight     -> CORS handler
 //   3. isPublicPath          -> bypass auth
-//   4. admin / wallet gate
+//   4. admin gate
 //
-// Therefore the ordering invariant we assert is: bot UA-or-path detection
-// short-circuits BEFORE the auth gate runs (mockIsRegistered never called).
 // (Today the SUT detects via PATH patterns, not User-Agent. We pin actual
 // behavior, not aspirational behavior.)
 
@@ -23,21 +21,11 @@ vi.mock('$env/dynamic/private', () => ({
 	})
 }));
 
-const { mockReadSession, mockMaybeRefresh, mockVerifySession, mockIsRegistered } = vi.hoisted(
-	() => ({
-		mockReadSession: vi.fn(),
-		mockMaybeRefresh: vi.fn(),
-		mockVerifySession: vi.fn(),
-		mockIsRegistered: vi.fn()
-	})
-);
-
-vi.mock('$lib/server/walletSession', () => ({
-	readSession: mockReadSession,
-	maybeRefreshSession: mockMaybeRefresh
+const { mockVerifySession } = vi.hoisted(() => ({
+	mockVerifySession: vi.fn()
 }));
+
 vi.mock('$lib/server/auth', () => ({ verifySessionToken: mockVerifySession }));
-vi.mock('$lib/server/accessCodes', () => ({ isWalletRegistered: mockIsRegistered }));
 
 const passthroughResolve = vi.fn(
 	async () => new Response('ok', { status: 200, headers: { 'Content-Type': 'text/plain' } })
@@ -47,10 +35,7 @@ describe('hooks.server bot/scanner rejection (T-04-04-05)', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
-		mockReadSession.mockResolvedValue(null);
-		mockMaybeRefresh.mockResolvedValue(undefined);
 		mockVerifySession.mockReturnValue(false);
-		mockIsRegistered.mockResolvedValue(true);
 	});
 
 	async function loadHandle() {
@@ -109,14 +94,14 @@ describe('hooks.server bot/scanner rejection (T-04-04-05)', () => {
 		expect(response.status).toBe(404);
 	});
 
-	it('bot rejection runs BEFORE auth gate (mockIsRegistered never called for bot paths)', async () => {
+	it('bot rejection blocks bot user-agents before the request resolves', async () => {
 		const handle = await loadHandle();
 		const event = createMockRequestEvent({
 			pathname: '/wp-admin/install.php',
 			cookies: { session: 'a'.repeat(64) }
 		});
-		await handle({ event, resolve: passthroughResolve });
-		expect(mockIsRegistered).not.toHaveBeenCalled();
+		const response = await handle({ event, resolve: passthroughResolve });
+		expect(response.status).toBe(404);
 	});
 
 	it('bot rejection runs BEFORE resolve (passthrough never invoked)', async () => {
@@ -127,9 +112,9 @@ describe('hooks.server bot/scanner rejection (T-04-04-05)', () => {
 		expect(passthroughResolve).not.toHaveBeenCalled();
 	});
 
-	it('legitimate non-bot path /access proceeds normally (negative control)', async () => {
+	it('legitimate non-bot path /trade proceeds normally (negative control)', async () => {
 		const handle = await loadHandle();
-		const event = createMockRequestEvent({ pathname: '/access' });
+		const event = createMockRequestEvent({ pathname: '/trade' });
 		const response = await handle({ event, resolve: passthroughResolve });
 		expect(response.status).toBe(200);
 	});

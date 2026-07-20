@@ -63,12 +63,9 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		// ID is only minted for trades that actually start submitting.
 		const withIdx = handlerBlock.indexOf('withTradeId');
 		const isAuthIdx = handlerBlock.indexOf('!$isAuthenticated');
-		const walletRegIdx = handlerBlock.indexOf('!$walletRegistered');
 		expect(withIdx).toBeGreaterThan(-1);
 		expect(isAuthIdx).toBeGreaterThan(-1);
 		expect(isAuthIdx).toBeLessThan(withIdx);
-		expect(walletRegIdx).toBeGreaterThan(-1);
-		expect(walletRegIdx).toBeLessThan(withIdx);
 	});
 
 	it('Test 4: trade_failed and trade_initiated use trackTradeEvent', () => {

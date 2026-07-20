@@ -86,12 +86,11 @@ export function getRequestContext(): RequestContext | undefined {
  * If the client supplies an `x-request-id` header we reuse it (cross-correlation);
  * otherwise we generate a CSPRNG-backed UUIDv4 via `crypto.randomUUID()` (T-05-06).
  *
- * Wallet best-effort: SEC-03 (Plan 03-08b atomic flip) — wallet is now derived
- * from the server-issued 'session' cookie + KV record (the same source of truth
- * `getWalletFromRequest()` in hooks.server.ts uses). The client-set
- * 'wallet-address' cookie is no longer trusted as auth proof. If the session
- * cookie is missing or KV is unavailable, wallet is null (logs simply lack the
- * field rather than blocking the request).
+ * Wallet best-effort: SEC-03 (Plan 03-08b atomic flip) — wallet is derived
+ * from the server-issued 'session' cookie + KV record via readSession. The
+ * client-set 'wallet-address' cookie is no longer trusted as auth proof. If the
+ * session cookie is missing or KV is unavailable, wallet is null (logs simply
+ * lack the field rather than blocking the request).
  */
 export const requestContextHandle: Handle = async ({ event, resolve }) => {
 	const request_id = event.request.headers.get('x-request-id') ?? randomUUID();

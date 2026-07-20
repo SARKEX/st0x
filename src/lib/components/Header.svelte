@@ -1,6 +1,5 @@
 <script lang="ts">
 	import NetworkSelector from './NetworkSelector.svelte';
-	import ReferralButton from './referrals/ReferralButton.svelte';
 	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
 	import { onMount } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -8,7 +7,6 @@
 	import { web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
 	import { wrongNetwork, sfts, tradePanelOpen } from '$lib/stores';
-	import { walletRegistered } from '$lib/stores/accessStore';
 	// Unified auth
 	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
 	import { openAuthModal, logoutDynamic, dynamicSession } from '$lib/stores/dynamicStore';
@@ -151,11 +149,6 @@
 				<ThemeToggle />
 				<NetworkSelector />
 
-				<!-- Hide on mobile, show in hamburger menu instead -->
-				{#if !isHamburgerMode}
-					<ReferralButton />
-				{/if}
-
 				{#if $authMethod === 'dynamic' && $dynamicSession}
 					<!-- Dynamic authenticated user -->
 					<div class="account-menu-container relative">
@@ -212,8 +205,8 @@
 							</div>
 						{/if}
 					</div>
-				{:else if $isAuthenticated && !$wrongNetwork && $walletAddress && $walletRegistered}
-					<!-- Wallet user (fully registered) -->
+				{:else if $isAuthenticated && !$wrongNetwork && $walletAddress}
+					<!-- Wallet user -->
 					<div class="account-menu-container relative">
 						<button
 							class="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-gradient-to-b from-emerald-300 to-emerald-400 px-2.5 py-2 text-sm font-semibold text-[#053124] shadow-[0_10px_30px_-10px_rgba(45,227,166,0.45)] transition hover:brightness-105 sm:px-3.5"

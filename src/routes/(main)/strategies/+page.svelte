@@ -8,7 +8,6 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
-	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import { onMount, onDestroy } from 'svelte';
 	import { track, trackPageView } from '$lib/services/analytics';
@@ -60,8 +59,8 @@
 <div>
 	<!-- Strategies Content -->
 	<PageContainer>
-		{#if !$isAuthenticated || !$walletRegistered}
-			<!-- Login gate for strategies -->
+		{#if !$isAuthenticated}
+			<!-- Connect gate for strategies -->
 			<div class="flex min-h-[60vh] items-center justify-center">
 				<div class="max-w-md text-center">
 					<div class="mb-6 inline-flex rounded-full bg-accent-soft p-6 text-accent">
@@ -69,16 +68,12 @@
 					</div>
 					<h2 class="mb-2 text-2xl font-bold">Connect to Access Strategies</h2>
 					<p class="mb-6 text-text-2">
-						Connect and register your wallet to access advanced trading strategies including
-						portfolio management and market making.
+						Connect your wallet to access advanced trading strategies including portfolio management
+						and market making.
 					</p>
-					<Button
-						on:click={() => (!$isAuthenticated ? openAuthModal() : promptLogin())}
-						variant="primary"
-						size="lg"
+					<Button on:click={() => openAuthModal()} variant="primary" size="lg"
+						>Connect Wallet</Button
 					>
-						Connect or Log In
-					</Button>
 				</div>
 			</div>
 		{:else}
