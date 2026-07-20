@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRequestEvent } from './_helpers';
 
-// Plan 04-04 / TEST-01 — public-path classification before auth.
+// Plan 04-04 / TEST-01 — public-path classification before resolve.
 //
-// hooks.server.ts lists the paths that bypass the admin gate. Regressions here
-// are critical: marking an admin path public would silently expose protected
-// data; marking a public path private would break login. Each invariant gets a
-// named `it` below.
+// hooks.server.ts lists the paths that are explicitly public. Every other path
+// simply falls through to resolve (there is no longer a server-side auth gate),
+// so these assertions pin the self-checking endpoints (session login/logout) +
+// docs + public API.
 
 vi.mock('$app/environment', () => ({ dev: false }));
 vi.mock('$env/dynamic/private', () => ({
@@ -15,12 +15,6 @@ vi.mock('$env/dynamic/private', () => ({
 	})
 }));
 
-const { mockVerifySession } = vi.hoisted(() => ({
-	mockVerifySession: vi.fn()
-}));
-
-vi.mock('$lib/server/auth', () => ({ verifySessionToken: mockVerifySession }));
-
 const passthroughResolve = async () =>
 	new Response('ok', { status: 200, headers: { 'Content-Type': 'text/plain' } });
 
@@ -28,7 +22,6 @@ describe('hooks.server PUBLIC_PATHS classification', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
-		mockVerifySession.mockReturnValue(false);
 	});
 
 	async function loadHandle() {
@@ -74,40 +67,10 @@ describe('hooks.server PUBLIC_PATHS classification', () => {
 		expect(response.status).toBe(200);
 	});
 
-	it('/admin/login is public (so admins CAN log in)', async () => {
-		const handle = await loadHandle();
-		const event = createMockRequestEvent({ pathname: '/admin/login' });
-		const response = await handle({ event, resolve: passthroughResolve });
-		expect(response.status).toBe(200);
-		expect(mockVerifySession).not.toHaveBeenCalled();
-	});
-
-	it('/admin (other than /admin/login) is NOT public — admin gate runs', async () => {
-		const handle = await loadHandle();
-		const event = createMockRequestEvent({ pathname: '/admin' });
-		const response = await handle({ event, resolve: passthroughResolve });
-		// No auth-session cookie => redirect to /admin/login (303).
-		expect(response.status).toBe(303);
-		expect(response.headers.get('Location')).toBe('/admin/login');
-	});
-
-	it('protected page / (root) is NOT public — wallet gate runs (no session => 200, lets client-side handle)', async () => {
+	it('page / (root) falls through to resolve (no server-side gate; client handles auth)', async () => {
 		const handle = await loadHandle();
 		const event = createMockRequestEvent({ pathname: '/' });
 		const response = await handle({ event, resolve: passthroughResolve });
-		// No wallet, page (not API) => proceed (per source comment "client-side will redirect")
 		expect(response.status).toBe(200);
-	});
-
-	it('public path classification short-circuits to allow (no admin gate)', async () => {
-		const handle = await loadHandle();
-		const event = createMockRequestEvent({
-			pathname: '/api/public/leaderboard',
-			cookies: { session: 'a'.repeat(64) }
-		});
-		const response = await handle({ event, resolve: passthroughResolve });
-		expect(response.status).toBe(200);
-		// Public paths must never reach the admin auth gate.
-		expect(mockVerifySession).not.toHaveBeenCalled();
 	});
 });

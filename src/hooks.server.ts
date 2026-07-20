@@ -1,7 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { sequence } from '@sveltejs/kit/hooks';
-import { verifySessionToken } from '$lib/server/auth';
 import { requestContextHandle } from '$lib/server/logger';
 import { scrubSentryEvent } from '$lib/observability/scrub';
 import { CSP_DIRECTIVES } from '$lib/server/csp';
@@ -207,9 +206,6 @@ function isPublicPath(path: string): boolean {
 	if (path.startsWith('/api/auth/dynamic/')) return true;
 	if (path.startsWith('/auth/dynamic/')) return true;
 
-	// Admin login page (admin area itself is protected by layout)
-	if (path === '/admin/login') return true;
-
 	// Docs are public
 	if (path.startsWith('/docs')) return true;
 
@@ -233,28 +229,7 @@ function isPublicPath(path: string): boolean {
 	return PUBLIC_PATHS.has(path);
 }
 
-function isAdminPath(path: string): boolean {
-	return path.startsWith('/admin') && path !== '/admin/login';
-}
-
 // Helper to add security headers to response
-function addSecurityHeaders(response: Response): Response {
-	const newHeaders = new Headers(response.headers);
-
-	// Add security headers (don't override existing ones)
-	for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-		if (!newHeaders.has(key)) {
-			newHeaders.set(key, value);
-		}
-	}
-
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers: newHeaders
-	});
-}
-
 // Helper to add both security headers and CORS headers to response
 function addSecurityAndCorsHeaders(
 	response: Response,
@@ -314,7 +289,7 @@ function isBotOrMalformedPath(path: string): boolean {
 }
 
 const existingHandle: Handle = async ({ event, resolve }) => {
-	const { url, cookies, request } = event;
+	const { url, request } = event;
 	const path = url.pathname;
 	const origin = request.headers.get('Origin');
 	const method = request.method;
@@ -345,31 +320,6 @@ const existingHandle: Handle = async ({ event, resolve }) => {
 	// Public paths - no auth needed
 	if (isPublicPath(path)) {
 		if (debug) console.log('[auth] public path', path);
-		const response = await resolve(event);
-		return addSecurityAndCorsHeaders(response, origin, path);
-	}
-
-	// Admin paths - require session auth
-	if (isAdminPath(path)) {
-		const token = cookies.get('auth-session');
-		const tsStr = cookies.get('auth-timestamp');
-		const timestamp = tsStr ? Number(tsStr) : NaN;
-
-		const valid = token && Number.isFinite(timestamp) && verifySessionToken(token, timestamp);
-
-		if (debug) {
-			console.log('[auth] admin path', path, { hasToken: !!token, valid });
-		}
-
-		if (!valid) {
-			return addSecurityHeaders(
-				new Response(null, {
-					status: 303,
-					headers: { Location: '/admin/login' }
-				})
-			);
-		}
-
 		const response = await resolve(event);
 		return addSecurityAndCorsHeaders(response, origin, path);
 	}

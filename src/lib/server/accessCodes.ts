@@ -1,6 +1,5 @@
 import { createPublicClient, fallback, http } from 'viem';
 import { base } from 'viem/chains';
-import { getKv, kvGet, KV_KEYS } from './kv';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
 import { networks } from '$lib/config/networks';
@@ -41,31 +40,7 @@ const basePublicClient = createPublicClient({
 	)
 });
 
-// Types
-export interface AccessCode {
-	code: string;
-	maxUses: number | null; // null = unlimited
-	currentUses: number;
-	expiresAt: string | null; // ISO timestamp, null = never expires
-	createdAt: string;
-	createdBy: string;
-	label: string | null;
-}
-
-export interface RegisteredWallet {
-	address: string;
-	accessCode: string;
-	registeredAt: string;
-}
-
-// In-memory fallback for development
-const devStore = {
-	codes: new Map<string, AccessCode>(),
-	wallets: new Map<string, RegisteredWallet>(),
-	codeWallets: new Map<string, string[]>()
-};
-
-// Verify a wallet signature
+// Verify a wallet signature for session login.
 // Supports: ECDSA (EOA), EIP-1271 (Smart Contract Wallets), EIP-6492 (Undeployed Counterfactual)
 //
 // OBS-04 instrumentation (D-09 + Plan 03-07): the `rpc_url` label is the synthetic
@@ -122,52 +97,4 @@ export async function verifyWalletSignature(
 		});
 		return false;
 	}
-}
-
-// === Read-only access-code + wallet lookups (admin analytics) ===
-
-export async function getAccessCode(code: string): Promise<AccessCode | null> {
-	const normalizedCode = code.trim().toUpperCase();
-
-	const kv = await getKv();
-	if (kv) {
-		return await kvGet<AccessCode>(KV_KEYS.accessCode(normalizedCode));
-	}
-	return devStore.codes.get(normalizedCode) || null;
-}
-
-export async function listAccessCodes(): Promise<AccessCode[]> {
-	const kv = await getKv();
-	if (kv) {
-		const allCodes = (await kvGet<string[]>(KV_KEYS.allCodes())) || [];
-		const codes: AccessCode[] = [];
-		for (const code of allCodes) {
-			const accessCode = await getAccessCode(code);
-			if (accessCode) {
-				codes.push(accessCode);
-			}
-		}
-		return codes;
-	}
-	return Array.from(devStore.codes.values());
-}
-
-export async function getWalletInfo(address: string): Promise<RegisteredWallet | null> {
-	const normalizedAddress = address.toLowerCase();
-
-	const kv = await getKv();
-	if (kv) {
-		return await kvGet<RegisteredWallet>(KV_KEYS.wallet(normalizedAddress));
-	}
-	return devStore.wallets.get(normalizedAddress) || null;
-}
-
-export async function getWalletsByCode(code: string): Promise<string[]> {
-	const normalizedCode = code.trim().toUpperCase();
-
-	const kv = await getKv();
-	if (kv) {
-		return (await kvGet<string[]>(KV_KEYS.codeWallets(normalizedCode))) || [];
-	}
-	return devStore.codeWallets.get(normalizedCode) || [];
 }

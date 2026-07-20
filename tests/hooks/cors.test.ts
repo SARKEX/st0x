@@ -16,19 +16,10 @@ vi.mock('$env/dynamic/private', () => ({
 	})
 }));
 
-const { mockVerifySession } = vi.hoisted(() => ({
-	mockVerifySession: vi.fn()
-}));
-
-vi.mock('$lib/server/auth', () => ({
-	verifySessionToken: mockVerifySession
-}));
-
 describe('hooks.server CORS', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
-		mockVerifySession.mockReturnValue(false);
 		delete process.env.VERCEL_URL;
 	});
 

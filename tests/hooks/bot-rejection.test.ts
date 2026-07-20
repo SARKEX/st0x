@@ -21,12 +21,6 @@ vi.mock('$env/dynamic/private', () => ({
 	})
 }));
 
-const { mockVerifySession } = vi.hoisted(() => ({
-	mockVerifySession: vi.fn()
-}));
-
-vi.mock('$lib/server/auth', () => ({ verifySessionToken: mockVerifySession }));
-
 const passthroughResolve = vi.fn(
 	async () => new Response('ok', { status: 200, headers: { 'Content-Type': 'text/plain' } })
 );
@@ -35,7 +29,6 @@ describe('hooks.server bot/scanner rejection (T-04-04-05)', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
-		mockVerifySession.mockReturnValue(false);
 	});
 
 	async function loadHandle() {
