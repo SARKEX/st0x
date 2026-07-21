@@ -67,6 +67,25 @@ export interface ApiSwapCalldataResponse {
 	approvals: ApiApproval[];
 }
 
+export type ApiSwapCalldataMode = 'buyUpTo' | 'spendExact' | 'spendUpTo';
+
+interface ApiSwapCalldataV2RequestCommon {
+	taker: string;
+	inputToken: string;
+	outputToken: string;
+	mode: ApiSwapCalldataMode;
+	amount: string;
+	denomination?: 'wrapped' | 'unwrapped';
+}
+
+export type ApiSwapCalldataV2Request = ApiSwapCalldataV2RequestCommon &
+	({ priceCap: string; slippageBps?: never } | { priceCap?: never; slippageBps: number });
+
+export interface ApiSwapCalldataV2Response extends ApiSwapCalldataResponse {
+	denomination: 'wrapped' | 'unwrapped';
+	resolvedPriceCap: string;
+}
+
 // ============================================================================
 // Order Types
 // ============================================================================
@@ -402,6 +421,21 @@ export async function apiGetSwapCalldata(
 ): Promise<ApiSwapCalldataResponse> {
 	assertBrowser('apiGetSwapCalldata');
 	return fetchJson<ApiSwapCalldataResponse>(apiUrl('/v1/swap/calldata'), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(request)
+	});
+}
+
+/**
+ * Fetch ready-to-send v2 swap calldata. The API resolves optional slippage
+ * through SDK quotes and returns the fixed cap to reuse after approvals.
+ */
+export async function apiGetSwapCalldataV2(
+	request: ApiSwapCalldataV2Request
+): Promise<ApiSwapCalldataV2Response> {
+	assertBrowser('apiGetSwapCalldataV2');
+	return fetchJson<ApiSwapCalldataV2Response>(apiUrl('/v2/swap/calldata'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(request)

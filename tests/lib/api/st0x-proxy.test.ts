@@ -100,6 +100,43 @@ describe('/api/st0x proxy', () => {
 		);
 	});
 
+	it('allows POST /v2/swap/calldata and forwards slippage without caching', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					to: '0xOrderbook',
+					data: '0x1234',
+					value: '0x0',
+					estimatedInput: '100',
+					denomination: 'wrapped',
+					resolvedPriceCap: '2.02',
+					approvals: []
+				}),
+				{ status: 200, headers: { 'Content-Type': 'application/json' } }
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const body = JSON.stringify({
+			taker: '0xTaker',
+			inputToken: '0xIn',
+			outputToken: '0xOut',
+			mode: 'spendUpTo',
+			amount: '100',
+			slippageBps: 100
+		});
+
+		const response = await POST(proxyEvent('POST', 'v2/swap/calldata', body));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.example.test/v2/swap/calldata?page=1',
+			expect.objectContaining({ method: 'POST' })
+		);
+		const init = fetchMock.mock.calls[0][1] as RequestInit;
+		expect(await new Response(init.body).text()).toBe(body);
+	});
+
 	it('allows cached wrap-ratio endpoints', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ data: [], errors: [] }), {
