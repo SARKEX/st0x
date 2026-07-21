@@ -17,8 +17,8 @@
 // selectors (verified via the deposit-selector reverse-engineering in
 // tests/helpers/anvilControl.ts), so hand-rolled ABI was fragile. The
 // OUTPUT-vault drain alone is the load-bearing TRADE-01 mitigation —
-// fill mechanics are covered by marketBuy/marketSell which exercise the
-// SDK-generated takeOrders calldata path.
+// market REST request contracts are covered by marketBuy/marketSell; on-chain
+// calldata construction is covered in the REST API repository.
 //
 // Pitfall 4 (LimitOrder lazy-load): LimitOrder.svelte is dynamically imported
 // via `{#await import()}` (PERF-01). Wait on the `limit-form-loaded` anchor

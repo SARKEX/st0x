@@ -1,16 +1,8 @@
 /**
  * Plan 02-03 Task 1b — marketOrderExecution.ts broadcast/confirmed event tests.
  *
- * Spike finding: executeMarketOrder dispatches via handleAggregatedTakeOrdersCalldata
- * (which internally awaits wallet sign + on-chain receipt) and then reads the
- * `transactionStoreInternal` terminal status. There is no per-callback hook for
- * "broadcast" (post-dispatch, pre-confirmation) distinct from "confirmed"
- * (post-receipt) at this layer — by the time control returns to executeMarketOrder
- * the SDK has already gone through both phases.
- *
- * Per Plan 02-03 §Task 1b action: when the SDK collapses broadcast/confirmed into
- * a single boundary, fire BOTH back-to-back so the OBS-07 funnel contract holds.
- * This test asserts that contract.
+ * The REST-calldata flow has distinct wallet dispatch and receipt boundaries,
+ * so broadcast must precede the confirmation wait and confirmed must follow it.
  *
  * Approach: source-content + behavioural assertion via the same mock harness that
  * the existing `marketOrderExecution.test.ts` uses (see vitest-setup.ts) — the
@@ -27,9 +19,7 @@ const serviceSource = readFileSync(servicePath, 'utf-8');
 
 describe('marketOrderExecution.ts OBS-07 emission boundaries (Plan 02-03 Task 1b)', () => {
 	it('Test 1: imports trackTradeEvent from observability/tradeEvents', () => {
-		expect(serviceSource).toMatch(
-			/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/
-		);
+		expect(serviceSource).toMatch(/from\s+['"]\$lib\/services\/observability\/tradeEvents['"]/);
 		expect(serviceSource).toMatch(/trackTradeEvent/);
 	});
 
@@ -45,33 +35,26 @@ describe('marketOrderExecution.ts OBS-07 emission boundaries (Plan 02-03 Task 1b
 		);
 	});
 
-	it('Test 4: broadcast precedes confirmed (or both fire at the same boundary with explanatory comment)', () => {
+	it("emits 'quote_received' after the REST calldata response", () => {
+		const responseIdx = serviceSource.indexOf('await apiGetSwapCalldataV2(request)');
+		const quoteIdx = serviceSource.indexOf("trackTradeEvent('quote_received'");
+		expect(responseIdx).toBeGreaterThan(-1);
+		expect(quoteIdx).toBeGreaterThan(responseIdx);
+	});
+
+	it('Test 4: broadcast precedes confirmed', () => {
 		const broadcastIdx = serviceSource.indexOf("trackTradeEvent('broadcast'");
 		const confirmedIdx = serviceSource.indexOf("trackTradeEvent('confirmed'");
 		expect(broadcastIdx).toBeGreaterThan(-1);
 		expect(confirmedIdx).toBeGreaterThan(-1);
 		expect(broadcastIdx).toBeLessThan(confirmedIdx);
-		// Per Plan 02-03 Task 1b: if SDK collapses the two callbacks, emit both
-		// back-to-back at the same boundary with an explanatory comment. This test
-		// accepts either: distinct boundaries OR same boundary, but if same boundary,
-		// a comment must document the collapse.
-		const between = serviceSource.slice(broadcastIdx, confirmedIdx);
-		// If less than 200 chars between them, they are colocated — require the
-		// "collapse" comment somewhere in the file (above the broadcast site).
-		if (between.length < 200) {
-			const upTo = serviceSource.slice(0, broadcastIdx);
-			expect(upTo).toMatch(/collapse|callback|boundary/i);
-		}
+		expect(serviceSource.slice(broadcastIdx, confirmedIdx)).toContain('waitForTransaction');
 	});
 
 	it('Test 5: emission carries order_side derived from orderSide ("buy" | "sell")', () => {
 		// The trackTradeEvent call should include order_side (lowercased Buy/Sell)
-		expect(serviceSource).toMatch(
-			/trackTradeEvent\(\s*['"]broadcast['"][\s\S]{0,400}?order_side:/
-		);
-		expect(serviceSource).toMatch(
-			/trackTradeEvent\(\s*['"]confirmed['"][\s\S]{0,400}?order_side:/
-		);
+		expect(serviceSource).toMatch(/trackTradeEvent\(\s*['"]broadcast['"][\s\S]{0,400}?order_side:/);
+		expect(serviceSource).toMatch(/trackTradeEvent\(\s*['"]confirmed['"][\s\S]{0,400}?order_side:/);
 	});
 
 	it('Test 6: emission ONLY fires on the SUCCESS branch, not on every dispatcher (failWith) exit', () => {

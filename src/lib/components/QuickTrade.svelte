@@ -21,6 +21,7 @@
 	import QuickTradeChart from './QuickTradeChart.svelte';
 	import Icon from './ui/Icon.svelte';
 	import { goto } from '$app/navigation';
+	import { resolveMarketOrderAnchor } from '$lib/utils/marketOrderInput';
 
 	type ParseFloatHex = typeof import('$lib/utils/tokenMath').parseFloatHex;
 
@@ -131,6 +132,17 @@
 
 	// ============ DATA LOADING ============
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
+	$: tradeAnchor =
+		selectedToken && paymentToken
+			? resolveMarketOrderAnchor({
+					orderSide: isBuying ? 'Buy' : 'Sell',
+					editedField: lastEditedField,
+					paymentAmount: topAmount,
+					assetAmount: bottomAmount,
+					paymentDecimals: paymentToken.decimals,
+					assetDecimals: selectedToken.decimals
+				})
+			: null;
 
 	// TanStack Query for quotes — polls every 15s, retries on failure, preserves stale data
 	$: orderbookQuery = createQuery<OrderbookQuoteCache>({
@@ -152,8 +164,6 @@
 		}
 	});
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
-	$: isLoadingQuotes = $orderbookQuery.isPending && !$orderbookQuery.data;
-	$: quoteFetchError = $orderbookQuery.isError;
 
 	// On mount: analytics only. The selected-token query above fetches the visible quote data.
 	onMount(() => {
@@ -175,7 +185,7 @@
 					token_amount: bottomAmount || null
 				},
 				time_spent_ms: Date.now() - panelOpenTime,
-				last_error: tradeError || (showLiquidityWarning ? 'insufficient_liquidity' : null)
+				last_error: tradeError || (quote && !quote.hasLiquidity ? 'insufficient_liquidity' : null)
 			});
 		}
 	});
@@ -261,110 +271,8 @@
 			.sort((a, b) => (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0));
 	})();
 
-	$: relevantQuotes = isBuying ? askQuotes : bidQuotes;
 	$: bestAskPrice = askQuotes.length > 0 ? askQuotes[0].quotePerAsset : null;
 	$: bestBidPrice = bidQuotes.length > 0 ? bidQuotes[0].quotePerAsset : null;
-
-	// ============ MAX LIQUIDITY CALCULATION ============
-	// Calculate maximum USDC that can be spent when buying
-	$: maxBuyUsdcAvailable = (() => {
-		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
-		parseFloatVersion;
-		if (askQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
-		let totalUsdc = 0n;
-		const paymentDecimals = paymentToken.decimals ?? 6;
-		const assetDecimals = selectedToken.decimals ?? 18;
-
-		for (const q of askQuotes) {
-			const price = q.quotePerAsset ?? 0;
-			if (price <= 0) continue;
-			let maxAssetAvailable = 0n;
-			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
-				maxAssetAvailable = parseQuoteFloat(q.maxOutput, outputDecimals);
-			}
-			if (maxAssetAvailable <= 0n) continue;
-			const usdcForQuote = BigInt(
-				Math.ceil((Number(maxAssetAvailable) / 10 ** assetDecimals) * price * 10 ** paymentDecimals)
-			);
-			totalUsdc += usdcForQuote;
-		}
-		return Number(totalUsdc) / 10 ** paymentDecimals;
-	})();
-
-	// Calculate maximum tokens that can be bought (sum of ask maxOutput)
-	$: maxBuyTokensAvailable = (() => {
-		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
-		parseFloatVersion;
-		if (askQuotes.length === 0 || !selectedToken) return 0;
-		let totalTokens = 0n;
-		const assetDecimals = selectedToken.decimals ?? 18;
-
-		for (const q of askQuotes) {
-			let maxAssetAvailable = 0n;
-			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
-				maxAssetAvailable = parseQuoteFloat(q.maxOutput, outputDecimals);
-				if (outputDecimals !== assetDecimals) {
-					const scale = 10n ** BigInt(Math.abs(assetDecimals - outputDecimals));
-					maxAssetAvailable =
-						outputDecimals < assetDecimals ? maxAssetAvailable * scale : maxAssetAvailable / scale;
-				}
-			}
-			if (maxAssetAvailable > 0n) totalTokens += maxAssetAvailable;
-		}
-		return Number(totalTokens) / 10 ** assetDecimals;
-	})();
-
-	// Calculate maximum tokens that can be sold
-	$: maxSellTokensAvailable = (() => {
-		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
-		parseFloatVersion;
-		if (bidQuotes.length === 0 || !selectedToken || !paymentToken) return 0;
-		let totalTokens = 0n;
-		const paymentDecimals = paymentToken.decimals ?? 6;
-		const assetDecimals = selectedToken.decimals ?? 18;
-
-		for (const q of bidQuotes) {
-			const price = q.quotePerAsset ?? 0;
-			if (price <= 0) continue;
-			let maxUsdcFromBid = 0n;
-			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
-				maxUsdcFromBid = parseQuoteFloat(q.maxOutput, outputDecimals);
-			}
-			if (maxUsdcFromBid <= 0n) continue;
-			const tokensForBid = BigInt(
-				Math.floor((Number(maxUsdcFromBid) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
-			);
-			totalTokens += tokensForBid;
-		}
-		return Number(totalTokens) / 10 ** assetDecimals;
-	})();
-
-	// Calculate maximum USDC that can be received when selling (sum of bid maxOutput)
-	$: maxSellUsdcAvailable = (() => {
-		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
-		parseFloatVersion;
-		if (bidQuotes.length === 0 || !paymentToken) return 0;
-		let totalUsdc = 0n;
-		const paymentDecimals = paymentToken.decimals ?? 6;
-
-		for (const q of bidQuotes) {
-			let maxUsdcFromBid = 0n;
-			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
-				maxUsdcFromBid = parseQuoteFloat(q.maxOutput, outputDecimals);
-				if (outputDecimals !== paymentDecimals) {
-					const scale = 10n ** BigInt(Math.abs(paymentDecimals - outputDecimals));
-					maxUsdcFromBid =
-						outputDecimals < paymentDecimals ? maxUsdcFromBid * scale : maxUsdcFromBid / scale;
-				}
-			}
-			if (maxUsdcFromBid > 0n) totalUsdc += maxUsdcFromBid;
-		}
-		return Number(totalUsdc) / 10 ** paymentDecimals;
-	})();
 
 	// ============ QUOTE CALCULATION ============
 	$: quote = (() => {
@@ -391,80 +299,6 @@
 			bottomAmount = newValue;
 		} else {
 			topAmount = newValue;
-		}
-		// Note: We no longer cap while typing - capping happens on blur
-	}
-
-	// Track if we capped due to liquidity - persists until user types again
-	let showLiquidityWarning = false;
-	let hasCappedThisBlur = false;
-
-	// Cap amounts at max available when liquidity is insufficient
-	function capAmountsIfNeeded() {
-		// If there's sufficient liquidity and we haven't capped, nothing to do
-		if (!quote || (quote.hasLiquidity && !showLiquidityWarning)) {
-			return;
-		}
-
-		// If we already capped on this blur event, don't cap again
-		if (hasCappedThisBlur) return;
-
-		// If there's not enough liquidity, cap and show warning
-		if (!quote.hasLiquidity) {
-			if (isBuying) {
-				if (lastEditedField === 'top') {
-					// User edited USDC amount - cap USDC to max available
-					const enteredUsdc = parseFloat(topAmount);
-					if (
-						Number.isFinite(enteredUsdc) &&
-						enteredUsdc > maxBuyUsdcAvailable &&
-						maxBuyUsdcAvailable > 0
-					) {
-						topAmount = maxBuyUsdcAvailable.toFixed(2);
-						showLiquidityWarning = true;
-						hasCappedThisBlur = true;
-					}
-				} else if (lastEditedField === 'bottom') {
-					// User edited token amount - cap tokens to max available
-					const enteredTokens = parseFloat(bottomAmount);
-					if (
-						Number.isFinite(enteredTokens) &&
-						enteredTokens > maxBuyTokensAvailable &&
-						maxBuyTokensAvailable > 0
-					) {
-						bottomAmount = formatTokenAmount(maxBuyTokensAvailable);
-						showLiquidityWarning = true;
-						hasCappedThisBlur = true;
-					}
-				}
-			} else {
-				// Selling
-				if (lastEditedField === 'bottom') {
-					// User edited token amount - cap tokens to max available
-					const enteredTokens = parseFloat(bottomAmount);
-					if (
-						Number.isFinite(enteredTokens) &&
-						enteredTokens > maxSellTokensAvailable &&
-						maxSellTokensAvailable > 0
-					) {
-						bottomAmount = formatTokenAmount(maxSellTokensAvailable);
-						showLiquidityWarning = true;
-						hasCappedThisBlur = true;
-					}
-				} else if (lastEditedField === 'top') {
-					// User edited USDC amount - cap USDC to max available
-					const enteredUsdc = parseFloat(topAmount);
-					if (
-						Number.isFinite(enteredUsdc) &&
-						enteredUsdc > maxSellUsdcAvailable &&
-						maxSellUsdcAvailable > 0
-					) {
-						topAmount = maxSellUsdcAvailable.toFixed(2);
-						showLiquidityWarning = true;
-						hasCappedThisBlur = true;
-					}
-				}
-			}
 		}
 	}
 
@@ -669,9 +503,6 @@
 		const target = e.target as HTMLInputElement;
 		topAmount = target.value;
 		lastEditedField = 'top';
-		// Reset warning flags when user starts typing
-		showLiquidityWarning = false;
-		hasCappedThisBlur = false;
 		// Clear the other field to prevent both having user-entered values while prices load
 		bottomAmount = '';
 	}
@@ -680,9 +511,6 @@
 		const target = e.target as HTMLInputElement;
 		bottomAmount = target.value;
 		lastEditedField = 'bottom';
-		// Reset warning flags when user starts typing
-		showLiquidityWarning = false;
-		hasCappedThisBlur = false;
 		// Clear the other field to prevent both having user-entered values while prices load
 		topAmount = '';
 	}
@@ -701,8 +529,6 @@
 		const flooredAmount = Math.floor(amount * 100) / 100;
 		topAmount = flooredAmount.toFixed(2);
 		lastEditedField = 'top';
-		showLiquidityWarning = false;
-		hasCappedThisBlur = false;
 	}
 
 	function handleTokenPercentClick(percent: number) {
@@ -711,8 +537,6 @@
 		const flooredAmount = Math.floor(amount * 1e6) / 1e6;
 		bottomAmount = flooredAmount.toFixed(6);
 		lastEditedField = 'bottom';
-		showLiquidityWarning = false;
-		hasCappedThisBlur = false;
 	}
 
 	// ============ TRADE EXECUTION ============
@@ -731,39 +555,29 @@
 			openAuthModal();
 			return;
 		}
-		if (!selectedToken || !paymentToken || !$currentNetwork || !quote || isExecutingTrade) {
+		if (
+			!selectedToken ||
+			!paymentToken ||
+			!$currentNetwork ||
+			!lastEditedField ||
+			isExecutingTrade
+		) {
 			return;
 		}
 
-		const tokenAmount = parseFloat(bottomAmount);
-		if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return;
-		const tradeAmount = parseUnits(tokenAmount.toString(), selectedToken.decimals);
 		const orderSide = isBuying ? 'Buy' : 'Sell';
+		if (!tradeAnchor) return;
 
 		isExecutingTrade = true;
 		tradeError = null;
 
 		try {
-			const { executeMarketOrder, filterQuotesForSide, sortQuotesByPrice } = await import(
-				'$lib/services/marketOrderExecution'
-			);
-			const relevantQuotes = filterQuotesForSide(
-				quotes,
-				orderSide,
-				selectedToken.address,
-				paymentToken.address
-			);
-			const sortedQuotes = sortQuotesByPrice(relevantQuotes, orderSide);
-
-			if (sortedQuotes.length === 0) {
-				tradeError = 'No liquidity available';
-				return;
-			}
+			const { executeMarketOrder } = await import('$lib/services/marketOrderExecution');
 
 			const result = await executeMarketOrder({
 				orderSide,
-				amount: tradeAmount,
-				inputMode: 'amount',
+				amount: tradeAnchor.amount,
+				inputMode: tradeAnchor.inputMode,
 				assetToken: {
 					address: selectedToken.address,
 					decimals: selectedToken.decimals,
@@ -774,7 +588,6 @@
 					decimals: paymentToken.decimals,
 					symbol: paymentToken.symbol
 				},
-				quotes: sortedQuotes,
 				network: $currentNetwork
 			});
 
@@ -870,7 +683,6 @@
 						placeholder="0"
 						value={topAmount}
 						on:input={handleTopInput}
-						on:blur={capAmountsIfNeeded}
 						class="w-full bg-transparent text-right text-xl font-medium text-text placeholder-text-3 focus:outline-none sm:text-2xl"
 					/>
 				</div>
@@ -897,15 +709,11 @@
 					{/if}
 				</div>
 			</div>
-			{#if isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
+			{#if isBuying && quote && !quote.hasLiquidity}
 				<div
 					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
 				>
-					{#if showLiquidityWarning}
-						Order capped to max available liquidity.
-					{:else}
-						Not enough liquidity to fully fill your order.
-					{/if}
+					The displayed orderbook may not cover this amount. REST will resolve the executable route.
 					{#if isOutsideMarketHours()}
 						<br />This might be because US markets are currently closed.
 					{/if}
@@ -1034,7 +842,6 @@
 						placeholder="0"
 						value={bottomAmount}
 						on:input={handleBottomInput}
-						on:blur={capAmountsIfNeeded}
 						class="w-full bg-transparent text-right text-xl font-medium text-text placeholder-text-3 focus:outline-none sm:text-2xl"
 					/>
 				</div>
@@ -1063,15 +870,11 @@
 					{/if}
 				</div>
 			</div>
-			{#if !isBuying && quote && (!quote.hasLiquidity || showLiquidityWarning)}
+			{#if !isBuying && quote && !quote.hasLiquidity}
 				<div
 					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
 				>
-					{#if showLiquidityWarning}
-						Order capped to max available liquidity.
-					{:else}
-						Not enough liquidity to fully fill your order.
-					{/if}
+					The displayed orderbook may not cover this amount. REST will resolve the executable route.
 					{#if isOutsideMarketHours()}
 						<br />This might be because US markets are currently closed.
 					{/if}
@@ -1099,13 +902,8 @@
 				variant="primary"
 				size="lg"
 				className="w-full rounded-xl py-4 text-base font-semibold"
-				disabled={isExecutingTrade ||
-					isLoadingQuotes ||
-					(!(quoteFetchError && relevantQuotes.length === 0) &&
-						(!quote || (!topAmount && !bottomAmount)))}
-				on:click={quoteFetchError && relevantQuotes.length === 0
-					? () => $orderbookQuery.refetch()
-					: handleTrade}
+				disabled={isExecutingTrade || !tradeAnchor}
+				on:click={handleTrade}
 			>
 				{#if isExecutingTrade}
 					<span class="flex items-center justify-center gap-2">
@@ -1128,31 +926,6 @@
 					</span>
 				{:else if !topAmount && !bottomAmount}
 					Enter amount
-				{:else if isLoadingQuotes}
-					<span class="flex items-center justify-center gap-2">
-						<svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-							<circle
-								class="opacity-25"
-								cx="12"
-								cy="12"
-								r="10"
-								stroke="currentColor"
-								stroke-width="4"
-							></circle>
-							<path
-								class="opacity-75"
-								fill="currentColor"
-								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-							></path>
-						</svg>
-						Loading prices...
-					</span>
-				{:else if quoteFetchError && relevantQuotes.length === 0}
-					Couldn't load prices — tap to retry
-				{:else if relevantQuotes.length === 0}
-					No liquidity
-				{:else if !quote}
-					No liquidity
 				{:else if isBuying}
 					Buy {selectedToken?.symbol}
 				{:else}

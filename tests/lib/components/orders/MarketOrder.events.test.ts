@@ -71,8 +71,8 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 	it('Test 4: trade_failed and trade_initiated use trackTradeEvent', () => {
 		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_failed['"]/);
 		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_initiated['"]/);
-		// quote_received funnel step
-		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]quote_received['"]/);
+		// quote_received belongs to the REST calldata response boundary in the service.
+		expect(componentSource).not.toMatch(/trackTradeEvent\(\s*['"]quote_received['"]/);
 	});
 
 	it('Test 5: shared classifyError covers the market-scope ErrorClass branches', () => {
