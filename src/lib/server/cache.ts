@@ -174,7 +174,9 @@ export const CACHE_KEYS = {
 	// Public TVL cache (aggregate only, no wallet data)
 	publicTvl: () => 'cache:public:tvl',
 	// Public trade activity cache (aggregate 30-day metrics)
-	publicTradeActivity: () => 'cache:public:trade-activity'
+	publicTradeActivity: () => 'cache:public:trade-activity',
+	// Public midpoint prices cache (bid/ask midpoints for all networks, short TTL)
+	publicPrices: () => 'cache:public:prices'
 } as const;
 
 // TTL constants (in seconds)

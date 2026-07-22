@@ -4,8 +4,7 @@
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptVault';
 	import { formatUnits } from 'viem';
-	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
-	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
+	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import Icon from '$lib/components/ui/Icon.svelte';
 
 	export let visible: boolean = false; // controlled by parent
@@ -21,8 +20,11 @@
 		price: number;
 		dollarVolume: number;
 	};
-	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
-	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	// Displayed price is the bid/ask midpoint from the public prices endpoint (falls back to
+	// the last known price when a book is one-sided, else 0 → N/A). Matches sft.address to the
+	// canonical token so wrapped/legacy variants resolve.
+	let midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
+	$: midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 
 	let sortedAssets: AssetWithMetrics[] = [];
 
@@ -34,11 +36,7 @@
 		? [...$sfts]
 				.map<AssetWithMetrics>((sft) => {
 					const totalVolume = BigInt(sft.activityVolume ?? '0');
-					// Use token config symbol for price lookup so legacy symbols (e.g. tSTOX) resolve to the wrapped token's price feed (wtSTOX / AMEX:SPLG)
-					const tokenInfo = findApiTokenByAnyAddress(apiTokens, sft.address);
-					const symbolForPrice = tokenInfo?.symbol ?? sft.symbol;
-					const quote = findQuoteForSymbol(symbolForPrice, $priceFeedsQuery?.data ?? [], apiTokens);
-					const price = quote?.close ?? 0;
+					const price = getMidpointPrice($midpointPricesQuery?.data, sft.address)?.price ?? 0;
 					const volumeInShares = parseFloat(formatUnits(totalVolume, 18));
 					const dollarVolume = volumeInShares * price;
 					return { ...sft, dollarVolume, price };
