@@ -1,9 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { sequence } from '@sveltejs/kit/hooks';
-import { verifySessionToken } from '$lib/server/auth';
-import { isWalletRegistered } from '$lib/server/accessCodes';
-import { readSession, maybeRefreshSession } from '$lib/server/walletSession';
 import { requestContextHandle } from '$lib/server/logger';
 import { scrubSentryEvent } from '$lib/observability/scrub';
 import { CSP_DIRECTIVES } from '$lib/server/csp';
@@ -205,16 +202,9 @@ function isPublicPath(path: string): boolean {
 	if (path.startsWith('/images/') || path.startsWith('/assets/')) return true;
 	if (path.startsWith('/.well-known/')) return true;
 
-	// Access page and API
-	if (path === '/access' || path.startsWith('/access/')) return true;
-	if (path.startsWith('/api/access/')) return true;
-
 	// Dynamic auth API
 	if (path.startsWith('/api/auth/dynamic/')) return true;
 	if (path.startsWith('/auth/dynamic/')) return true;
-
-	// Admin login page (admin area itself is protected by layout)
-	if (path === '/admin/login') return true;
 
 	// Docs are public
 	if (path.startsWith('/docs')) return true;
@@ -239,64 +229,7 @@ function isPublicPath(path: string): boolean {
 	return PUBLIC_PATHS.has(path);
 }
 
-// Paths that require wallet registration (server-side enforcement)
-function requiresWalletRegistration(path: string): boolean {
-	// Protected API endpoints that need wallet registration
-	if (path.startsWith('/api/snapshots/')) return true;
-
-	// Protected pages
-	if (path === '/' || path === '/trade' || path === '/portfolio') {
-		return true;
-	}
-
-	return false;
-}
-
-// Extract wallet address from the server-issued 'session' cookie + KV record.
-// SEC-03 (Plan 03-08b atomic flip): the client-set 'wallet-address' cookie is
-// no longer trusted as auth proof. Authentication is established by the
-// 'session' cookie minted at /api/auth/session POST after wallet signature
-// verification (Plan 03-08a). This reader (a) regex-validates the sessionId
-// shape, (b) looks up the KV record via readSession, and (c) fire-and-forgets
-// maybeRefreshSession to slide the 30-day TTL (throttled to 1 KV write per 24h
-// per session — D-04a UX guarantee).
-//
-// Per D-04b: wallet signature is NEVER re-prompted per request. This function
-// only reads KV state bound to a previously-verified wallet.
-async function getWalletFromRequest(cookies: {
-	get: (name: string) => string | undefined;
-}): Promise<string | null> {
-	const sessionId = cookies.get('session');
-	if (!sessionId || !/^[a-f0-9]{64}$/.test(sessionId)) return null;
-	const record = await readSession(sessionId);
-	if (!record) return null;
-	// Fire-and-forget sliding refresh; throttled internally to 1 KV write per 24h.
-	void maybeRefreshSession(sessionId, record);
-	return record.walletAddress;
-}
-
-function isAdminPath(path: string): boolean {
-	return path.startsWith('/admin') && path !== '/admin/login';
-}
-
 // Helper to add security headers to response
-function addSecurityHeaders(response: Response): Response {
-	const newHeaders = new Headers(response.headers);
-
-	// Add security headers (don't override existing ones)
-	for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-		if (!newHeaders.has(key)) {
-			newHeaders.set(key, value);
-		}
-	}
-
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers: newHeaders
-	});
-}
-
 // Helper to add both security headers and CORS headers to response
 function addSecurityAndCorsHeaders(
 	response: Response,
@@ -356,7 +289,7 @@ function isBotOrMalformedPath(path: string): boolean {
 }
 
 const existingHandle: Handle = async ({ event, resolve }) => {
-	const { url, cookies, request } = event;
+	const { url, request } = event;
 	const path = url.pathname;
 	const origin = request.headers.get('Origin');
 	const method = request.method;
@@ -389,95 +322,6 @@ const existingHandle: Handle = async ({ event, resolve }) => {
 		if (debug) console.log('[auth] public path', path);
 		const response = await resolve(event);
 		return addSecurityAndCorsHeaders(response, origin, path);
-	}
-
-	// Admin paths - require session auth
-	if (isAdminPath(path)) {
-		const token = cookies.get('auth-session');
-		const tsStr = cookies.get('auth-timestamp');
-		const timestamp = tsStr ? Number(tsStr) : NaN;
-
-		const valid = token && Number.isFinite(timestamp) && verifySessionToken(token, timestamp);
-
-		if (debug) {
-			console.log('[auth] admin path', path, { hasToken: !!token, valid });
-		}
-
-		if (!valid) {
-			return addSecurityHeaders(
-				new Response(null, {
-					status: 303,
-					headers: { Location: '/admin/login' }
-				})
-			);
-		}
-
-		const response = await resolve(event);
-		return addSecurityAndCorsHeaders(response, origin, path);
-	}
-
-	// Protected paths - require wallet registration (server-side enforcement)
-	if (requiresWalletRegistration(path)) {
-		// Allow admin session to bypass wallet registration for API routes
-		// (admin panel pages make fetch calls to these endpoints)
-		if (path.startsWith('/api/')) {
-			const token = cookies.get('auth-session');
-			const tsStr = cookies.get('auth-timestamp');
-			const timestamp = tsStr ? Number(tsStr) : NaN;
-			if (token && Number.isFinite(timestamp) && verifySessionToken(token, timestamp)) {
-				if (debug) console.log('[auth] admin session bypass for API', path);
-				const response = await resolve(event);
-				return addSecurityAndCorsHeaders(response, origin, path);
-			}
-		}
-
-		const walletAddress = await getWalletFromRequest(cookies);
-
-		if (debug) {
-			console.log('[auth] protected path', path, { wallet: walletAddress });
-		}
-
-		// If we have a wallet address, verify it's registered
-		if (walletAddress) {
-			const isRegistered = await isWalletRegistered(walletAddress);
-
-			if (!isRegistered) {
-				if (debug) console.log('[auth] wallet not registered, redirecting', walletAddress);
-
-				// For API requests, return 401 with CORS headers
-				if (path.startsWith('/api/')) {
-					const corsHeaders = getCorsHeaders(origin, isPublicApiPath(path), true);
-					return addSecurityHeaders(
-						new Response(JSON.stringify({ error: 'Wallet not registered' }), {
-							status: 401,
-							headers: { 'Content-Type': 'application/json', ...corsHeaders }
-						})
-					);
-				}
-
-				// For pages, redirect to access
-				return addSecurityHeaders(
-					new Response(null, {
-						status: 303,
-						headers: { Location: '/access' }
-					})
-				);
-			}
-		} else {
-			// No wallet found - for API routes, return 401; for pages, let client handle
-			if (path.startsWith('/api/')) {
-				if (debug) console.log('[auth] no wallet found for API', path);
-				const corsHeaders = getCorsHeaders(origin, isPublicApiPath(path), true);
-				return addSecurityHeaders(
-					new Response(JSON.stringify({ error: 'Authentication required' }), {
-						status: 401,
-						headers: { 'Content-Type': 'application/json', ...corsHeaders }
-					})
-				);
-			}
-			// For pages, allow through - client-side will redirect if needed
-			// This prevents breaking the UX when wallet isn't in cookie yet
-		}
 	}
 
 	if (debug) console.log('[auth] allowing path', path);

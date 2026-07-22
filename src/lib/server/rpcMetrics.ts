@@ -10,7 +10,7 @@
  * fires every chain-exhausted occurrence (no rollup/dedupe in Phase 1 per D-09).
  *
  * RPC-tier metric — distinct from subgraph/HTTP failures in src/lib/utils/monitoring.ts.
- * Module never throws back to caller (analog convention from monitoring.ts and auditLog.ts).
+ * Module never throws back to caller (analog convention from monitoring.ts).
  *
  * Phase 1 visibility-only fence (Pitfall 3 / REL-01): this module records visibility
  * around the existing single-attempt-per-RPC fallback chain. It does NOT add retry,

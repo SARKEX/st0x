@@ -11,11 +11,7 @@ const ATOMIC_GET_DEL_SCRIPT = `
 	return value
 `;
 
-export type SignatureChallengePurpose =
-	| 'access_register'
-	| 'referral_join'
-	| 'referral_update_nickname'
-	| 'session_login';
+export type SignatureChallengePurpose = 'session_login';
 
 interface SignatureChallengeRecord {
 	purpose: SignatureChallengePurpose;
@@ -84,42 +80,6 @@ function keyForChallenge(
 	nonce: string
 ): string {
 	return `signature_challenge:${purpose}:${address}:${nonce}`;
-}
-
-function buildAccessRegistrationMessage(
-	address: string,
-	accessCode: string,
-	nonce: string,
-	issuedAtIso: string
-): string {
-	return `Sign to verify wallet ownership for st0x rewards.
-
-Wallet: ${address}
-Access Code: ${accessCode}
-Nonce: ${nonce}
-Issued At: ${issuedAtIso}`;
-}
-
-function buildReferralJoinMessage(address: string, nonce: string, issuedAtIso: string): string {
-	return `Sign to join the st0x referral programme.
-
-Wallet: ${address}
-Nonce: ${nonce}
-Issued At: ${issuedAtIso}`;
-}
-
-function buildReferralNicknameUpdateMessage(
-	address: string,
-	nickname: string,
-	nonce: string,
-	issuedAtIso: string
-): string {
-	return `Sign to update your st0x referral nickname.
-
-Wallet: ${address}
-New Nickname: ${nickname}
-Nonce: ${nonce}
-Issued At: ${issuedAtIso}`;
 }
 
 function buildSessionLoginMessage(address: string, nonce: string, issuedAtIso: string): string {
@@ -213,124 +173,11 @@ function validateChallengeRecord(
 	return { valid: true, message: record.message };
 }
 
-export async function issueAccessRegistrationChallenge(
-	address: string,
-	accessCode: string
-): Promise<ChallengeResponse> {
-	const normalizedAddress = normalizeAddress(address);
-	const normalizedCode = accessCode.trim().toUpperCase();
-	const nonce = generateNonce();
-	const issuedAt = nowMs();
-	const issuedAtIso = new Date(issuedAt).toISOString();
-	const expiresAt = issuedAt + CHALLENGE_TTL_MS;
-
-	const message = buildAccessRegistrationMessage(
-		normalizedAddress,
-		normalizedCode,
-		nonce,
-		issuedAtIso
-	);
-
-	await storeChallenge({
-		purpose: 'access_register',
-		address: normalizedAddress,
-		nonce,
-		message,
-		issuedAt,
-		expiresAt,
-		context: { accessCode: normalizedCode }
-	});
-
-	return { nonce, message, expiresAt };
-}
-
-export async function verifyAccessRegistrationChallenge(
-	address: string,
-	nonce: string,
-	accessCode: string
-): Promise<ChallengeValidationResult> {
-	const normalizedAddress = normalizeAddress(address);
-	const normalizedCode = accessCode.trim().toUpperCase();
-	const record = await consumeChallenge('access_register', normalizedAddress, nonce);
-	return validateChallengeRecord(record, { accessCode: normalizedCode });
-}
-
-export async function issueReferralJoinChallenge(address: string): Promise<ChallengeResponse> {
-	const normalizedAddress = normalizeAddress(address);
-	const nonce = generateNonce();
-	const issuedAt = nowMs();
-	const issuedAtIso = new Date(issuedAt).toISOString();
-	const expiresAt = issuedAt + CHALLENGE_TTL_MS;
-	const message = buildReferralJoinMessage(normalizedAddress, nonce, issuedAtIso);
-
-	await storeChallenge({
-		purpose: 'referral_join',
-		address: normalizedAddress,
-		nonce,
-		message,
-		issuedAt,
-		expiresAt,
-		context: {}
-	});
-
-	return { nonce, message, expiresAt };
-}
-
-export async function verifyReferralJoinChallenge(
-	address: string,
-	nonce: string
-): Promise<ChallengeValidationResult> {
-	const normalizedAddress = normalizeAddress(address);
-	const record = await consumeChallenge('referral_join', normalizedAddress, nonce);
-	return validateChallengeRecord(record, {});
-}
-
-export async function issueReferralNicknameUpdateChallenge(
-	address: string,
-	nickname: string
-): Promise<ChallengeResponse> {
-	const normalizedAddress = normalizeAddress(address);
-	const normalizedNickname = nickname.trim();
-	const nonce = generateNonce();
-	const issuedAt = nowMs();
-	const issuedAtIso = new Date(issuedAt).toISOString();
-	const expiresAt = issuedAt + CHALLENGE_TTL_MS;
-	const message = buildReferralNicknameUpdateMessage(
-		normalizedAddress,
-		normalizedNickname,
-		nonce,
-		issuedAtIso
-	);
-
-	await storeChallenge({
-		purpose: 'referral_update_nickname',
-		address: normalizedAddress,
-		nonce,
-		message,
-		issuedAt,
-		expiresAt,
-		context: { nickname: normalizedNickname }
-	});
-
-	return { nonce, message, expiresAt };
-}
-
-export async function verifyReferralNicknameUpdateChallenge(
-	address: string,
-	nonce: string,
-	nickname: string
-): Promise<ChallengeValidationResult> {
-	const normalizedAddress = normalizeAddress(address);
-	const normalizedNickname = nickname.trim();
-	const record = await consumeChallenge('referral_update_nickname', normalizedAddress, nonce);
-	return validateChallengeRecord(record, { nickname: normalizedNickname });
-}
-
 // SEC-03 / Plan 03-08a: session-login challenge purpose. User POSTs address
 // to /api/auth/session/challenge → this function issues a one-time nonce; the
 // user signs the returned message; /api/auth/session POST consumes the nonce
-// via verifySessionLoginChallenge atomically (same Lua GET+DEL precedent as
-// access_register). On success the session cookie is minted by walletSession.ts.
+// via verifySessionLoginChallenge atomically (one-time Lua GET+DEL). On
+// success the session cookie is minted by walletSession.ts.
 export async function issueSessionLoginChallenge(address: string): Promise<ChallengeResponse> {
 	const normalizedAddress = normalizeAddress(address);
 	const nonce = generateNonce();

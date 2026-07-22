@@ -19,22 +19,6 @@ vi.mock('$env/dynamic/private', () => ({
 	})
 }));
 
-const { mockReadSession, mockMaybeRefresh, mockVerifySession, mockIsRegistered } = vi.hoisted(
-	() => ({
-		mockReadSession: vi.fn(),
-		mockMaybeRefresh: vi.fn(),
-		mockVerifySession: vi.fn(),
-		mockIsRegistered: vi.fn()
-	})
-);
-
-vi.mock('$lib/server/walletSession', () => ({
-	readSession: mockReadSession,
-	maybeRefreshSession: mockMaybeRefresh
-}));
-vi.mock('$lib/server/auth', () => ({ verifySessionToken: mockVerifySession }));
-vi.mock('$lib/server/accessCodes', () => ({ isWalletRegistered: mockIsRegistered }));
-
 const passthroughResolve = async () =>
 	new Response('ok', { status: 200, headers: { 'Content-Type': 'text/plain' } });
 
@@ -49,29 +33,25 @@ describe('hooks.server CSP', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		vi.clearAllMocks();
-		mockReadSession.mockResolvedValue(null);
-		mockMaybeRefresh.mockResolvedValue(undefined);
-		mockVerifySession.mockReturnValue(false);
-		mockIsRegistered.mockResolvedValue(true);
 	});
 
 	it("default-src is 'self'", async () => {
-		const csp = await getCspForPath('/access');
+		const csp = await getCspForPath('/trade');
 		expect(csp).toMatch(/default-src 'self'/);
 	});
 
 	it('connect-src includes explicit https://*.ingest.sentry.io (Pitfall 1: pinned, not wildcarded)', async () => {
-		const csp = await getCspForPath('/access');
+		const csp = await getCspForPath('/trade');
 		expect(csp).toContain('https://*.ingest.sentry.io');
 	});
 
 	it('connect-src includes explicit https://*.ingest.us.sentry.io (Pitfall 1: per-region pin)', async () => {
-		const csp = await getCspForPath('/access');
+		const csp = await getCspForPath('/trade');
 		expect(csp).toContain('https://*.ingest.us.sentry.io');
 	});
 
 	it('connect-src does NOT contain a bare *.sentry.io wildcard (Phase 1 Pitfall 1 invariant)', async () => {
-		const csp = await getCspForPath('/access');
+		const csp = await getCspForPath('/trade');
 		// Match a bare ".sentry.io" host token — i.e., not preceded by "ingest.".
 		// The two legitimate hosts are *.ingest.sentry.io and *.ingest.us.sentry.io.
 		// A regression to "https://*.sentry.io" (no ingest prefix) MUST fail this.
@@ -80,50 +60,50 @@ describe('hooks.server CSP', () => {
 	});
 
 	it('frame-src does NOT include Onramper hosts (DEPR-03 carry-forward)', async () => {
-		const csp = await getCspForPath('/access');
+		const csp = await getCspForPath('/trade');
 		expect(csp).not.toContain('onramper.com');
 		expect(csp).not.toContain('onramper.io');
 	});
 
 	it('frame-ancestors is none (clickjacking defense)', async () => {
-		const csp = await getCspForPath('/access');
+		const csp = await getCspForPath('/trade');
 		expect(csp).toMatch(/frame-ancestors 'none'/);
 	});
 
 	it("object-src is 'none' (legacy plugin defense)", async () => {
-		const csp = await getCspForPath('/access');
+		const csp = await getCspForPath('/trade');
 		expect(csp).toMatch(/object-src 'none'/);
 	});
 
 	it('connect-src includes Pyth Hermes endpoint (price-feed dependency)', async () => {
-		const csp = await getCspForPath('/access');
+		const csp = await getCspForPath('/trade');
 		expect(csp).toContain('hermes.pyth.network');
 	});
 
 	it('X-Frame-Options DENY is set (defense-in-depth alongside frame-ancestors)', async () => {
 		const { handle } = await import('../../src/hooks.server');
-		const event = createMockRequestEvent({ pathname: '/access' });
+		const event = createMockRequestEvent({ pathname: '/trade' });
 		const response = await handle({ event, resolve: passthroughResolve });
 		expect(response.headers.get('X-Frame-Options')).toBe('DENY');
 	});
 
 	it('X-Content-Type-Options nosniff is set', async () => {
 		const { handle } = await import('../../src/hooks.server');
-		const event = createMockRequestEvent({ pathname: '/access' });
+		const event = createMockRequestEvent({ pathname: '/trade' });
 		const response = await handle({ event, resolve: passthroughResolve });
 		expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
 	});
 
 	it('Referrer-Policy strict-origin-when-cross-origin is set', async () => {
 		const { handle } = await import('../../src/hooks.server');
-		const event = createMockRequestEvent({ pathname: '/access' });
+		const event = createMockRequestEvent({ pathname: '/trade' });
 		const response = await handle({ event, resolve: passthroughResolve });
 		expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
 	});
 
 	it('HSTS is set in production builds (dev=false)', async () => {
 		const { handle } = await import('../../src/hooks.server');
-		const event = createMockRequestEvent({ pathname: '/access' });
+		const event = createMockRequestEvent({ pathname: '/trade' });
 		const response = await handle({ event, resolve: passthroughResolve });
 		expect(response.headers.get('Strict-Transport-Security')).toContain('max-age=31536000');
 	});

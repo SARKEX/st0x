@@ -99,9 +99,8 @@ export function getTakeOrderFailureStage(
  * Dispatch a take-order failure transcript to both observability sinks.
  *
  * Logging never throws back into the caller (project convention from
- * `src/lib/utils/monitoring.ts` and `src/lib/server/auditLog.ts`). Both sinks are
- * wrapped in try/catch so a Sentry SDK glitch or a JSON serialization edge case
- * cannot crash the trade UI.
+ * `src/lib/utils/monitoring.ts`). The sink is wrapped in try/catch so a Sentry
+ * SDK glitch or a JSON serialization edge case cannot crash the trade UI.
  */
 export function captureTakeOrderFailure(
 	err: unknown,

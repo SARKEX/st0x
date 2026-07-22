@@ -9,7 +9,6 @@
 	import { browser } from '$app/environment';
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { createApiTokensQuery } from '$lib/queries/tokens';
-	import { walletRegistered, promptLogin } from '$lib/stores/accessStore';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import {
@@ -730,10 +729,6 @@
 
 		if (!$isAuthenticated) {
 			openAuthModal();
-			return;
-		}
-		if (!$walletRegistered) {
-			promptLogin();
 			return;
 		}
 		if (!selectedToken || !paymentToken || !$currentNetwork || !quote || isExecutingTrade) {
