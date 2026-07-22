@@ -26,6 +26,7 @@ import {
 } from '$lib/utils/orderbook';
 import {
 	apiGetOrdersByToken,
+	apiGetOrdersByOwner,
 	type ApiOrderSummary,
 	type ApiOrdersListResponse
 } from '$lib/api/st0xApi';
@@ -284,6 +285,50 @@ export async function fetchAndQuotePaymentTokenOrders(
 		if (result.status === 'rejected') {
 			console.warn('[orders] Token fetch failed:', result.reason);
 		}
+	}
+
+	return processedQuotes;
+}
+
+/**
+ * Fetches all of an owner's orders via the REST API and converts them to ProcessedQuotes.
+ * One paginated request stream instead of the per-token fan-out — surfaces that only need
+ * the connected wallet's orders (dashboard) must not pay for the whole book, since every
+ * upstream call draws from a single shared rate-limit budget.
+ */
+export async function fetchAndQuoteOwnerOrders(
+	networkId: number,
+	ownerAddress: string,
+	overridePaymentToken?: PythToken
+): Promise<ProcessedQuote[]> {
+	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
+	const chainId = networks.find((n) => n.id === networkId)?.chainId;
+
+	const processedQuotes: ProcessedQuote[] = [];
+	const seen = new Set<string>();
+	let page = 1;
+	let hasMore = true;
+	while (hasMore && page <= MAX_ORDER_PAGES) {
+		const response = await apiGetOrdersByOwner(ownerAddress, { page, pageSize: 50 });
+		for (const order of response.orders) {
+			if (chainId !== undefined && order.chainId !== chainId) continue;
+			if (seen.has(order.orderHash)) continue;
+			seen.add(order.orderHash);
+			const quote = convertApiOrderToProcessedQuote(
+				order,
+				paymentToken.address,
+				allTokens,
+				networkId
+			);
+			if (quote) processedQuotes.push(quote);
+		}
+		hasMore = response.pagination.hasMore;
+		page++;
+	}
+	if (hasMore) {
+		console.warn(
+			`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for owner ${ownerAddress}`
+		);
 	}
 
 	return processedQuotes;

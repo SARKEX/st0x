@@ -67,7 +67,6 @@
 	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import {
 		createTokenOrderbookQuotesQuery,
-		prefetchGlobalOrders,
 		refreshLegacyTokenQuotes,
 		type OrderbookQuoteCache
 	} from '$lib/queries/orderbook';
@@ -336,10 +335,10 @@
 	// User vaults query - no polling, invalidated after order deployment
 	$: userVaultsQuery = createUserVaultsQuery($currentNetwork, $walletAddress);
 
-	// Background prefetch of global caches when page loads
+	// Background prefetch of the user's vaults when page loads. The full-book orders
+	// prefetch that used to live here fired a request per stock token on every trade-page
+	// visit purely to warm a display cache — cut to protect the shared upstream rate limit.
 	$: if (browser && $currentNetwork && $walletAddress) {
-		// Prefetch global orders and vaults in background (non-blocking)
-		prefetchGlobalOrders($currentNetwork.id).catch(() => {});
 		prefetchUserVaults($currentNetwork.id, $walletAddress).catch(() => {});
 	}
 

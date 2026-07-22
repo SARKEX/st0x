@@ -4,6 +4,7 @@ import type { Network } from '$lib/config/network';
 import {
 	fetchAndQuotePaymentTokenOrders,
 	fetchAndQuoteTokenOrders,
+	fetchAndQuoteOwnerOrders,
 	buildTokenPriceMap,
 	type TokenPriceSummary,
 	type ProcessedQuote
@@ -285,6 +286,32 @@ export function createTokenOrderbookQuotesQuery(
 }
 
 /**
+ * The connected wallet's own orders as ProcessedQuotes.
+ * Dashboard replacement for the full-book fan-out: one paginated by-owner request
+ * per poll instead of a request per stock token.
+ */
+export function createOwnerOrdersQuery(
+	network: Network | null,
+	ownerAddress: string | null,
+	pollInterval: number | false = 15_000
+) {
+	return createQuery<ProcessedQuote[]>({
+		queryKey: ['ownerOrders', network?.id, ownerAddress?.toLowerCase()],
+		enabled: Boolean(browser && network && ownerAddress),
+		staleTime: 30_000,
+		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+		refetchInterval: pollInterval,
+		refetchOnWindowFocus: false,
+		refetchIntervalInBackground: false,
+		queryFn: async () => {
+			if (!network || !ownerAddress) return [];
+			return fetchAndQuoteOwnerOrders(network.id, ownerAddress);
+		}
+	});
+}
+
+/**
  * Invalidate order queries.
  * @param networkId - Network ID
  * @param tokenAddress - Optional token address. If provided, only refreshes that token's data.
@@ -300,27 +327,8 @@ export function invalidateOrderQueries(networkId?: number, tokenAddress?: string
 		// Full invalidation: refetch entire global cache
 		queryClient.invalidateQueries({ queryKey: ['orderbookQuotes'] });
 	}
+	// The user's own orders changed (deploy/cancel), so the dashboard list must refresh
+	queryClient.invalidateQueries({ queryKey: ['ownerOrders'] });
 	// Always invalidate closed orders query
 	queryClient.invalidateQueries({ queryKey: ['closedOrders'] });
-}
-
-/**
- * Prefetch global orders cache in the background.
- * Call this after priority data loads to ensure global cache is populated.
- */
-export async function prefetchGlobalOrders(networkId: number) {
-	const existing = queryClient.getQueryData<OrderbookQuoteCache>(['orderbookQuotes', networkId]);
-	if (existing?.quotes?.length) {
-		return;
-	}
-
-	await queryClient.prefetchQuery({
-		queryKey: ['orderbookQuotes', networkId],
-		queryFn: async () => {
-			const quotes = await fetchAndQuotePaymentTokenOrders(networkId);
-			const summary = buildSummaryFromQuotes(quotes, networkId);
-			return { summary, quotes };
-		},
-		staleTime: 30_000
-	});
 }

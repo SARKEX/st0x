@@ -36,7 +36,7 @@
 		getMakerOutputTokenAddress
 	} from '$lib/types/orderPerspective';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
+	import { createOwnerOrdersQuery } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
 	import { createTakerTradesQuery, createBatchTradesQuery } from '$lib/queries/tradeActivity';
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
@@ -919,8 +919,9 @@
 			.filter((token) => !hideDust || token.balanceNum >= DUST_THRESHOLD);
 	})();
 
-	// Orders: Fetch orderbook quotes for all tokens
-	$: orderbookQuotesQuery = createOrderbookQuotesQuery($currentNetwork, 15_000);
+	// Orders: fetch only the connected wallet's orders (by-owner endpoint) — the dashboard
+	// never needs the rest of the book, and the full fan-out was a rate-limit amplifier
+	$: ownerOrdersQuery = createOwnerOrdersQuery($currentNetwork, $walletAddress, 15_000);
 
 	// Taker trades for market orders - poll every 10 minutes
 	$: takerTradesQuery = createTakerTradesQuery($currentNetwork, $walletAddress, 600_000);
@@ -949,13 +950,7 @@
 	})();
 
 	// Extract user's order hashes for batch trades query
-	$: userOrderHashes = (() => {
-		if (!$orderbookQuotesQuery.data?.quotes || !$walletAddress) return [] as string[];
-		const myAddress = $walletAddress.toLowerCase();
-		return $orderbookQuotesQuery.data.quotes
-			.filter((q) => q.sgOrder?.owner?.toLowerCase() === myAddress)
-			.map((q) => q.orderHash);
-	})();
+	$: userOrderHashes = ($ownerOrdersQuery.data ?? []).map((q) => q.orderHash);
 
 	// Fetch trade fill data for user's deployed orders
 	$: batchTradesQuery = createBatchTradesQuery($currentNetwork, userOrderHashes, 600_000);
@@ -965,12 +960,9 @@
 		const displayOrders: DisplayOrder[] = [];
 		const tradesMap = $batchTradesQuery?.data;
 
-		// Add limit orders from quotes (only user's orders)
-		if ($orderbookQuotesQuery.data?.quotes && $walletAddress) {
-			const myAddress = $walletAddress.toLowerCase();
-			const myQuotes = $orderbookQuotesQuery.data.quotes.filter(
-				(q) => q.sgOrder?.owner?.toLowerCase() === myAddress
-			);
+		// Add limit orders from quotes (the by-owner query already returns only user's orders)
+		if ($ownerOrdersQuery.data?.length && $walletAddress) {
+			const myQuotes = $ownerOrdersQuery.data;
 
 			for (const quote of myQuotes) {
 				const isBuy = quote.side === 'bid';
@@ -1763,9 +1755,9 @@
 					<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Your Orders</h2>
 					<OrdersTable
 						orders={allOrders}
-						isLoading={$orderbookQuotesQuery.isLoading}
-						isError={$orderbookQuotesQuery.isError}
-						errorMessage={$orderbookQuotesQuery.error?.message ?? ''}
+						isLoading={$ownerOrdersQuery.isLoading}
+						isError={$ownerOrdersQuery.isError}
+						errorMessage={$ownerOrdersQuery.error?.message ?? ''}
 						showOwnerFilter={false}
 					/>
 				</Section>
