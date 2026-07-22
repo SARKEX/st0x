@@ -1,6 +1,6 @@
 // Maker-order deployment helper.
 //
-// Deploys a fixed-limit order to the orderbook on anvil using the production Rain
+// Deploys a dia-limit order to the orderbook on anvil using the production Rain
 // SDK (DotrainRegistry + RaindexOrderBuilder) — same path as the UI's
 // `src/lib/services/orderDeployment.ts`. The only thing we do differently is
 // (a) point the SDK's RPC at anvil instead of LIVE Base, and (b) submit
@@ -21,6 +21,7 @@
 // having to parse `AddOrderV*` event logs whose topic isn't documented in the
 // SDK type surface.
 
+import { ST0X_REGISTRY_MANIFEST_URL } from '$lib/config/registry';
 import {
 	createWalletClient,
 	decodeEventLog,
@@ -198,9 +199,7 @@ export async function deployMakerLimitOrder(
 			? params.pricePaymentPerAsset
 			: String(1 / parseFloat(params.pricePaymentPerAsset));
 
-	const registry = await getRegistry(
-		params.registryUrl ?? 'http://127.0.0.1:4173/registry/manifest'
-	);
+	const registry = await getRegistry(params.registryUrl ?? ST0X_REGISTRY_MANIFEST_URL);
 	// Sell (ask) → base-dia-limit (DIA direct); buy (bid) → base-dia-limit-inv (DIA inverted).
 	const deploymentKey = orderType === 'ask' ? 'base-dia-limit' : 'base-dia-limit-inv';
 	const guiResult = await registry.getOrderBuilder('dia-limit', deploymentKey);
