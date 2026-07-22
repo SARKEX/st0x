@@ -162,6 +162,21 @@
 			processedTokens = [];
 		}
 	}
+
+	// Prices load from a separate query than the token metadata, so price/TVL cells
+	// would flash a literal "N/A" (reads as broken, not loading) during the initial
+	// fetch. Gate on whether the midpoint query has returned any prices yet so we can
+	// show a loading skeleton until then — this also covers the case where the first
+	// fetch comes back empty and prices only land on a later refetch.
+	$: pricesLoaded = Object.keys($midpointPricesQuery?.data ?? {}).length > 0;
+
+	// Holder counts come straight from the backend and are currently "1" across the
+	// board, which adds no signal. Only surface the column once the data is
+	// meaningful: at least 50 holders for 80%+ of listed assets.
+	$: showHolders =
+		processedTokens.length > 0 &&
+		processedTokens.filter((t) => Number(t.totalHolders) >= 50).length / processedTokens.length >=
+			0.8;
 </script>
 
 <div class="relative z-10 min-h-screen">
@@ -302,17 +317,22 @@
 									class="hidden px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-3 sm:table-cell sm:px-5"
 									>Bridged On-Chain</th
 								>
-								<th
-									class="hidden px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-3 sm:table-cell sm:px-5"
-									>Holders</th
-								>
+								{#if showHolders}
+									<th
+										class="hidden px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-text-3 sm:table-cell sm:px-5"
+										>Holders</th
+									>
+								{/if}
 								<th class="w-10"></th>
 							</tr>
 						</thead>
 						<tbody>
 							{#if !processedTokens.length}
 								<tr>
-									<td colspan="6" class="px-5 py-8 text-center text-sm text-text-3">
+									<td
+										colspan={showHolders ? 6 : 5}
+										class="px-5 py-8 text-center text-sm text-text-3"
+									>
 										No assets available.
 									</td>
 								</tr>
@@ -346,22 +366,30 @@
 											</div>
 										</td>
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
-											<div class="font-mono font-medium text-text">
-												{Number.isFinite(displayPrice) ? `$${displayPrice.toFixed(2)}` : 'N/A'}
-											</div>
+											{#if Number.isFinite(displayPrice)}
+												<div class="font-mono font-medium text-text">
+													{`$${displayPrice.toFixed(2)}`}
+												</div>
+											{:else if !pricesLoaded}
+												<div class="h-4 w-14 animate-pulse rounded bg-line-strong"></div>
+											{:else}
+												<div class="font-mono font-medium text-text">N/A</div>
+											{/if}
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
-											<div class="font-mono text-sm text-text-2">
-												{#if marketCap != null}
+											{#if marketCap != null}
+												<div class="font-mono text-sm text-text-2">
 													{marketCap >= 1_000_000
 														? `$${(marketCap / 1_000_000).toFixed(2)}M`
 														: marketCap >= 1_000
 															? `$${(marketCap / 1_000).toFixed(1)}K`
 															: `$${marketCap.toFixed(2)}`}
-												{:else}
-													N/A
-												{/if}
-											</div>
+												</div>
+											{:else if !pricesLoaded}
+												<div class="h-4 w-16 animate-pulse rounded bg-line-strong"></div>
+											{:else}
+												<div class="font-mono text-sm text-text-2">N/A</div>
+											{/if}
 										</td>
 										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
 											<div class="font-mono text-sm text-text-2">
@@ -370,9 +398,11 @@
 													: bridgedSupply.toFixed(2)}
 											</div>
 										</td>
-										<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
-											<div class="font-mono text-sm text-text-2">{token.totalHolders}</div>
-										</td>
+										{#if showHolders}
+											<td class="hidden px-3 py-3 sm:table-cell sm:px-5 sm:py-4">
+												<div class="font-mono text-sm text-text-2">{token.totalHolders}</div>
+											</td>
+										{/if}
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
 											<Icon name="arrowRight" className="icon-slide h-4 w-4 text-text-muted" />
 										</td>
