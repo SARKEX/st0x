@@ -5,8 +5,7 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import TokenDisplay from '$lib/components/ui/TokenDisplay.svelte';
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
-	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
-	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
+	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -67,9 +66,9 @@
 	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
 	$: apiTokens = $apiTokensQuery.data ?? [];
 
-	// Price feeds query — same source the sidebar uses for symbol-based price lookup
-	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
-	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
+	// Displayed price is the bid/ask midpoint — same source the sidebar uses, keyed by address.
+	let midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
+	$: midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 
 	function formatBaseUnitAmount(value: string | null | undefined): string {
 		const amount = toBigInt(value);
@@ -138,15 +137,12 @@
 	$: {
 		if ($sfts && $sfts.length) {
 			const rows: TokenRow[] = [];
-			const priceQuotes = $priceFeedsQuery?.data ?? [];
+			const midpointPrices = $midpointPricesQuery?.data;
 			for (const sft of $sfts) {
-				// Resolve token info (handles wrapped/unwrapped/legacy address variants),
-				// then use symbol-based lookup against the priceFeeds query — same pattern
-				// the sidebar uses so home/sidebar stay consistent.
-				const tokenInfo = findApiTokenByAnyAddress(apiTokens, sft.address);
-				const symbolForPrice = tokenInfo?.symbol ?? sft.symbol;
-				const quote = findQuoteForSymbol(symbolForPrice, priceQuotes, apiTokens);
-				const price = quote?.close ?? null;
+				// Displayed price is the bid/ask midpoint (falls back to last known, else N/A).
+				// getMidpointPrice resolves wrapped/unwrapped/legacy address variants so home and
+				// sidebar stay consistent. Market cap below is derived from this same price.
+				const price = getMidpointPrice(midpointPrices, sft.address)?.price ?? null;
 
 				rows.push({
 					id: sft.id,

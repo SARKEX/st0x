@@ -24,10 +24,29 @@ import {
 	type TokenPriceSummary,
 	walkOrderbook
 } from '$lib/utils/orderbook';
-import { apiGetOrdersByToken, type ApiOrderSummary } from '$lib/api/st0xApi';
+import {
+	apiGetOrdersByToken,
+	type ApiOrderSummary,
+	type ApiOrdersListResponse
+} from '$lib/api/st0xApi';
 
 export type { ProcessedQuote, TokenPriceSummary };
 export { OrderV4_ABI, normalizeOrderData, walkOrderbook };
+
+/**
+ * Fetches one page of orders for a token. Defaults to the browser proxy client
+ * (`apiGetOrdersByToken`); server callers inject a fetcher that hits the REST API directly
+ * so the same quoting pipeline can run server-side (e.g. the public prices endpoint).
+ */
+export type OrdersByTokenFetcher = (
+	tokenAddress: string,
+	options?: {
+		page?: number;
+		pageSize?: number;
+		side?: 'input' | 'output';
+		state?: 'active' | 'inactive' | 'all';
+	}
+) => Promise<ApiOrdersListResponse>;
 
 export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>
 	buildTokenPriceMapBase(quotes, quoteAddressRaw, describeQuote);
@@ -189,7 +208,8 @@ function resolveNetworkTokens(
  */
 export async function fetchAndQuotePaymentTokenOrders(
 	networkId: number = 8453,
-	overridePaymentToken?: PythToken
+	overridePaymentToken?: PythToken,
+	fetchOrders: OrdersByTokenFetcher = apiGetOrdersByToken
 ) {
 	const { paymentToken, stockTokens, allTokens } = resolveNetworkTokens(
 		networkId,
@@ -204,7 +224,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 			let page = 1;
 			let hasMore = true;
 			while (hasMore && page <= MAX_ORDER_PAGES) {
-				const response = await apiGetOrdersByToken(token.address, { page, pageSize: 50 });
+				const response = await fetchOrders(token.address, { page, pageSize: 50 });
 				for (const order of response.orders) {
 					if (seen.has(order.orderHash)) continue;
 					seen.add(order.orderHash);

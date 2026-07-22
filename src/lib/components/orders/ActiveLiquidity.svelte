@@ -21,7 +21,6 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 
 	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId ?? $currentNetwork?.id);
 	$: ALL_TOKENS = $apiTokensQuery.data ?? [];
@@ -60,9 +59,7 @@
 	let maxTradeAmount: bigint = 0n;
 	let initialIo: string = '0';
 	let priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
-	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	$: priceFeedsQuery = createPriceFeedsQuery($currentNetwork);
-	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 
 	// errors
 	let minTradeAmountError: boolean = false;
@@ -349,7 +346,7 @@
 				<h4 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-text-2">Prices</h4>
 				{#if !hasValidPriceFeedId(selectedToken1) && !hasValidPriceFeedId(selectedToken2)}
 					<div class="py-6 text-center text-sm text-text-2">No price feed data available</div>
-				{:else if !$priceFeedsQuery?.data?.length || !$oracleQuotesQuery?.data}
+				{:else if !$priceFeedsQuery?.data?.length}
 					<div class="flex justify-center py-6">
 						<LoadingSpinner size="sm" text="Loading price data..." />
 					</div>
@@ -364,11 +361,11 @@
 									>
 									<th
 										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
-										>Oracle Price</th
+										>Mid Price</th
 									>
 									<th
 										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
-										>Price Certainty</th
+										>Bid / Ask</th
 									>
 									<th
 										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"

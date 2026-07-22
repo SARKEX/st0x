@@ -81,6 +81,9 @@ export const KV_KEYS = {
 	wallet: (address: string) => `wallets:${address.toLowerCase()}`,
 	codeWallets: (code: string) => `code_wallets:${code.toUpperCase()}`,
 	allCodes: () => 'access_codes:__all__',
+	// Last-known midpoint prices per network (no TTL — the fallback when a book is
+	// one-sided or the market is closed). Keyed by lowercased canonical token address.
+	midpointLastKnown: (networkId: number) => `prices:last-known:${networkId}`,
 	// Snapshot keys
 	snapshotBlocks: () => 'snapshots:blocks', // List of all snapshot block records
 	snapshotBlocksByDate: (date: string) => `snapshots:date:${date}`, // Blocks for a specific date (YYYY-MM-DD)

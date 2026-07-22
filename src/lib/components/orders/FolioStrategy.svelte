@@ -484,11 +484,11 @@
 								>
 								<th
 									class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
-									>Oracle Price</th
+									>Mid Price</th
 								>
 								<th
 									class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
-									>Price Certainty</th
+									>Bid / Ask</th
 								>
 								<th
 									class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
