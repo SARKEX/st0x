@@ -1,6 +1,7 @@
 import { createQuery } from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
 import { getTokenByAnyAddress } from '$lib/config/network';
+import { isRateLimitError } from '$lib/clients/http';
 import {
 	apiGetTradesByToken,
 	apiGetTakerTrades,
@@ -32,6 +33,10 @@ export function createTokenTradeActivityQuery(
 		enabled: Boolean(network && primaryAddress),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
+		// Don't retry on 429 — the next poll is the retry. Retrying here just piles more
+		// load onto an already-throttling upstream.
+		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
+		refetchOnWindowFocus: false,
 		queryFn: async () => {
 			// Bucket the window edge so consecutive polls produce identical
 			// startTime/endTime params — letting the upstream REST API serve them

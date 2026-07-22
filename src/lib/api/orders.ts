@@ -54,6 +54,40 @@ export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: st
 /** Safety cap to prevent infinite pagination loops from a buggy API response */
 const MAX_ORDER_PAGES = 100;
 
+/**
+ * Max number of tokens fetched concurrently in the payment-token fan-out.
+ * The book has ~29 stock-token address variants; firing them all at once (the previous
+ * behaviour) overwhelmed the shared upstream and tripped its rate limit. A small pool
+ * keeps throughput high while staying under the upstream's budget.
+ */
+const ORDER_FETCH_CONCURRENCY = 5;
+
+/**
+ * Run `worker` over `items` with at most `limit` in flight at once. Never rejects —
+ * mirrors Promise.allSettled semantics so one failing token can't abort the rest.
+ */
+async function runWithConcurrency<T>(
+	items: T[],
+	limit: number,
+	worker: (item: T) => Promise<void>
+): Promise<PromiseSettledResult<void>[]> {
+	const results: PromiseSettledResult<void>[] = new Array(items.length);
+	let cursor = 0;
+	const runner = async () => {
+		while (cursor < items.length) {
+			const index = cursor++;
+			try {
+				await worker(items[index]);
+				results[index] = { status: 'fulfilled', value: undefined };
+			} catch (reason) {
+				results[index] = { status: 'rejected', reason };
+			}
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner));
+	return results;
+}
+
 function getTokenMetadata(address: string, tokens: PythToken[]) {
 	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
 	return {
@@ -219,33 +253,31 @@ export async function fetchAndQuotePaymentTokenOrders(
 	const processedQuotes: ProcessedQuote[] = [];
 	const seen = new Set<string>();
 
-	const results = await Promise.allSettled(
-		stockTokens.map(async (token) => {
-			let page = 1;
-			let hasMore = true;
-			while (hasMore && page <= MAX_ORDER_PAGES) {
-				const response = await fetchOrders(token.address, { page, pageSize: 50 });
-				for (const order of response.orders) {
-					if (seen.has(order.orderHash)) continue;
-					seen.add(order.orderHash);
-					const quote = convertApiOrderToProcessedQuote(
-						order,
-						paymentToken.address,
-						allTokens,
-						networkId
-					);
-					if (quote) processedQuotes.push(quote);
-				}
-				hasMore = response.pagination.hasMore;
-				page++;
-			}
-			if (hasMore) {
-				console.warn(
-					`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`
+	const results = await runWithConcurrency(stockTokens, ORDER_FETCH_CONCURRENCY, async (token) => {
+		let page = 1;
+		let hasMore = true;
+		while (hasMore && page <= MAX_ORDER_PAGES) {
+			const response = await fetchOrders(token.address, { page, pageSize: 50 });
+			for (const order of response.orders) {
+				if (seen.has(order.orderHash)) continue;
+				seen.add(order.orderHash);
+				const quote = convertApiOrderToProcessedQuote(
+					order,
+					paymentToken.address,
+					allTokens,
+					networkId
 				);
+				if (quote) processedQuotes.push(quote);
 			}
-		})
-	);
+			hasMore = response.pagination.hasMore;
+			page++;
+		}
+		if (hasMore) {
+			console.warn(
+				`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`
+			);
+		}
+	});
 
 	// Log any failed token fetches
 	for (const result of results) {

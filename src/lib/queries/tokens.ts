@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import { createQuery } from '@tanstack/svelte-query';
 import { apiGetTokens, type ApiToken } from '$lib/api/st0xApi';
+import { isRateLimitError } from '$lib/clients/http';
 import type { CategorizedToken, TokenCategory } from '$lib/config/tokens';
 
 type ApiTokenExtensions = {
@@ -111,10 +112,13 @@ export function createApiTokensQuery(chainId: number | null | undefined) {
 	return createQuery<CategorizedToken[]>({
 		queryKey: ['st0xApiTokens', chainId],
 		enabled: Boolean(browser && chainId),
-		staleTime: 0,
-		retry: 2,
-		refetchOnMount: 'always',
-		refetchOnWindowFocus: true,
+		// The supported-token list is effectively static config; it does not need to be
+		// re-fetched on every mount/focus. Aggressive refetch here (staleTime:0 +
+		// refetchOnMount:'always' + refetchOnWindowFocus) fired /v1/tokens from ~9 mount
+		// sites and contributed to the upstream rate-limit storm.
+		staleTime: 5 * 60_000, // 5 minutes
+		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
+		refetchOnWindowFocus: false,
 		queryFn: async () => normalizeApiTokensForNetwork(await apiGetTokens(), chainId as number)
 	});
 }

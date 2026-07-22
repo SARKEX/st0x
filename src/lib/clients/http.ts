@@ -6,7 +6,19 @@ export interface FetchJsonOptions extends RequestInit {
 	fetchFn?: FetchLike;
 }
 
-const defaultRetryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
+// NOTE: 429 (Too Many Requests) and 503 (Service Unavailable) are deliberately
+// EXCLUDED. When the upstream is overloaded and shedding load, retrying these is a
+// retry storm that amplifies the very problem — every retry adds load precisely when
+// the backend can least handle it. These calls fan out per-token across many users, so
+// an immediate retry on an explicit "back off" signal is always wrong. Callers that
+// need to react to a rate limit should surface it (see isRateLimitError) and let the
+// caller's own backoff/poll cadence handle the next attempt.
+const defaultRetryableStatuses = new Set([408, 500, 502, 504]);
+
+/** True when an error thrown by fetchJson/fetchText represents an upstream 429. */
+export function isRateLimitError(error: unknown): boolean {
+	return error instanceof Error && /^HTTP 429\b/.test(error.message);
+}
 
 async function delay(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));

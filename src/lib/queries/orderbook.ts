@@ -14,6 +14,7 @@ import {
 	getTokenByAnyAddress
 } from '$lib/config/network';
 import { queryClient } from '$lib/clients/queryClient';
+import { isRateLimitError } from '$lib/clients/http';
 import { getMakerInputTokenAddress, getMakerOutputTokenAddress } from '$lib/types/orderPerspective';
 
 /**
@@ -70,10 +71,12 @@ export function createOrderbookQuotesQuery(
 		queryKey: ['orderbookQuotes', network?.id],
 		enabled: Boolean(browser && network),
 		staleTime: 30_000, // Stale after 30s (server caches at 15s)
-		retry: 2,
+		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchInterval: pollInterval,
-		refetchOnWindowFocus: Boolean(pollInterval), // Only refetch on focus if stale
+		// Focus refetch re-fired the full per-token fan-out on every tab switch; the poll
+		// interval already keeps this fresh. Disabled to cut load on the upstream.
+		refetchOnWindowFocus: false,
 		refetchIntervalInBackground: false,
 		queryFn: async () => {
 			if (!network) {
@@ -255,11 +258,12 @@ export function createTokenOrderbookQuotesQuery(
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
 		enabled: Boolean(browser && network && tokenAddress),
 		staleTime: 30_000, // Stale after 30s (server caches at 15s)
-		retry: 2,
+		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchOnMount: 'always', // Always refresh when component mounts
 		refetchInterval: pollInterval, // Poll every 15s by default on trade pages
-		refetchOnWindowFocus: true, // Only refetch on focus if stale
+		// Focus refetch re-fired a token fan-out on every tab switch; the poll keeps it fresh.
+		refetchOnWindowFocus: false,
 		refetchIntervalInBackground: false,
 		// Use global cache as initial data for instant display
 		initialData: () => {
