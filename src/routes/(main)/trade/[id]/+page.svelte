@@ -78,6 +78,7 @@
 		createBatchTradesQuery
 	} from '$lib/queries/tradeActivity';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { wagmiConfig } from 'svelte-wagmi';
 	import { isAuthenticated, walletAddress, authMethod } from '$lib/stores/authStore';
@@ -123,6 +124,7 @@
 		currentToken?.address ?? null
 	);
 	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	let midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 	const exchangeRatesQuery = createExchangeRatesQuery();
 	$: {
 		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
@@ -131,6 +133,7 @@
 		);
 		tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
 		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+		midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 	}
 
 	// Wrap ratio (assetsPerShare) for the current wrapped token. Defaults to 1
@@ -536,7 +539,6 @@
 	} | null = null;
 	let oracleEntry: OracleQuote | undefined;
 	let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
-	let oracleLoading = false;
 	let oracleError: string | null = null;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
@@ -615,8 +617,25 @@
 				confidence: oracleEntry.confidence ?? null
 			}
 		: null;
-	$: oracleLoading =
-		!!currentFeedId && (oracleResource?.status === 'idle' || oracleResource?.status === 'loading');
+	// Displayed "mid" price = midpoint of best bid/ask. Prefer the live two-sided book so it
+	// matches Bid/Offer exactly; fall back to the shared prices endpoint's cached last-known
+	// midpoint when the market is closed / one-sided, else N/A. Never a one-sided value.
+	$: midpointEntry = getMidpointPrice(
+		$midpointPricesQuery?.data,
+		currentPythToken?.address ?? currentToken?.address
+	);
+	$: liveMid =
+		buyPrice != null && buyPrice > 0 && sellPrice != null && sellPrice > 0
+			? (buyPrice + sellPrice) / 2
+			: null;
+	$: midPrice = liveMid ?? midpointEntry?.price ?? null;
+	$: midIsCached = liveMid == null && midPrice != null && midpointEntry?.source === 'cached';
+	$: midSpread =
+		buyPrice != null && buyPrice > 0 && sellPrice != null && sellPrice > 0
+			? sellPrice - buyPrice
+			: midpointEntry?.bid != null && midpointEntry?.ask != null
+				? midpointEntry.ask - midpointEntry.bid
+				: null;
 	$: oracleError = (() => {
 		if (!currentFeedId) return null;
 		if (oracleResource?.status === 'error') {
@@ -1060,27 +1079,45 @@
 						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:gap-x-6 sm:gap-y-3 sm:text-sm">
 							<div>
 								<dt class="text-[10px] uppercase tracking-wider text-text-3 sm:text-xs">
-									Oracle Price
+									Mid Price
 								</dt>
-								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
-									{#if oracleLoading}
+								<dd
+									class="mt-0.5 font-mono tabular-nums text-text sm:mt-1"
+									title={midIsCached ? 'Last known midpoint (market closed or one-sided book)' : ''}
+								>
+									{#if orderbookQuoteUiState.loadingWithoutData && midPrice === null}
 										Loading...
-									{:else if oraclePriceData}
-										${formatNumeric(oraclePriceData.price)}
+									{:else if midPrice !== null}
+										{#if hasRatio && currentRatio > 0}
+											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+												/^wt/,
+												't'
+											)}
+											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+											<div class="leading-tight">
+												<div>
+													${formatNumeric(midPrice / currentRatio)}
+													<span class="text-[10px] font-normal text-text-3">/ {assetSym}</span>
+												</div>
+												<div class="mt-0.5 text-[11px] font-normal text-text-2 sm:text-xs">
+													${formatNumeric(midPrice)}
+													<span class="text-[10px] text-text-3">/ {wrappedSym}</span>
+												</div>
+											</div>
+										{:else}
+											${formatNumeric(midPrice)}{#if midIsCached}<span class="text-text-3">*</span
+												>{/if}
+										{/if}
 									{:else}
 										—
 									{/if}
 								</dd>
 							</div>
 							<div>
-								<dt class="text-[10px] uppercase tracking-wider text-text-3 sm:text-xs">
-									Confidence
-								</dt>
+								<dt class="text-[10px] uppercase tracking-wider text-text-3 sm:text-xs">Spread</dt>
 								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
-									{#if oracleLoading}
-										Loading...
-									{:else if oraclePriceData}
-										± ${formatNumeric(oraclePriceData.confidence)}
+									{#if midSpread !== null}
+										${formatNumeric(midSpread)}
 									{:else}
 										—
 									{/if}
