@@ -13,8 +13,10 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
-import { withConditionalCache, CACHE_KEYS } from '$lib/server/cache';
 import { kvGet, kvSet, KV_KEYS } from '$lib/server/kv';
+import { PUBLIC_PRICES_CACHE_CONTROL } from '$lib/config/publicPrices';
+import { getCachedPublicPrices } from '$lib/server/publicPricesCache';
+import { createServerOrderFetcher } from '$lib/server/st0xOrderFetcher';
 import {
 	networks,
 	TOKENS,
@@ -26,10 +28,8 @@ import type { Network } from '$lib/config/network';
 import {
 	fetchAndQuotePaymentTokenOrders,
 	buildTokenPriceMap,
-	type OrdersByTokenFetcher,
 	type TokenPriceSummary
 } from '$lib/api/orders';
-import type { ApiOrdersListResponse } from '$lib/api/st0xApi';
 import {
 	pickBestBidAsk,
 	resolveMidpoints,
@@ -37,9 +37,6 @@ import {
 	type MidpointPrice
 } from '$lib/utils/midpointPrice';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
-
-/** Short response cache — matches the 15s client poll and shields the REST API. */
-const RESPONSE_TTL_SECONDS = 15;
 
 export interface PublicPricesResponse {
 	success: boolean;
@@ -59,26 +56,6 @@ function getApiConfig(): { apiBase: string; authHeader: string } | null {
 	return {
 		apiBase: url.replace(/\/+$/, ''),
 		authHeader: 'Basic ' + btoa(`${key}:${secret}`)
-	};
-}
-
-/** Build a server-side orders fetcher that hits the REST API directly with Basic auth. */
-function makeServerOrderFetcher(apiBase: string, authHeader: string): OrdersByTokenFetcher {
-	return async (tokenAddress, options) => {
-		const params = new URLSearchParams();
-		if (options?.page !== undefined) params.set('page', String(options.page));
-		if (options?.pageSize !== undefined) params.set('pageSize', String(options.pageSize));
-		if (options?.side) params.set('side', options.side);
-		if (options?.state) params.set('state', options.state);
-		const qs = params.toString();
-		const url = `${apiBase}/v1/orders/token/${tokenAddress}${qs ? `?${qs}` : ''}`;
-		const res = await fetch(url, {
-			headers: { Authorization: authHeader, Accept: 'application/json' }
-		});
-		if (!res.ok) {
-			throw new Error(`Orders fetch failed (${res.status}) for ${tokenAddress}`);
-		}
-		return (await res.json()) as ApiOrdersListResponse;
 	};
 }
 
@@ -115,7 +92,7 @@ async function computeNetworkPrices(
 			const quotes = await fetchAndQuotePaymentTokenOrders(
 				network.id,
 				undefined,
-				makeServerOrderFetcher(config.apiBase, config.authHeader)
+				createServerOrderFetcher(config)
 			);
 			const map = buildTokenPriceMap(quotes, paymentToken.address);
 			for (const [address, value] of map.entries()) {
@@ -191,16 +168,14 @@ export const GET: RequestHandler = async ({ request }) => {
 	}
 
 	try {
-		const data = await withConditionalCache<PublicPricesResponse>(
-			CACHE_KEYS.publicPrices(),
+		const data = await getCachedPublicPrices<PublicPricesResponse>(
 			computePrices,
-			(result) => result.success,
-			RESPONSE_TTL_SECONDS
+			(result) => result.success
 		);
 
 		return json(data, {
 			headers: {
-				'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=60'
+				'Cache-Control': PUBLIC_PRICES_CACHE_CONTROL
 			}
 		});
 	} catch (error) {
