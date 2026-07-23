@@ -13,6 +13,18 @@ interface PublicPricesResponse {
 	prices: Record<string, Record<string, MidpointPrice>>;
 }
 
+export async function fetchMidpointPrices(
+	networkId: number,
+	fetchFn: typeof fetch = fetch
+): Promise<Record<string, MidpointPrice>> {
+	const response = await fetchFn('/api/public/prices');
+	if (!response.ok) {
+		throw new Error(`Public prices request failed (${response.status})`);
+	}
+	const data: PublicPricesResponse = await response.json();
+	return data.prices?.[String(networkId)] ?? {};
+}
+
 /**
  * Query for displayable token prices (bid/ask midpoints) from the public prices endpoint.
  * Returns a map of lowercased canonical token address -> price for the current network.
@@ -26,12 +38,10 @@ export function createMidpointPricesQuery(network: Network | null) {
 		refetchInterval: PUBLIC_PRICES_REFRESH_INTERVAL_MS,
 		refetchOnWindowFocus: false,
 		refetchIntervalInBackground: false,
+		retry: false,
 		queryFn: async () => {
 			if (!network) return {};
-			const res = await fetch('/api/public/prices');
-			if (!res.ok) return {};
-			const data: PublicPricesResponse = await res.json();
-			return data.prices?.[String(network.id)] ?? {};
+			return fetchMidpointPrices(network.id);
 		}
 	});
 }

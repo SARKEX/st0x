@@ -54,7 +54,7 @@
 		Boolean(tokenAddress);
 	$: error = (() => {
 		if (!tokenAddress) return 'Token missing address';
-		if (midpointState?.status === 'error') return 'Failed to fetch price data';
+		if (midpointState?.status === 'error' && !entry) return 'Failed to fetch price data';
 		return null;
 	})();
 	// Only render a price when we have a real one (live or cached). A one-sided book resolves
