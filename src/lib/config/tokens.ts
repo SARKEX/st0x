@@ -159,7 +159,6 @@ export const TOKENS: CategorizedToken[] = [
 		priceFeedId: '',
 		// priceFeedId removed — Pyth no longer supports this feed ID.
 		// Using a hardcoded fallback until a replacement feed is wired up.
-		fallbackPrice: 82.5,
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:SPYM',
 		tradingViewMarket: 'america',
@@ -316,7 +315,6 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'Wrapped Space Exploration Technologies Corp. ST0x',
 		logoUrl: '/images/SPCX.svg',
 		priceFeedId: '',
-		fallbackPrice: 145.3,
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:SPCX',
 		tradingViewMarket: 'america',
@@ -345,9 +343,6 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'Wrapped Roundhill Memory ETF ST0x',
 		logoUrl: '/images/roundhill.png',
 		priceFeedId: '',
-		// Pyth does not publish a DRAM feed. Use TradingView's latest close observed
-		// on 2026-07-13 until a replacement feed is wired up.
-		fallbackPrice: 63.04,
 		category: 'ST0x',
 		tradingViewSymbol: 'CBOE:DRAM',
 		tradingViewMarket: 'america',
@@ -390,8 +385,6 @@ export const TOKENS: CategorizedToken[] = [
 		name: 'Wrapped SK hynix Inc. ADR ST0x',
 		logoUrl: '/images/SKHY.png',
 		priceFeedId: '',
-		// Pyth does not yet publish an SKHY feed. Use the $149 IPO price until one is available.
-		fallbackPrice: 149,
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:SKHY',
 		tradingViewMarket: 'america',
