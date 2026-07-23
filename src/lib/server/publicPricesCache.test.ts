@@ -17,10 +17,10 @@ describe('public prices cache', () => {
 		vi.useRealTimers();
 	});
 
-	it('uses a five-minute shared and browser refresh window', () => {
-		expect(PUBLIC_PRICES_TTL_SECONDS).toBe(300);
-		expect(PUBLIC_PRICES_REFRESH_INTERVAL_MS).toBe(300_000);
-		expect(PUBLIC_PRICES_CACHE_CONTROL).toBe('public, s-maxage=300, stale-while-revalidate=900');
+	it('uses a 90-second shared and browser refresh window', () => {
+		expect(PUBLIC_PRICES_TTL_SECONDS).toBe(90);
+		expect(PUBLIC_PRICES_REFRESH_INTERVAL_MS).toBe(90_000);
+		expect(PUBLIC_PRICES_CACHE_CONTROL).toBe('public, s-maxage=90, stale-while-revalidate=270');
 	});
 
 	it('does not repeat the expensive computation when Redis is unavailable', async () => {
