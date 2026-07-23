@@ -4,8 +4,8 @@
 import type { BlockSnapshot } from './types';
 import { fetchAllTransfers, ALL_TOKEN_ADDRESSES } from './scraper';
 import { generateSnapshot } from './processor';
-import { fetchPythPricesAtTimestamp } from './pyth';
 import { fetchAllVaultHoldings } from './vaults';
+import { fetchMarketPrices } from '$lib/server/marketPrices';
 import { getRewardsExcludedWalletsSet } from '$lib/server/kv';
 import { networks } from '$lib/config/networks';
 import { TOKENS, getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
@@ -13,6 +13,13 @@ import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
 import { withRetry } from '$lib/utils/retry';
 
 const RPC_URLS = [networks[0].rpcUrl, ...networks[0].fallbackRpcUrls];
+
+export async function fetchSnapshotPrices(
+	timestamp: number
+): Promise<Map<string, Awaited<ReturnType<typeof fetchMarketPrices>>[number]>> {
+	const prices = await fetchMarketPrices(networks[0].chainId, { at: timestamp });
+	return new Map(prices.map((price) => [price.assetAddress.toLowerCase(), price]));
+}
 
 /**
  * Single-attempt RPC fetch helper. Throws on non-ok HTTP, JSON-parse failure, or
@@ -203,9 +210,8 @@ export async function generateTokenSnapshot(
 	// Fetch transfers for all address variants up to target block
 	const transfers = await fetchAllTransfers(blockNumber, allAddresses);
 
-	// Fetch Pyth price at block timestamp (only need the wrapped address price)
-	const { prices, priceTimestamp } = await fetchPythPricesAtTimestamp(timestamp, [wrappedAddress]);
-	const price = prices.get(wrappedAddress);
+	// The API returns the nearest retained midpoint at or before the block time.
+	const price = (await fetchSnapshotPrices(timestamp)).get(wrappedAddress);
 
 	// Fetch vault holdings for all address variants at the specific block
 	const vaultHoldings = await fetchAllVaultHoldings(allAddresses, blockNumber);
@@ -222,7 +228,6 @@ export async function generateTokenSnapshot(
 		price,
 		vaultHoldings,
 		excludedWallets,
-		priceTimestamp,
 		allAddresses
 	);
 }
@@ -236,13 +241,13 @@ export async function generateTokenSnapshot(
  * wrapped, unwrapped, and legacy addresses.
  */
 export async function generateAllTokenSnapshots(blockNumber: number): Promise<BlockSnapshot[]> {
-	// Get block timestamp first (needed for Pyth price lookup)
+	// Get block timestamp first (needed for retained price lookup)
 	const timestamp = await getBlockTimestamp(blockNumber);
 
 	// Fetch transfers, prices, vault holdings, and excluded/pool wallets in parallel
-	const [transfers, { prices, priceTimestamp }, vaultHoldings, excludedSet] = await Promise.all([
+	const [transfers, prices, vaultHoldings, excludedSet] = await Promise.all([
 		fetchAllTransfers(blockNumber, ALL_TOKEN_ADDRESSES),
-		fetchPythPricesAtTimestamp(timestamp, ALL_TOKEN_ADDRESSES),
+		fetchSnapshotPrices(timestamp),
 		fetchAllVaultHoldings(ALL_TOKEN_ADDRESSES, blockNumber),
 		getRewardsExcludedWalletsSet()
 	]);
@@ -261,7 +266,6 @@ export async function generateAllTokenSnapshots(blockNumber: number): Promise<Bl
 			prices.get(wrappedAddr),
 			vaultHoldings,
 			excludedWallets,
-			priceTimestamp,
 			allAddrs
 		);
 	});

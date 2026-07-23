@@ -83,7 +83,6 @@ export const KV_KEYS = {
 	allCodes: () => 'access_codes:__all__',
 	// Last-known midpoint prices per network (no TTL — the fallback when a book is
 	// one-sided or the market is closed). Keyed by lowercased canonical token address.
-	midpointLastKnown: (networkId: number) => `prices:last-known:${networkId}`,
 	// Snapshot keys
 	snapshotBlocks: () => 'snapshots:blocks', // List of all snapshot block records
 	snapshotBlocksByDate: (date: string) => `snapshots:date:${date}`, // Blocks for a specific date (YYYY-MM-DD)

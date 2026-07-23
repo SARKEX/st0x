@@ -299,16 +299,17 @@
 		return findQuoteForSymbol(symbol, quotes, ALL_TOKENS);
 	}
 
-	function getMidPrice(networkId: number, tokenAddress: string | null): number | null {
-		if (!tokenAddress) return null;
-		const summary =
-			orderbookStates.find(({ network }) => network.chainId === networkId)?.query?.data?.summary ??
-			{};
-		const metrics = summary[tokenAddress] ?? summary[tokenAddress.toLowerCase()];
-		if (!metrics) return null;
-		const { bid, ask } = metrics;
-		if (bid && ask) return (bid + ask) / 2;
-		return bid ?? ask ?? null;
+	function getNetworkPrice(
+		networkId: number,
+		tokenAddress: string | null,
+		symbol: string | undefined
+	): number | null {
+		const restPrice = symbol ? findNetworkQuote(symbol, networkId)?.close ?? null : null;
+		if (restPrice != null) return restPrice;
+
+		const network = networks.find((candidate) => candidate.chainId === networkId);
+		const paymentTokenAddress = normalizeAddress(network?.defaultPaymentToken?.address);
+		return tokenAddress && normalizeAddress(tokenAddress) === paymentTokenAddress ? 1 : null;
 	}
 
 	function vaultBalanceToNumber(vault: RaindexVault): number {
@@ -377,13 +378,7 @@
 					// Part 1: tStock in output vaults - get USDC value
 					const tokenInfo = tokenLookup(address);
 					const symbol = tokenInfo?.symbol ?? vault.token.symbol;
-					let price = symbol ? findNetworkQuote(symbol, networkId)?.close ?? null : null;
-					if (price == null) {
-						price = getMidPrice(networkId, address);
-					}
-					if (price == null) {
-						price = 0; // Don't assume price 1 for tStocks without price data
-					}
+					const price = getNetworkPrice(networkId, address, symbol) ?? 0;
 					total += balance * price;
 				} else if (isPaymentToken) {
 					// Part 2: USDC in output vaults where input is a tStock
@@ -437,13 +432,7 @@
 		tokenBalances.forEach((balance, address) => {
 			const tokenInfo = tokenLookup(address);
 			const symbol = tokenInfo?.symbol;
-			let price = symbol ? findNetworkQuote(symbol, network.chainId)?.close ?? null : null;
-			if (price == null) {
-				price = getMidPrice(network.chainId, address);
-			}
-			if (price == null) {
-				price = 1;
-			}
+			const price = getNetworkPrice(network.chainId, address, symbol) ?? 0;
 			tvl += balance * price;
 		});
 
@@ -481,13 +470,7 @@
 			if (isTStock) {
 				const tokenInfo = tokenLookup(address);
 				const symbol = tokenInfo?.symbol ?? vault.token.symbol;
-				let price = symbol ? findNetworkQuote(symbol, network.chainId)?.close ?? null : null;
-				if (price == null) {
-					price = getMidPrice(network.chainId, address);
-				}
-				if (price == null) {
-					price = 0;
-				}
+				const price = getNetworkPrice(network.chainId, address, symbol) ?? 0;
 				networkDexLiquidity += balance * price;
 			} else if (isPaymentToken) {
 				const hasTStockInputOrder = vault.ordersAsOutput?.some((order) => {

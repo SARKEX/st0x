@@ -9,6 +9,7 @@
 	import { browser } from '$app/environment';
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { createApiTokensQuery } from '$lib/queries/tokens';
+	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
 	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import {
@@ -57,6 +58,7 @@
 
 	// ============ TOKEN SELECTION (completely independent) ============
 	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	$: midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 	$: apiTokens = $apiTokensQuery.data ?? [];
 	$: tradableTokens = apiTokens.filter((t) => t.category === 'ST0x');
 
@@ -75,6 +77,10 @@
 	$: selectedToken = tradableTokens.find(
 		(t) => t.address.toLowerCase() === selectedTokenAddress?.toLowerCase()
 	);
+	$: selectedMarketPrice = getMidpointPrice(
+		$midpointPricesQuery?.data,
+		selectedToken?.address
+	)?.price;
 
 	function handleTokenSelect(address: string) {
 		const newToken = tradableTokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
@@ -1190,7 +1196,7 @@
 	<!-- Right: ambient price chart for the selected token (md+ only) -->
 	<div class="relative hidden md:block">
 		<div class="h-full min-h-[320px] overflow-hidden rounded-xl border border-line bg-bg-deep">
-			<QuickTradeChart token={selectedToken} fallbackPrice={bestAskPrice ?? bestBidPrice} />
+			<QuickTradeChart token={selectedToken} fallbackPrice={selectedMarketPrice ?? null} />
 		</div>
 	</div>
 </div>

@@ -1,7 +1,7 @@
 /**
- * A price refresh fans out to 27 token endpoints against a 60-request rolling
- * 60-second per-key limit. Ninety seconds keeps normal refresh bursts in
- * separate limiter windows while reserving capacity for interactive traffic.
+ * Cache the REST API's sampled market-price response across website clients.
+ * The sampler runs independently in the REST service; the website only needs
+ * to refresh often enough to pick up the latest completed sample.
  */
 export const PUBLIC_PRICES_TTL_SECONDS = 90;
 export const PUBLIC_PRICES_REFRESH_INTERVAL_MS = PUBLIC_PRICES_TTL_SECONDS * 1_000;

@@ -16,11 +16,18 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ApiMarketPrice } from '$lib/api/st0xApi';
 
-const { mockRecordRpcAttempt, mockReportChainExhausted } = vi.hoisted(() => ({
-	mockRecordRpcAttempt: vi.fn(),
-	mockReportChainExhausted: vi.fn().mockResolvedValue(undefined)
-}));
+const { mockRecordRpcAttempt, mockReportChainExhausted, mockFetchMarketPrices } = vi.hoisted(
+	() => ({
+		mockRecordRpcAttempt: vi.fn(),
+		mockReportChainExhausted: vi.fn().mockResolvedValue(undefined),
+		mockFetchMarketPrices: vi.fn<
+			[chainId: number, options?: { at?: number }],
+			Promise<ApiMarketPrice[]>
+		>(async () => [])
+	})
+);
 
 vi.mock('$lib/server/rpcMetrics', () => ({
 	recordRpcAttempt: mockRecordRpcAttempt,
@@ -31,6 +38,7 @@ vi.mock('$lib/server/rpcMetrics', () => ({
 vi.mock('$lib/config/networks', () => ({
 	networks: [
 		{
+			chainId: 8453,
 			rpcUrl: 'https://rpc-primary.example/key',
 			fallbackRpcUrls: ['https://rpc-fallback-1.example', 'https://rpc-fallback-2.example']
 		}
@@ -56,8 +64,8 @@ vi.mock('./processor', () => ({
 	generateSnapshot: vi.fn()
 }));
 
-vi.mock('./pyth', () => ({
-	fetchPythPricesAtTimestamp: vi.fn(async () => ({ prices: new Map(), priceTimestamp: 0 }))
+vi.mock('$lib/server/marketPrices', () => ({
+	fetchMarketPrices: mockFetchMarketPrices
 }));
 
 vi.mock('./vaults', () => ({
@@ -218,5 +226,30 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 		const promise = getBlockNumberForTimestamp(1_700_000_000);
 		await expect(promise).rejects.toBeInstanceOf(Error);
 		await expect(promise).rejects.toThrow(/no block lookup succeeded/);
+	});
+});
+
+describe('snapshot market prices', () => {
+	it('requests the historical block timestamp and indexes canonical addresses case-insensitively', async () => {
+		mockFetchMarketPrices.mockResolvedValueOnce([
+			{
+				chainId: 8453,
+				assetAddress: '0xAbCd',
+				symbol: 'wtTEST',
+				quoteAddress: '0xQuote',
+				bestBid: '99',
+				bestAsk: '101',
+				midpoint: '100',
+				source: 'historical',
+				observedAt: 1_784_799_940,
+				change24hPercent: null
+			}
+		]);
+		const { fetchSnapshotPrices } = await import('./generator');
+
+		const prices = await fetchSnapshotPrices(1_784_800_000);
+
+		expect(mockFetchMarketPrices).toHaveBeenCalledWith(8453, { at: 1_784_800_000 });
+		expect(prices.get('0xabcd')?.midpoint).toBe('100');
 	});
 });

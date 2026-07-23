@@ -80,3 +80,8 @@ export function hasValidPriceFeedId(token: Token | MaybePythToken | undefined): 
 	const feedId = maybe.priceFeedId;
 	return !!feedId && feedId !== '' && feedId !== '0x';
 }
+
+/** Whether the retained REST market-price service covers this token. */
+export function hasMarketPrice(token: (Token & { category?: string }) | undefined): boolean {
+	return token?.category === 'ST0x';
+}

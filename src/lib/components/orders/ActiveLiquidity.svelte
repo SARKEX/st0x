@@ -14,9 +14,9 @@
 	import { formatUnits } from 'viem';
 	import { isAuthenticated } from '$lib/stores/authStore';
 	import transactionStore from '$lib/stores/transaction';
-	import { hasValidPriceFeedId } from '$lib/utils/derivations';
+	import { hasMarketPrice } from '$lib/utils/derivations';
 	import { currentNetwork } from '$lib/stores';
-	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+	import MarketPriceRow from '$lib/components/MarketPriceRow.svelte';
 	import { containerStyles } from '$lib/styles/utils';
 	import Button from '$lib/components/ui/Button.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -344,12 +344,14 @@
 		<div class="mt-4 space-y-4 lg:mt-0">
 			<div class={containerStyles.cardBordered}>
 				<h4 class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-text-2">Prices</h4>
-				{#if !hasValidPriceFeedId(selectedToken1) && !hasValidPriceFeedId(selectedToken2)}
+				{#if !hasMarketPrice(selectedToken1) && !hasMarketPrice(selectedToken2)}
 					<div class="py-6 text-center text-sm text-text-2">No price feed data available</div>
-				{:else if !$priceFeedsQuery?.data?.length}
+				{:else if $priceFeedsQuery?.status === 'pending'}
 					<div class="flex justify-center py-6">
 						<LoadingSpinner size="sm" text="Loading price data..." />
 					</div>
+				{:else if $priceFeedsQuery?.status === 'error' && !$priceFeedsQuery?.data?.length}
+					<div class="py-6 text-center text-sm text-red-400">Failed to load price data</div>
 				{:else}
 					<div class="overflow-x-auto">
 						<table class="min-w-full text-sm text-text-2">
@@ -369,19 +371,19 @@
 									>
 									<th
 										class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
-										>Off-chain</th
+										>24h Change</th
 									>
 								</tr>
 							</thead>
 							<tbody>
-								{#if hasValidPriceFeedId(selectedToken1)}
-									<PythOracleRow
+								{#if hasMarketPrice(selectedToken1)}
+									<MarketPriceRow
 										token={selectedToken1}
 										tokenQuotes={$priceFeedsQuery?.data ?? []}
 									/>
 								{/if}
-								{#if hasValidPriceFeedId(selectedToken2)}
-									<PythOracleRow
+								{#if hasMarketPrice(selectedToken2)}
+									<MarketPriceRow
 										token={selectedToken2}
 										tokenQuotes={$priceFeedsQuery?.data ?? []}
 									/>

@@ -4,8 +4,8 @@ import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 import type { ApiTokenProofsResponse } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
 import { networks } from '$lib/config/network';
-import type { OracleQuote } from '$lib/queries/oracleQuotes';
-import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+import type { MidpointPrice } from '$lib/queries/midpointPrices';
+import { createMidpointPricesQuery } from '$lib/queries/midpointPrices';
 import { createSftsQuery } from '$lib/queries/vaults';
 import type { CreateQueryResult } from '@tanstack/svelte-query';
 import { browser } from '$app/environment';
@@ -38,13 +38,16 @@ export const vaultsQuery = createNetworkQueryStore(currentNetwork, (network) =>
 	createSftsQuery(network ?? null)
 );
 
-export const oracleQuotesQuery = createNetworkQueryStore(currentNetwork, (network) =>
-	createOracleQuotesQuery(network)
+export const midpointPricesQuery = createNetworkQueryStore(currentNetwork, (network) =>
+	createMidpointPricesQuery(network)
 );
 
 export const sfts = mapQueryData(vaultsQuery, [] as OffchainAssetReceiptVault[]);
 export const currentToken = writable<OffchainAssetReceiptVault | null>(null);
-export const oracleQuotes = mapQueryData(oracleQuotesQuery, {} as Record<string, OracleQuote>);
+export const midpointPrices = mapQueryData(
+	midpointPricesQuery,
+	{} as Record<string, MidpointPrice>
+);
 
 // Store for Rainlang confirmation modal
 export const rainlangConfirmationModal = writable<{

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
+	import { currentNetwork, tradePanelOpen } from '$lib/stores';
 	import { setSheetOpen } from '$lib/stores/uiStore';
 	import { formatUnits } from 'viem';
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
@@ -57,14 +57,12 @@
 		toBigInt,
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
-	import type { OracleQuote } from '$lib/queries/oracleQuotes';
 	import {
 		getMakerInputTokenAddress,
 		getMakerOutputTokenAddress
 	} from '$lib/types/orderPerspective';
 	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
-	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import {
 		createTokenOrderbookQuotesQuery,
 		refreshLegacyTokenQuotes,
@@ -76,7 +74,6 @@
 		createTakerTradesQuery,
 		createBatchTradesQuery
 	} from '$lib/queries/tradeActivity';
-	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { wagmiConfig } from 'svelte-wagmi';
@@ -122,7 +119,6 @@
 		$currentNetwork,
 		currentToken?.address ?? null
 	);
-	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	let midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 	const exchangeRatesQuery = createExchangeRatesQuery();
 	$: {
@@ -131,7 +127,6 @@
 			currentToken?.address ?? null
 		);
 		tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
-		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 		midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 	}
 
@@ -530,15 +525,6 @@
 	let orderbookDepth: DepthSeries = { bids: [], asks: [] };
 	let chartsLoading = false;
 	let tradeQueryError: string | null = null;
-	let oracleResource: {
-		status: ResourceStatus;
-		data: Record<string, OracleQuote> | null;
-		updatedAt: number | null;
-		error: unknown | null;
-	} | null = null;
-	let oracleEntry: OracleQuote | undefined;
-	let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
-	let oracleError: string | null = null;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
 	type OrderbookQuoteUiState = {
@@ -585,21 +571,6 @@
 		}
 		return fallback;
 	}
-	$: oracleResource = (() => {
-		const q = $oracleQuotesQuery;
-		const status: ResourceStatus =
-			q?.status === 'success' ? 'ready' : q?.status === 'error' ? 'error' : 'loading';
-		return {
-			status,
-			data: q?.data ?? null,
-			updatedAt: q?.dataUpdatedAt ?? null,
-			error: q?.error ?? null,
-			refreshInterval: 15_000,
-			timerId: null,
-			subscribers: 0
-		};
-	})();
-	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
 	// Include legacy address so bid/ask and depth match quotes for tokens like tSTOX/wtSTOX
 	$: assetAddressSet = (() => {
 		const set = new Set<string>();
@@ -609,42 +580,19 @@
 		if (currentToken?.address) set.add(currentToken.address.toLowerCase());
 		return set;
 	})();
-	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
-	$: oraclePriceData = oracleEntry
-		? {
-				price: oracleEntry.price ?? null,
-				confidence: oracleEntry.confidence ?? null
-			}
-		: null;
-	// Displayed "mid" price = midpoint of best bid/ask. Prefer the live two-sided book so it
-	// matches Bid/Offer exactly; fall back to the shared prices endpoint's cached last-known
-	// midpoint when the market is closed / one-sided, else N/A. Never a one-sided value.
+	// Display pricing is REST-authoritative. The local orderbook quote remains available for
+	// execution and liquidity validation, but it must not override the sampled platform price.
 	$: midpointEntry = getMidpointPrice(
 		$midpointPricesQuery?.data,
 		currentPythToken?.address ?? currentToken?.address
 	);
-	$: liveMid =
-		buyPrice != null && buyPrice > 0 && sellPrice != null && sellPrice > 0
-			? (buyPrice + sellPrice) / 2
-			: null;
-	$: midPrice = liveMid ?? midpointEntry?.price ?? null;
-	$: midIsCached = liveMid == null && midPrice != null && midpointEntry?.source === 'cached';
-	$: midSpread =
-		buyPrice != null && buyPrice > 0 && sellPrice != null && sellPrice > 0
-			? sellPrice - buyPrice
-			: midpointEntry?.bid != null && midpointEntry?.ask != null
-				? midpointEntry.ask - midpointEntry.bid
-				: null;
-	$: oracleError = (() => {
-		if (!currentFeedId) return null;
-		if (oracleResource?.status === 'error') {
-			return 'Failed to fetch oracle data';
-		}
-		if (oracleResource?.status === 'ready' && !oracleEntry) {
-			return 'Oracle data unavailable';
-		}
-		return null;
-	})();
+	$: midpointPriceLoading =
+		$midpointPricesQuery?.fetchStatus === 'fetching' && midpointEntry === undefined;
+	$: midPrice = midpointEntry?.price ?? null;
+	$: midpointBid = midpointEntry?.bid ?? null;
+	$: midpointAsk = midpointEntry?.ask ?? null;
+	$: midIsCached = midPrice != null && midpointEntry?.source === 'cached';
+	$: midSpread = midpointBid != null && midpointAsk != null ? midpointAsk - midpointBid : null;
 	let cleanupScrollTracking: (() => void) | null = null;
 	let lastTrackedTokenId: string | null = null;
 
@@ -677,7 +625,6 @@
 			activeAssetTab = nextId as AssetTabId;
 		}
 	};
-	$: currentFeedId = browser ? currentPythToken?.priceFeedId ?? null : null;
 	function handleTokenTabChange(event: CustomEvent<{ id: string }>) {
 		const nextId = event.detail.id;
 		if (TOKEN_TABS.some((tab) => tab.id === nextId)) {
@@ -1084,7 +1031,7 @@
 									class="mt-0.5 font-mono tabular-nums text-text sm:mt-1"
 									title={midIsCached ? 'Last known midpoint (market closed or one-sided book)' : ''}
 								>
-									{#if orderbookQuoteUiState.loadingWithoutData && midPrice === null}
+									{#if midpointPriceLoading}
 										Loading...
 									{:else if midPrice !== null}
 										{#if hasRatio && currentRatio > 0}
@@ -1127,9 +1074,9 @@
 									Bid Price
 								</dt>
 								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
-									{#if orderbookQuoteUiState.loadingWithoutData}
+									{#if midpointPriceLoading}
 										Loading...
-									{:else if buyPrice !== null}
+									{:else if midpointBid !== null}
 										{#if hasRatio && currentRatio > 0}
 											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
 												/^wt/,
@@ -1138,16 +1085,16 @@
 											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
 											<div class="leading-tight">
 												<div>
-													${formatNumeric(buyPrice / currentRatio)}
+													${formatNumeric(midpointBid / currentRatio)}
 													<span class="text-[10px] font-normal text-text-3">/ {assetSym}</span>
 												</div>
 												<div class="mt-0.5 text-[11px] font-normal text-text-2 sm:text-xs">
-													${formatNumeric(buyPrice)}
+													${formatNumeric(midpointBid)}
 													<span class="text-[10px] text-text-3">/ {wrappedSym}</span>
 												</div>
 											</div>
 										{:else}
-											${formatNumeric(buyPrice)}
+											${formatNumeric(midpointBid)}
 										{/if}
 									{:else}
 										—
@@ -1159,9 +1106,9 @@
 									Offer Price
 								</dt>
 								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
-									{#if orderbookQuoteUiState.loadingWithoutData}
+									{#if midpointPriceLoading}
 										Loading...
-									{:else if sellPrice !== null}
+									{:else if midpointAsk !== null}
 										{#if hasRatio && currentRatio > 0}
 											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
 												/^wt/,
@@ -1170,16 +1117,16 @@
 											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
 											<div class="leading-tight">
 												<div>
-													${formatNumeric(sellPrice / currentRatio)}
+													${formatNumeric(midpointAsk / currentRatio)}
 													<span class="text-[10px] font-normal text-text-3">/ {assetSym}</span>
 												</div>
 												<div class="mt-0.5 text-[11px] font-normal text-text-2 sm:text-xs">
-													${formatNumeric(sellPrice)}
+													${formatNumeric(midpointAsk)}
 													<span class="text-[10px] text-text-3">/ {wrappedSym}</span>
 												</div>
 											</div>
 										{:else}
-											${formatNumeric(sellPrice)}
+											${formatNumeric(midpointAsk)}
 										{/if}
 									{:else}
 										—
@@ -1216,9 +1163,6 @@
 									What's this?
 								</button>
 							</div>
-						{/if}
-						{#if oracleError}
-							<p class="mt-2 text-xs text-red-400 sm:mt-4">{oracleError}</p>
 						{/if}
 					</div>
 					<div class="grid grid-cols-2 gap-2 sm:gap-3" data-tutorial="buy-sell-buttons">
@@ -2128,8 +2072,8 @@
 											orderSide={panelOrderSide}
 											assetToken={currentPythToken}
 											currentPrice={panelOrderSide === 'Buy'
-												? (sellPrice ?? oraclePriceData?.price)?.toFixed(4)
-												: (buyPrice ?? oraclePriceData?.price)?.toFixed(4)}
+												? (midpointAsk ?? midPrice)?.toFixed(4)
+												: (midpointBid ?? midPrice)?.toFixed(4)}
 											{buyPrice}
 											{sellPrice}
 											displayDenom={$panelDenom}

@@ -13,7 +13,7 @@
 // ignore unknown fields. No backfill, no wipe.
 
 import type { Transfer, BlockSnapshot, TokenBalances, SnapshotPrice } from './types';
-import type { TokenPrice } from './pyth';
+import type { ApiMarketPrice } from '$lib/api/st0xApi';
 import type { VaultHolding } from './vaults';
 import { getTokenByAnyAddress } from '$lib/config/tokens';
 import {
@@ -152,16 +152,16 @@ export function processBalances(
 }
 
 /**
- * Convert TokenPrice to SnapshotPrice format
+ * Convert a retained REST midpoint to the backward-compatible snapshot shape.
  */
-function toSnapshotPrice(tokenPrice: TokenPrice | undefined): SnapshotPrice | null {
-	if (!tokenPrice) return null;
+function toSnapshotPrice(tokenPrice: ApiMarketPrice | undefined): SnapshotPrice | null {
+	if (!tokenPrice || tokenPrice.midpoint === null) return null;
 
 	return {
-		price: tokenPrice.price,
-		confidence: tokenPrice.confidence,
-		priceFeedId: tokenPrice.priceFeedId,
-		pricePublishTime: tokenPrice.publishTime
+		price: Number(tokenPrice.midpoint),
+		confidence: null,
+		priceFeedId: '',
+		pricePublishTime: tokenPrice.observedAt
 	};
 }
 
@@ -172,17 +172,15 @@ function toSnapshotPrice(tokenPrice: TokenPrice | undefined): SnapshotPrice | nu
  *   If not provided, only tokenAddress is used.
  * @param vaultHoldings - Optional vault holdings to attribute to owners instead of orderbook
  * @param dynamicExcluded - Optional list of wallet addresses from KV store to mark as excluded
- * @param priceTimestamp - Optional timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
  */
 export function generateSnapshot(
 	transfers: Transfer[],
 	blockNumber: number,
 	timestamp: number,
 	tokenAddress: string,
-	tokenPrice?: TokenPrice,
+	tokenPrice?: ApiMarketPrice,
 	vaultHoldings?: VaultHolding[],
 	dynamicExcluded?: string[],
-	priceTimestamp?: number,
 	allTokenAddresses?: string[]
 ): BlockSnapshot {
 	const token = getTokenByAnyAddress(tokenAddress);
@@ -239,6 +237,6 @@ export function generateSnapshot(
 		excludedWallets: processed.excludedWallets,
 		totalSupply: totalSupply.toString(),
 		price: toSnapshotPrice(tokenPrice),
-		priceTimestamp: priceTimestamp ?? null
+		priceTimestamp: tokenPrice?.observedAt ?? null
 	};
 }

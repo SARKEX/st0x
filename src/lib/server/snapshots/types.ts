@@ -20,9 +20,11 @@ export interface TokenBalances {
 
 export interface SnapshotPrice {
 	price: number | null; // USD price at snapshot time
-	confidence: number | null; // Pyth confidence interval
-	priceFeedId: string; // Pyth price feed ID
-	pricePublishTime: number | null; // Pyth publish timestamp
+	/** Retained for backward compatibility with existing snapshot blobs. */
+	confidence: number | null;
+	/** Empty for REST midpoint snapshots; retained for old blob compatibility. */
+	priceFeedId: string;
+	pricePublishTime: number | null; // REST observation timestamp
 }
 
 export interface BlockSnapshot {
@@ -34,8 +36,8 @@ export interface BlockSnapshot {
 	balances: TokenBalances;
 	excludedWallets: string[]; // Wallets that are excluded from TVL calculations
 	totalSupply: string;
-	price: SnapshotPrice | null; // Pyth price at snapshot time
-	priceTimestamp: number | null; // Timestamp used for Pyth price fetch (may differ from block timestamp if outside market hours)
+	price: SnapshotPrice | null; // Retained platform midpoint at snapshot time
+	priceTimestamp: number | null; // REST observation timestamp
 }
 
 export interface SubgraphTransfer {
