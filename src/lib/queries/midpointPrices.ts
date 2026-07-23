@@ -2,6 +2,7 @@ import { createQuery } from '@tanstack/svelte-query';
 import { browser } from '$app/environment';
 import type { Network } from '$lib/config/network';
 import { getTokenByAnyAddress } from '$lib/config/network';
+import { PUBLIC_PRICES_REFRESH_INTERVAL_MS } from '$lib/config/publicPrices';
 import type { MidpointPrice } from '$lib/utils/midpointPrice';
 
 export type { MidpointPrice };
@@ -21,7 +22,10 @@ export function createMidpointPricesQuery(network: Network | null) {
 	return createQuery<Record<string, MidpointPrice>>({
 		queryKey: ['midpointPrices', network?.id],
 		enabled: Boolean(browser && network),
-		refetchInterval: 15_000,
+		staleTime: PUBLIC_PRICES_REFRESH_INTERVAL_MS,
+		refetchInterval: PUBLIC_PRICES_REFRESH_INTERVAL_MS,
+		refetchOnWindowFocus: false,
+		refetchIntervalInBackground: false,
 		queryFn: async () => {
 			if (!network) return {};
 			const res = await fetch('/api/public/prices');

@@ -1,0 +1,5 @@
+export const PUBLIC_PRICES_TTL_SECONDS = 5 * 60;
+export const PUBLIC_PRICES_REFRESH_INTERVAL_MS = PUBLIC_PRICES_TTL_SECONDS * 1_000;
+export const PUBLIC_PRICES_CACHE_CONTROL = `public, s-maxage=${PUBLIC_PRICES_TTL_SECONDS}, stale-while-revalidate=${
+	PUBLIC_PRICES_TTL_SECONDS * 3
+}`;
