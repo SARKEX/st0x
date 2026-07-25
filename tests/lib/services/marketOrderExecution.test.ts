@@ -56,7 +56,11 @@ vi.mock('$lib/services/observability/tradeId', () => ({
 	getCurrentTradeId: vi.fn(() => 'trade-1')
 }));
 
-import { executeMarketOrder, oracleReferenceIoRatio } from '$lib/services/marketOrderExecution';
+import {
+	buildMarketSwapQuoteRequest,
+	executeMarketOrder,
+	oracleReferenceIoRatio
+} from '$lib/services/marketOrderExecution';
 import { TAKE_ORDERS_4_ABI } from '$lib/services/takeOrders4Abi';
 import type { ApiSwapCalldataV2Request } from '$lib/api/st0xApi';
 
@@ -171,6 +175,77 @@ describe('executeMarketOrder REST calldata execution', () => {
 		expect(oracleReferenceIoRatio('Sell', 2500)).toBe('0.0004');
 		expect(oracleReferenceIoRatio('Buy', 0)).toBeUndefined();
 	});
+
+	it.each([
+		{
+			name: 'buy by asset amount',
+			orderSide: 'Buy' as const,
+			inputMode: 'amount' as const,
+			amount: 2_000_000_000_000_000_000n,
+			expected: {
+				inputToken: PAYMENT,
+				outputToken: ASSET,
+				mode: 'buyUpTo',
+				amount: '2'
+			}
+		},
+		{
+			name: 'buy by payment spend',
+			orderSide: 'Buy' as const,
+			inputMode: 'spend' as const,
+			amount: 25_000_000n,
+			expected: {
+				inputToken: PAYMENT,
+				outputToken: ASSET,
+				mode: 'spendUpTo',
+				amount: '25'
+			}
+		},
+		{
+			name: 'sell by asset spend',
+			orderSide: 'Sell' as const,
+			inputMode: 'amount' as const,
+			amount: 3_000_000_000_000_000_000n,
+			expected: {
+				inputToken: ASSET,
+				outputToken: PAYMENT,
+				mode: 'spendUpTo',
+				amount: '3'
+			}
+		},
+		{
+			name: 'sell by payment receive',
+			orderSide: 'Sell' as const,
+			inputMode: 'receive' as const,
+			amount: 40_000_000n,
+			expected: {
+				inputToken: ASSET,
+				outputToken: PAYMENT,
+				mode: 'buyUpTo',
+				amount: '40'
+			}
+		}
+	])(
+		'maps $name to the REST quote/calldata contract',
+		({ orderSide, inputMode, amount, expected }) => {
+			expect(
+				buildMarketSwapQuoteRequest({
+					orderSide,
+					inputMode,
+					amount,
+					slippageBps: 75,
+					referenceIoRatio: '2.5',
+					...tokens,
+					network
+				})
+			).toEqual({
+				...expected,
+				slippageBps: 75,
+				referenceIoRatio: '2.5',
+				denomination: 'wrapped'
+			});
+		}
+	);
 
 	beforeEach(() => {
 		vi.clearAllMocks();

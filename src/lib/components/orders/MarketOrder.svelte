@@ -1,23 +1,19 @@
 <script lang="ts">
 	import type { CategorizedToken } from '$lib/config/network';
 	import { currentNetwork } from '$lib/stores';
-	import { type ProcessedQuote, walkOrderbook } from '$lib/api/orders';
-	import {
-		getMakerInputTokenAddress,
-		getMakerOutputTokenAddress
-	} from '$lib/types/orderPerspective';
-	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits } from 'viem';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
-	import { isAuthenticated } from '$lib/stores/authStore';
+	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import { promptWalletConnection } from '$lib/stores/accessStore';
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
-	import type { CreateQueryResult } from '@tanstack/svelte-query';
+	import { createQuery, type CreateQueryResult } from '@tanstack/svelte-query';
+	import { apiGetSwapQuoteV2, type ApiSwapQuoteV2Response } from '$lib/api/st0xApi';
 	import {
+		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
 		MAX_SLIPPAGE_BPS,
 		executeMarketOrder,
@@ -67,7 +63,6 @@
 	export let wrapRatio: number = 1;
 
 	const ORDERBOOK_MAX_STALENESS_MS = 20_000; // 20 seconds
-	const PRICE_GUARD_MULTIPLIER = 1.05; // 5% price tolerance for slippage and liquidity checks
 	const HIGH_SLIPPAGE_WARNING_BPS = 500; // 5% — warn above this
 	let slippageBps = DEFAULT_MARKET_ORDER_SLIPPAGE_BPS;
 	let slippageInputValue = String(slippageBps / 100);
@@ -333,114 +328,57 @@
 		return null;
 	})();
 
-	// Liquidity warning: check if there's enough liquidity within price guard
+	// The REST quote uses the same mode, amount, slippage and oracle guard as
+	// calldata generation. The browser only formats the returned simulation.
 	let insufficientLiquidityWarning: boolean = false;
 	let availableLiquidityFormatted: string = '0';
-
-	// Calculate available liquidity within price guard
-	$: {
-		if (!selectedAmount || selectedAmount === 0n || !assetToken) {
-			insufficientLiquidityWarning = false;
-			availableLiquidityFormatted = '0';
-		} else {
-			const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-			const assetAddressNormalized = normalizeAddress(assetToken.address);
-			const paymentTokenAddressNormalized = normalizeAddress(
-				paymentToken?.address?.toLowerCase() || ''
-			);
-
-			// Filter quotes by side and token pair
-			const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-				const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
-				const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
-				const targetOutputAddress =
-					orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
-				const targetInputAddress =
-					orderSide === 'Buy' ? paymentTokenAddressNormalized : assetAddressNormalized;
-				const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
-				const quotePerAsset = quote.quotePerAsset;
-
-				return (
-					quoteOutputAddressNormalized === targetOutputAddress &&
-					quoteInputAddressNormalized === targetInputAddress &&
-					quote.side === targetSide &&
-					quotePerAsset !== undefined &&
-					Number.isFinite(quotePerAsset) &&
-					quotePerAsset > 0
-				);
-			});
-
-			// Get oracle price for price guard
-			const oracleAddress = assetToken?.address?.toLowerCase();
-			const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
-			const oraclePrice = oracleEntry?.price;
-
-			if (!oraclePrice || oraclePrice <= 0 || relevantQuotes.length === 0) {
-				insufficientLiquidityWarning = false;
-			} else {
-				// Filter quotes within price guard (5% of oracle price)
-				const maxAcceptablePrice = oraclePrice * PRICE_GUARD_MULTIPLIER;
-				const minAcceptablePrice = oraclePrice / PRICE_GUARD_MULTIPLIER;
-
-				const quotesWithinGuard = relevantQuotes.filter((quote: ProcessedQuote) => {
-					const price = quote.quotePerAsset ?? 0;
-					return orderSide === 'Buy' ? price <= maxAcceptablePrice : price >= minAcceptablePrice;
-				});
-
-				if (quotesWithinGuard.length === 0) {
-					insufficientLiquidityWarning = selectedAmount > 0n;
-				} else {
-					// Walk the filtered orderbook to calculate available liquidity
-					const assetDecimals = assetToken?.decimals ?? 18;
-					const paymentDecimals = paymentToken?.decimals ?? 6;
-
-					// Sort quotes by price (best first)
-					const sortedQuotes = [...quotesWithinGuard].sort((a, b) => {
-						if (orderSide === 'Buy') {
-							return (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0);
-						} else {
-							return (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0);
-						}
-					});
-
-					// Walk to calculate total available liquidity
-					const walkResult = walkOrderbook({
-						quotes: sortedQuotes,
+	$: quoteOraclePrice = assetToken
+		? $oracleQuotesQuery?.data?.[assetToken.address.toLowerCase()]?.price
+		: undefined;
+	$: quoteReferenceIoRatio = oracleReferenceIoRatio(orderSide, quoteOraclePrice);
+	$: marketQuoteRequest =
+		selectedAmount > 0n && assetToken && paymentToken && $currentNetwork
+			? buildMarketSwapQuoteRequest(
+					{
 						orderSide,
-						selectedAmount: BigInt('0xffffffffffffffffffffffffffffffff'), // Max value to get total liquidity
-						assetDecimals,
-						paymentDecimals
-					});
-
-					// Compare based on input mode:
-					// - amount mode: compare selectedAmount (asset) against available asset amount
-					// - spend mode: compare selectedAmount (payment) against available payment capacity
-					if (inputMode === 'spend') {
-						// In spend mode, selectedAmount is payment amount
-						// For BUY: outputAmountGiven is payment capacity
-						const availablePaymentCapacity = walkResult.outputAmountGiven;
-						insufficientLiquidityWarning = selectedAmount > availablePaymentCapacity;
-						// Format available amount for display
-						const availableFloat = parseFloat(
-							formatUnits(availablePaymentCapacity, paymentDecimals)
-						);
-						availableLiquidityFormatted = `${availableFloat.toFixed(2)} ${
-							paymentToken?.symbol ?? 'USDC'
-						}`;
-					} else {
-						// In amount mode, selectedAmount is asset amount
-						// For BUY: inputAmountFilled is asset amount, For SELL: outputAmountGiven is asset amount
-						const availableAssetAmount =
-							orderSide === 'Buy' ? walkResult.inputAmountFilled : walkResult.outputAmountGiven;
-						insufficientLiquidityWarning = selectedAmount > availableAssetAmount;
-						// Format available amount for display
-						const availableFloat = parseFloat(formatUnits(availableAssetAmount, assetDecimals));
-						availableLiquidityFormatted = `${availableFloat.toFixed(4)} ${
-							assetToken?.symbol ?? 'tokens'
-						}`;
-					}
-				}
-			}
+						amount: selectedAmount,
+						inputMode,
+						slippageBps,
+						referenceIoRatio: quoteReferenceIoRatio,
+						assetToken,
+						paymentToken,
+						network: $currentNetwork
+					},
+					$walletAddress ?? undefined
+				)
+			: null;
+	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
+		queryKey: ['marketSwapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
+		enabled: Boolean(marketQuoteRequest),
+		staleTime: 5_000,
+		retry: 1,
+		queryFn: () => {
+			if (!marketQuoteRequest) throw new Error('Missing market quote request');
+			return apiGetSwapQuoteV2(marketQuoteRequest);
+		}
+	});
+	$: marketQuote = $marketQuoteQuery.data;
+	$: {
+		insufficientLiquidityWarning = Boolean(
+			selectedAmount > 0n && marketQuote && !marketQuote.fullyFilled
+		);
+		if (!marketQuote || !assetToken) {
+			availableLiquidityFormatted = '0';
+		} else if (inputMode === 'spend') {
+			availableLiquidityFormatted = `${Number(marketQuote.estimatedInput).toFixed(2)} ${
+				paymentToken?.symbol ?? 'USDC'
+			}`;
+		} else {
+			const availableAsset =
+				orderSide === 'Buy' ? marketQuote.estimatedOutput : marketQuote.estimatedInput;
+			availableLiquidityFormatted = `${Number(availableAsset).toFixed(4)} ${
+				assetToken.symbol ?? 'tokens'
+			}`;
 		}
 	}
 
@@ -461,22 +399,20 @@
 	// In amount mode: show how much payment token you'll spend
 	// In spend mode: show how many asset tokens you'll receive
 	$: estimatedTradeResult = (() => {
-		if (!selectedAmount || !marketPrice) return { value: '0.00', label: '' };
+		if (!selectedAmount || !marketQuote) return { value: '0.00', label: '' };
 		if (inputMode === 'spend') {
-			// Spend mode: show estimated tokens received
-			const spendInTokens = parseFloat(formatUnits(selectedAmount, paymentToken?.decimals || 6));
-			const tokensReceived = spendInTokens / marketPrice;
 			return {
-				value: `~${tokensReceived.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`,
+				value: `~${Number(marketQuote.estimatedOutput).toFixed(4)} ${
+					assetToken?.symbol ?? 'tokens'
+				}`,
 				label: 'Est. tokens'
 			};
 		} else {
-			// Amount mode: show estimated cost
-			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
-			const total = outputInTokens * marketPrice;
+			const paymentEstimate =
+				orderSide === 'Buy' ? marketQuote.estimatedInput : marketQuote.estimatedOutput;
 			return {
-				value: `~${total.toFixed(2)} ${paymentTokenSymbol}`,
-				label: 'Est. cost'
+				value: `~${Number(paymentEstimate).toFixed(2)} ${paymentTokenSymbol}`,
+				label: orderSide === 'Buy' ? 'Est. cost' : 'Est. proceeds'
 			};
 		}
 	})();
@@ -548,157 +484,27 @@
 		showHighSlippageWarning = false;
 	}
 
-	async function fetchMarketPrice() {
-		if (!assetToken || !orderSide) {
-			isLoadingPrice = false;
-			return;
-		}
-
-		try {
-			isLoadingPrice = true;
-			priceError = false;
+	$: isLoadingPrice = selectedAmount > 0n && $marketQuoteQuery.isFetching;
+	$: priceError = selectedAmount > 0n && $marketQuoteQuery.isError;
+	$: {
+		if (!priceError) {
 			priceErrorReason = null;
-
-			// If no selected amount, don't calculate a price estimate
-			if (!selectedAmount || selectedAmount === 0n) {
-				marketPrice = 0;
-				return;
-			}
-
-			const walkResult = calculateOrderbookWalk();
-
-			if (!walkResult) {
-				console.warn('No relevant quotes found');
-				priceError = true;
-				priceErrorReason = 'no_quotes';
-				isLoadingPrice = false;
-				return;
-			}
-
-			const { inputAmountFilled, outputAmountGiven, ioRatio, fills } = walkResult;
-
-			// Check if anything was filled (asset amount)
-			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
-			if (assetFilled > 0n) {
-				// Convert ioRatio to price (quote per asset) for display
-				// BUY: ioRatio = asset/payment, so price = 1/ioRatio
-				// SELL: ioRatio = payment/asset = price
-				marketPrice = orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
-			} else {
-				console.warn('No quantity filled from orderbook', {
-					selectedAmount: selectedAmount.toString(),
-					ordersWalked: fills.length
-				});
-				priceError = true;
-				priceErrorReason = 'no_fill';
-				isLoadingPrice = false;
-				return;
-			}
-		} catch (error) {
-			console.error('Error calculating market price:', error);
-			priceError = true;
-			priceErrorReason = 'error';
-		} finally {
-			isLoadingPrice = false;
+		} else {
+			const message = String($marketQuoteQuery.error ?? '').toLowerCase();
+			priceErrorReason =
+				message.includes('liquidity') || message.includes('not found') ? 'no_quotes' : 'error';
 		}
 	}
-
-	// Fetch market price when component mounts or dependencies change
-	// Only calculates price when user has entered a quantity (selectedAmount > 0)
-	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes) {
-		fetchMarketPrice();
-	} else if (!selectedAmount || selectedAmount === 0n) {
-		// Clear price when quantity is cleared
-		marketPrice = 0;
-	}
-
-	// Walk the orderbook with current quotes and selected amount
-	// Applies the same price guard filter used during execution for consistency
-	function calculateOrderbookWalk() {
-		if (!assetToken || !orderSide || !selectedAmount || selectedAmount === 0n) {
-			return null;
+	$: {
+		if (!marketQuote) {
+			marketPrice = 0;
+		} else {
+			const estimatedInput = Number(marketQuote.estimatedInput);
+			const estimatedOutput = Number(marketQuote.estimatedOutput);
+			const price =
+				orderSide === 'Buy' ? estimatedInput / estimatedOutput : estimatedOutput / estimatedInput;
+			marketPrice = Number.isFinite(price) && price > 0 ? price : 0;
 		}
-
-		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-		const assetAddressNormalized = normalizeAddress(assetToken.address);
-		const paymentTokenAddressNormalized = normalizeAddress(
-			paymentToken?.address?.toLowerCase() || ''
-		);
-
-		// Get oracle price for price guard filtering
-		const oracleAddress = assetToken?.address?.toLowerCase();
-		const oracleEntry = oracleAddress ? $oracleQuotesQuery?.data?.[oracleAddress] : null;
-		const oraclePrice = oracleEntry?.price;
-
-		// Calculate price guard bounds (same logic as getFilteredOrders)
-		const maxAcceptablePrice =
-			oraclePrice && oraclePrice > 0 ? oraclePrice * PRICE_GUARD_MULTIPLIER : Infinity;
-		const minAcceptablePrice =
-			oraclePrice && oraclePrice > 0 ? oraclePrice / PRICE_GUARD_MULTIPLIER : 0;
-
-		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-			const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
-			const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
-			const targetOutputAddress =
-				orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
-			const targetInputAddress =
-				orderSide === 'Buy' ? paymentTokenAddressNormalized : assetAddressNormalized;
-			const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
-			const quotePerAsset = quote.quotePerAsset;
-
-			// Basic validity checks
-			if (
-				quoteOutputAddressNormalized !== targetOutputAddress ||
-				quoteInputAddressNormalized !== targetInputAddress ||
-				quote.side !== targetSide ||
-				quotePerAsset === undefined ||
-				!Number.isFinite(quotePerAsset) ||
-				quotePerAsset <= 0
-			) {
-				return false;
-			}
-
-			// Apply price guard filter (same as getFilteredOrders)
-			// For BUY: only accept prices up to 5% above oracle
-			// For SELL: only accept prices down to 5% below oracle
-			if (orderSide === 'Buy') {
-				return quotePerAsset <= maxAcceptablePrice;
-			} else {
-				return quotePerAsset >= minAcceptablePrice;
-			}
-		});
-
-		if (relevantQuotes.length === 0) {
-			return null;
-		}
-
-		// Validate token decimals are defined
-		if (typeof assetToken.decimals !== 'number') {
-			console.error('Asset token decimals are not defined');
-			return null;
-		}
-		if (!paymentToken || typeof paymentToken.decimals !== 'number') {
-			console.error('Payment token or its decimals are not defined');
-			return null;
-		}
-
-		const sortedQuotes = [...relevantQuotes].sort((a, b) => {
-			if (orderSide === 'Buy') {
-				return (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0);
-			} else {
-				return (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0);
-			}
-		});
-
-		return walkOrderbook({
-			quotes: sortedQuotes,
-			orderSide,
-			selectedAmount,
-			assetDecimals: assetToken.decimals,
-			paymentDecimals: paymentToken.decimals,
-			mode: inputMode === 'spend' ? 'spend' : 'receive'
-		});
 	}
 
 	const handleMarketOrder = async () => {
@@ -765,8 +571,8 @@
 					orderPreparationError = 'Token configuration error. Please refresh the page.';
 					return;
 				}
-				// Execution requests fresh REST API-built calldata. Display quotes above
-				// remain advisory; the REST API applies the oracle guard independently.
+				// Execution requests fresh REST API-built calldata with the same
+				// request semantics used by the display quote above.
 				const oracleAddress = assetToken.address.toLowerCase();
 				const oraclePrice = $oracleQuotesQuery?.data?.[oracleAddress]?.price;
 				const referenceIoRatio = oracleReferenceIoRatio(orderSide, oraclePrice);

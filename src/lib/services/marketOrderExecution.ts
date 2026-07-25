@@ -14,6 +14,7 @@ import {
 	type ApiApproval,
 	type ApiSwapCalldataV2Request,
 	type ApiSwapCalldataV2Response,
+	type ApiSwapQuoteV2Request,
 	type ApiTradesByTxResponse
 } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
@@ -85,7 +86,10 @@ export function oracleReferenceIoRatio(
 	return String(orderSide === 'Buy' ? oraclePrice : 1 / oraclePrice);
 }
 
-function buildCalldataRequest(input: MarketOrderInput, taker: string): ApiSwapCalldataV2Request {
+export function buildMarketSwapQuoteRequest(
+	input: MarketOrderInput,
+	taker?: string
+): ApiSwapQuoteV2Request {
 	const { orderSide, inputMode = 'amount', amount, assetToken, paymentToken } = input;
 	const isBuy = orderSide === 'Buy';
 	const inputToken = isBuy ? paymentToken : assetToken;
@@ -94,7 +98,7 @@ function buildCalldataRequest(input: MarketOrderInput, taker: string): ApiSwapCa
 	const amountToken = isOutputAnchored ? outputToken : inputToken;
 
 	return {
-		taker,
+		...(taker ? { taker } : {}),
 		inputToken: inputToken.address,
 		outputToken: outputToken.address,
 		mode: isOutputAnchored ? 'buyUpTo' : 'spendUpTo',
@@ -102,6 +106,13 @@ function buildCalldataRequest(input: MarketOrderInput, taker: string): ApiSwapCa
 		slippageBps: clampSlippageBps(input.slippageBps ?? DEFAULT_MARKET_ORDER_SLIPPAGE_BPS),
 		...(input.referenceIoRatio ? { referenceIoRatio: input.referenceIoRatio } : {}),
 		denomination: 'wrapped'
+	};
+}
+
+function buildCalldataRequest(input: MarketOrderInput, taker: string): ApiSwapCalldataV2Request {
+	return {
+		...buildMarketSwapQuoteRequest(input),
+		taker
 	};
 }
 

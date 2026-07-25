@@ -69,8 +69,7 @@ export interface ApiSwapCalldataResponse {
 
 export type ApiSwapCalldataMode = 'buyUpTo' | 'spendExact' | 'spendUpTo';
 
-interface ApiSwapCalldataV2RequestCommon {
-	taker: string;
+export interface ApiSwapV2RequestCommon {
 	inputToken: string;
 	outputToken: string;
 	mode: ApiSwapCalldataMode;
@@ -78,11 +77,27 @@ interface ApiSwapCalldataV2RequestCommon {
 	denomination?: 'wrapped' | 'unwrapped';
 }
 
-export type ApiSwapCalldataV2Request = ApiSwapCalldataV2RequestCommon &
-	(
-		| { priceCap: string; slippageBps?: never; referenceIoRatio?: never }
-		| { priceCap?: never; slippageBps: number; referenceIoRatio?: string }
-	);
+type ApiSwapV2PriceLimit =
+	| { priceCap: string; slippageBps?: never; referenceIoRatio?: never }
+	| { priceCap?: never; slippageBps: number; referenceIoRatio?: string };
+
+export type ApiSwapQuoteV2Request = ApiSwapV2RequestCommon &
+	ApiSwapV2PriceLimit & {
+		taker?: string;
+	};
+
+export interface ApiSwapQuoteV2Response extends ApiSwapV2RequestCommon {
+	estimatedInput: string;
+	estimatedOutput: string;
+	estimatedIoRatio: string;
+	fullyFilled: boolean;
+	resolvedPriceCap: string;
+}
+
+export type ApiSwapCalldataV2Request = ApiSwapV2RequestCommon &
+	ApiSwapV2PriceLimit & {
+		taker: string;
+	};
 
 export interface ApiSwapCalldataV2Response extends ApiSwapCalldataResponse {
 	denomination: 'wrapped' | 'unwrapped';
@@ -439,6 +454,21 @@ export async function apiGetWrapRatioHistory(
 export async function apiGetSwapQuote(request: ApiSwapQuoteRequest): Promise<ApiSwapQuoteResponse> {
 	assertBrowser('apiGetSwapQuote');
 	return fetchJson<ApiSwapQuoteResponse>(apiUrl('/v1/swap/quote'), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(request)
+	});
+}
+
+/**
+ * Fetch a mode-based swap quote from the same API simulation used to resolve
+ * v2 calldata. This is the authoritative market-order display quote.
+ */
+export async function apiGetSwapQuoteV2(
+	request: ApiSwapQuoteV2Request
+): Promise<ApiSwapQuoteV2Response> {
+	assertBrowser('apiGetSwapQuoteV2');
+	return fetchJson<ApiSwapQuoteV2Response>(apiUrl('/v2/swap/quote'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(request)

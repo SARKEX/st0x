@@ -57,9 +57,9 @@ describe('marketOrderExecution.ts OBS-07 emission boundaries (Plan 02-03 Task 1b
 		expect(serviceSource).toMatch(/trackTradeEvent\(\s*['"]confirmed['"][\s\S]{0,400}?order_side:/);
 	});
 
-	it('Test 6: emission ONLY fires on the SUCCESS branch, not on every dispatcher (failWith) exit', () => {
-		// failWith() is the dispatcher for FAILURE paths — broadcast/confirmed must
-		// not fire from there (only via captureTakeOrderFailure for Sentry).
+	it('Test 6: emission ONLY fires on the SUCCESS branch, not on failWith exits', () => {
+		// failWith() only updates transaction state after captureTradeFlowError reports
+		// the failure, so broadcast/confirmed must never fire from this dispatcher.
 		const failWithFn = serviceSource.match(/const failWith = [\s\S]*?return\s*\{[^}]*\};\s*\};/);
 		expect(failWithFn).toBeTruthy();
 		expect(failWithFn?.[0]).not.toMatch(/trackTradeEvent\(\s*['"]broadcast['"]/);

@@ -3,7 +3,7 @@
 	import { walletAddress, isAuthenticated } from '$lib/stores/authStore';
 	import { currentNetwork } from '$lib/stores';
 	import { readContract } from '@wagmi/core';
-	import { erc20Abi, formatUnits, parseUnits } from 'viem';
+	import { erc20Abi, formatUnits } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
@@ -22,33 +22,19 @@
 	import Icon from './ui/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { resolveMarketOrderAnchor } from '$lib/utils/marketOrderInput';
+	import { apiGetSwapQuoteV2, type ApiSwapQuoteV2Response } from '$lib/api/st0xApi';
+	import {
+		buildMarketSwapQuoteRequest,
+		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS
+	} from '$lib/services/marketOrderExecution';
 
-	type ParseFloatHex = typeof import('$lib/utils/tokenMath').parseFloatHex;
-
-	let parseFloatHexFn: ParseFloatHex | null = null;
-	let parseFloatVersion = 0;
-	let parseFloatImportPromise: Promise<ParseFloatHex> | null = null;
+	// Quick Trade intentionally uses a fixed 1% slippage tolerance to keep the
+	// simplified flow free of advanced order controls.
+	const QUICK_TRADE_SLIPPAGE_BPS = DEFAULT_MARKET_ORDER_SLIPPAGE_BPS;
 
 	function normalizeAddress(value: string | null | undefined): string | null {
 		const trimmed = value?.trim();
 		return trimmed ? trimmed.toLowerCase() : null;
-	}
-
-	function loadParseFloatHex(): Promise<ParseFloatHex> {
-		parseFloatImportPromise ??= import('$lib/utils/tokenMath').then((mod) => {
-			parseFloatHexFn = mod.parseFloatHex;
-			parseFloatVersion += 1;
-			return mod.parseFloatHex;
-		});
-		return parseFloatImportPromise;
-	}
-
-	function parseQuoteFloat(hexAmount: string, decimals: number): bigint {
-		if (!parseFloatHexFn) {
-			void loadParseFloatHex();
-			return 0n;
-		}
-		return parseFloatHexFn(hexAmount, decimals);
 	}
 
 	// Analytics tracking
@@ -164,6 +150,31 @@
 		}
 	});
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
+	$: marketQuoteRequest =
+		tradeAnchor && selectedToken && paymentToken && $currentNetwork
+			? buildMarketSwapQuoteRequest(
+					{
+						orderSide: isBuying ? 'Buy' : 'Sell',
+						amount: tradeAnchor.amount,
+						inputMode: tradeAnchor.inputMode,
+						slippageBps: QUICK_TRADE_SLIPPAGE_BPS,
+						assetToken: selectedToken,
+						paymentToken,
+						network: $currentNetwork
+					},
+					$walletAddress ?? undefined
+				)
+			: null;
+	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
+		queryKey: ['swapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
+		enabled: browser && Boolean(marketQuoteRequest),
+		staleTime: 5_000,
+		retry: 1,
+		queryFn: () => {
+			if (!marketQuoteRequest) throw new Error('Missing swap quote request');
+			return apiGetSwapQuoteV2(marketQuoteRequest);
+		}
+	});
 
 	// On mount: analytics only. The selected-token query above fetches the visible quote data.
 	onMount(() => {
@@ -274,21 +285,8 @@
 	$: bestAskPrice = askQuotes.length > 0 ? askQuotes[0].quotePerAsset : null;
 	$: bestBidPrice = bidQuotes.length > 0 ? bidQuotes[0].quotePerAsset : null;
 
-	// ============ QUOTE CALCULATION ============
-	$: quote = (() => {
-		// eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reactive dep: re-run once parseFloatHex lazy-loads (parseQuoteFloat returns 0n until then)
-		parseFloatVersion;
-		return computeQuote(
-			isBuying,
-			lastEditedField,
-			topAmount,
-			bottomAmount,
-			askQuotes,
-			bidQuotes,
-			selectedToken,
-			paymentToken
-		);
-	})();
+	// ============ AUTHORITATIVE REST QUOTE ============
+	$: quote = toDisplayQuote($marketQuoteQuery.data, isBuying, lastEditedField);
 
 	$: syncOtherField(quote, lastEditedField);
 
@@ -302,199 +300,36 @@
 		}
 	}
 
-	function computeQuote(
+	function toDisplayQuote(
+		response: ApiSwapQuoteV2Response | undefined,
 		buying: boolean,
-		editedField: 'top' | 'bottom' | null,
-		top: string,
-		bottom: string,
-		asks: ProcessedQuote[],
-		bids: ProcessedQuote[],
-		asset: (typeof tradableTokens)[0] | undefined,
-		payment: typeof paymentToken
+		editedField: 'top' | 'bottom' | null
 	) {
-		if (!asset || !payment || !editedField) return null;
-
-		const assetDecimals = asset.decimals ?? 18;
-		const paymentDecimals = payment.decimals ?? 6;
-
-		if (buying) {
-			const quotes = asks;
-			if (quotes.length === 0) return null;
-
-			if (editedField === 'top') {
-				const usdcAmount = parseFloat(top);
-				if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) return null;
-				return walkUsdcToTokens(usdcAmount, quotes, assetDecimals, paymentDecimals);
-			} else {
-				const tokenAmount = parseFloat(bottom);
-				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return null;
-				return walkTokensToUsdc(tokenAmount, quotes, assetDecimals, paymentDecimals, 'buy');
-			}
-		} else {
-			const quotes = bids;
-			if (quotes.length === 0) return null;
-
-			if (editedField === 'bottom') {
-				const tokenAmount = parseFloat(bottom);
-				if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) return null;
-				return walkTokensToUsdc(tokenAmount, quotes, assetDecimals, paymentDecimals, 'sell');
-			} else {
-				const usdcAmount = parseFloat(top);
-				if (!Number.isFinite(usdcAmount) || usdcAmount <= 0) return null;
-				return walkUsdcToTokensSell(usdcAmount, quotes, assetDecimals, paymentDecimals);
-			}
-		}
-	}
-
-	function walkUsdcToTokens(
-		usdcAmount: number,
-		quotes: ProcessedQuote[],
-		assetDecimals: number,
-		paymentDecimals: number
-	) {
-		let remainingUsdc = parseUnits(usdcAmount.toString(), paymentDecimals);
-		let totalTokensOut = 0n;
-		let weightedPriceSum = 0;
-
-		for (const q of quotes) {
-			if (remainingUsdc <= 0n) break;
-			const price = q.quotePerAsset ?? 0;
-			if (price <= 0) continue;
-
-			let maxAssetAvailable = 0n;
-			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals = q.outputTokenDecimals ?? assetDecimals;
-				maxAssetAvailable = parseQuoteFloat(q.maxOutput, outputDecimals);
-				if (outputDecimals !== assetDecimals) {
-					const scale = 10n ** BigInt(Math.abs(assetDecimals - outputDecimals));
-					maxAssetAvailable =
-						outputDecimals < assetDecimals ? maxAssetAvailable * scale : maxAssetAvailable / scale;
-				}
-			}
-			if (maxAssetAvailable <= 0n) continue;
-
-			const maxUsdcForQuote = BigInt(
-				Math.ceil((Number(maxAssetAvailable) / 10 ** assetDecimals) * price * 10 ** paymentDecimals)
-			);
-			const usdcToUse = remainingUsdc < maxUsdcForQuote ? remainingUsdc : maxUsdcForQuote;
-			const tokensFromQuote = BigInt(
-				Math.floor((Number(usdcToUse) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
-			);
-			if (tokensFromQuote <= 0n) continue;
-
-			totalTokensOut += tokensFromQuote;
-			remainingUsdc -= usdcToUse;
-			weightedPriceSum += price * Number(tokensFromQuote);
+		if (!response || !editedField) return null;
+		const estimatedInput = Number(response.estimatedInput);
+		const estimatedOutput = Number(response.estimatedOutput);
+		if (
+			!Number.isFinite(estimatedInput) ||
+			!Number.isFinite(estimatedOutput) ||
+			estimatedInput <= 0 ||
+			estimatedOutput <= 0
+		) {
+			return null;
 		}
 
-		if (totalTokensOut <= 0n) return null;
+		const calculatedAmount =
+			editedField === 'top'
+				? buying
+					? estimatedOutput
+					: estimatedInput
+				: buying
+					? estimatedInput
+					: estimatedOutput;
+		const avgPrice = buying ? estimatedInput / estimatedOutput : estimatedOutput / estimatedInput;
 		return {
-			calculatedAmount: Number(totalTokensOut) / 10 ** assetDecimals,
-			avgPrice: weightedPriceSum / Number(totalTokensOut),
-			hasLiquidity: remainingUsdc <= 0n
-		};
-	}
-
-	function walkTokensToUsdc(
-		tokenAmount: number,
-		quotes: ProcessedQuote[],
-		assetDecimals: number,
-		paymentDecimals: number,
-		direction: 'buy' | 'sell'
-	) {
-		let remainingTokens = parseUnits(tokenAmount.toString(), assetDecimals);
-		let totalUsdc = 0n;
-		let weightedPriceSum = 0;
-		let tokensFilled = 0n;
-
-		for (const q of quotes) {
-			if (remainingTokens <= 0n) break;
-			const price = q.quotePerAsset ?? 0;
-			if (price <= 0) continue;
-
-			let maxAvailable = 0n;
-			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals =
-					q.outputTokenDecimals ?? (direction === 'buy' ? assetDecimals : paymentDecimals);
-				maxAvailable = parseQuoteFloat(q.maxOutput, outputDecimals);
-			}
-			if (maxAvailable <= 0n) continue;
-
-			let tokensFromQuote: bigint;
-			let usdcFromQuote: bigint;
-
-			if (direction === 'buy') {
-				const maxTokens = maxAvailable;
-				tokensFromQuote = remainingTokens < maxTokens ? remainingTokens : maxTokens;
-				usdcFromQuote = BigInt(
-					Math.ceil((Number(tokensFromQuote) / 10 ** assetDecimals) * price * 10 ** paymentDecimals)
-				);
-			} else {
-				const maxUsdcFromBid = maxAvailable;
-				const maxTokensForBid = BigInt(
-					Math.floor((Number(maxUsdcFromBid) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
-				);
-				tokensFromQuote = remainingTokens < maxTokensForBid ? remainingTokens : maxTokensForBid;
-				usdcFromQuote = BigInt(
-					Math.floor(
-						(Number(tokensFromQuote) / 10 ** assetDecimals) * price * 10 ** paymentDecimals
-					)
-				);
-			}
-
-			if (tokensFromQuote <= 0n) continue;
-			tokensFilled += tokensFromQuote;
-			totalUsdc += usdcFromQuote;
-			remainingTokens -= tokensFromQuote;
-			weightedPriceSum += price * Number(tokensFromQuote);
-		}
-
-		if (tokensFilled <= 0n) return null;
-		return {
-			calculatedAmount: Number(totalUsdc) / 10 ** paymentDecimals,
-			avgPrice: weightedPriceSum / Number(tokensFilled),
-			hasLiquidity: remainingTokens <= 0n
-		};
-	}
-
-	function walkUsdcToTokensSell(
-		usdcAmount: number,
-		quotes: ProcessedQuote[],
-		assetDecimals: number,
-		paymentDecimals: number
-	) {
-		let remainingUsdc = parseUnits(usdcAmount.toString(), paymentDecimals);
-		let totalTokensNeeded = 0n;
-		let weightedPriceSum = 0;
-
-		for (const q of quotes) {
-			if (remainingUsdc <= 0n) break;
-			const price = q.quotePerAsset ?? 0;
-			if (price <= 0) continue;
-
-			let maxUsdcFromBid = 0n;
-			if (typeof q.maxOutput === 'string' && q.maxOutput.startsWith('0x')) {
-				const outputDecimals = q.outputTokenDecimals ?? paymentDecimals;
-				maxUsdcFromBid = parseQuoteFloat(q.maxOutput, outputDecimals);
-			}
-			if (maxUsdcFromBid <= 0n) continue;
-
-			const usdcToGet = remainingUsdc < maxUsdcFromBid ? remainingUsdc : maxUsdcFromBid;
-			const tokensNeeded = BigInt(
-				Math.ceil((Number(usdcToGet) / 10 ** paymentDecimals / price) * 10 ** assetDecimals)
-			);
-			if (tokensNeeded <= 0n) continue;
-
-			totalTokensNeeded += tokensNeeded;
-			remainingUsdc -= usdcToGet;
-			weightedPriceSum += price * Number(tokensNeeded);
-		}
-
-		if (totalTokensNeeded <= 0n) return null;
-		return {
-			calculatedAmount: Number(totalTokensNeeded) / 10 ** assetDecimals,
-			avgPrice: weightedPriceSum / Number(totalTokensNeeded),
-			hasLiquidity: remainingUsdc <= 0n
+			calculatedAmount,
+			avgPrice,
+			hasLiquidity: response.fullyFilled
 		};
 	}
 
@@ -578,6 +413,7 @@
 				orderSide,
 				amount: tradeAnchor.amount,
 				inputMode: tradeAnchor.inputMode,
+				slippageBps: QUICK_TRADE_SLIPPAGE_BPS,
 				assetToken: {
 					address: selectedToken.address,
 					decimals: selectedToken.decimals,
@@ -713,7 +549,7 @@
 				<div
 					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
 				>
-					The displayed orderbook may not cover this amount. REST will resolve the executable route.
+					Not enough liquidity to fully fill your order.
 					{#if isOutsideMarketHours()}
 						<br />This might be because US markets are currently closed.
 					{/if}
@@ -874,7 +710,7 @@
 				<div
 					class="mt-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-300"
 				>
-					The displayed orderbook may not cover this amount. REST will resolve the executable route.
+					Not enough liquidity to fully fill your order.
 					{#if isOutsideMarketHours()}
 						<br />This might be because US markets are currently closed.
 					{/if}
