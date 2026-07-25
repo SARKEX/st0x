@@ -20,7 +20,8 @@
 	import {
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
 		MAX_SLIPPAGE_BPS,
-		executeMarketOrder
+		executeMarketOrder,
+		oracleReferenceIoRatio
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
@@ -765,13 +766,17 @@
 					return;
 				}
 				// Execution requests fresh REST API-built calldata. Display quotes above
-				// remain advisory and never gate or construct the submitted transaction.
+				// remain advisory; the REST API applies the oracle guard independently.
+				const oracleAddress = assetToken.address.toLowerCase();
+				const oraclePrice = $oracleQuotesQuery?.data?.[oracleAddress]?.price;
+				const referenceIoRatio = oracleReferenceIoRatio(orderSide, oraclePrice);
 				activeStage = 'calldata';
 				const result = await executeMarketOrder({
 					orderSide,
 					amount: selectedAmount,
 					inputMode,
 					slippageBps,
+					referenceIoRatio,
 					assetToken: {
 						address: assetToken.address,
 						decimals: assetToken.decimals,

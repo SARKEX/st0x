@@ -5,11 +5,10 @@
  * Assembles a `MarketOrderSummary` from the take-order receipt + computed
  * partial-fill state.
  *
- * Consumed by `marketTakeStore.pollAndFinalizeTakeOrders` POST-COMPLETION
- * (after vault invalidation has run). DO NOT interleave with vault state
- * mutations — see 02-RESEARCH.md §"Pitfall 6" for the regression class
- * this contract protects against (partial-fill banner displayed with
- * stale balance reads).
+ * Consumed by both market-order finalization paths POST-COMPLETION (after
+ * vault invalidation has run). DO NOT interleave with vault state mutations —
+ * see 02-RESEARCH.md §"Pitfall 6" for the regression class this contract
+ * protects against (partial-fill banner displayed with stale balance reads).
  *
  * This module is a LEAF: it imports nothing from $lib/services or any
  * other $lib/stores/* module beyond `transactionShared` (for the

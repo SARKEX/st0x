@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 
 const mocks = vi.hoisted(() => ({
 	apiGetSwapCalldataV2: vi.fn(),
+	apiGetTradesByTx: vi.fn(),
 	getSignerAddress: vi.fn(),
 	sendTransaction: vi.fn(),
 	waitForTransaction: vi.fn(),
@@ -19,7 +20,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/api/st0xApi', () => ({
-	apiGetSwapCalldataV2: mocks.apiGetSwapCalldataV2
+	apiGetSwapCalldataV2: mocks.apiGetSwapCalldataV2,
+	apiGetTradesByTx: mocks.apiGetTradesByTx
 }));
 vi.mock('$lib/services/walletService', () => ({
 	APPROVAL_TX_CONFIRMATIONS: 2,
@@ -54,7 +56,7 @@ vi.mock('$lib/services/observability/tradeId', () => ({
 	getCurrentTradeId: vi.fn(() => 'trade-1')
 }));
 
-import { executeMarketOrder } from '$lib/services/marketOrderExecution';
+import { executeMarketOrder, oracleReferenceIoRatio } from '$lib/services/marketOrderExecution';
 import { TAKE_ORDERS_4_ABI } from '$lib/services/takeOrders4Abi';
 import type { ApiSwapCalldataV2Request } from '$lib/api/st0xApi';
 
@@ -127,11 +129,58 @@ function readyResponse(
 	};
 }
 
+function indexedTradeResponse(request: ApiSwapCalldataV2Request) {
+	const inputIsPayment = request.inputToken === PAYMENT;
+	const totalInputAmount =
+		request.mode === 'spendUpTo' ? request.amount : inputIsPayment ? '100' : '1';
+	const totalOutputAmount =
+		request.mode === 'buyUpTo' ? request.amount : inputIsPayment ? '1' : '100';
+	return {
+		txHash: TRADE_HASH,
+		blockNumber: 123,
+		timestamp: 1_700_000_000,
+		sender: TAKER,
+		trades: [
+			{
+				orderHash: ZERO_BYTES32,
+				orderOwner: TAKER,
+				request: {
+					inputToken: request.inputToken,
+					outputToken: request.outputToken,
+					maximumInput: totalInputAmount,
+					maximumIoRatio: '100'
+				},
+				result: {
+					inputAmount: totalInputAmount,
+					outputAmount: `-${totalOutputAmount}`,
+					actualIoRatio: '100'
+				}
+			}
+		],
+		totals: {
+			totalInputAmount,
+			totalOutputAmount,
+			averageIoRatio: '100'
+		}
+	};
+}
+
 describe('executeMarketOrder REST calldata execution', () => {
+	it('maps oracle prices into input-per-output ratios for both sides', () => {
+		expect(oracleReferenceIoRatio('Buy', 2500)).toBe('2500');
+		expect(oracleReferenceIoRatio('Sell', 2500)).toBe('0.0004');
+		expect(oracleReferenceIoRatio('Buy', 0)).toBeUndefined();
+	});
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mocks.getSignerAddress.mockReturnValue(TAKER);
 		mocks.apiGetSwapCalldataV2.mockImplementation(async (request) => readyResponse(request));
+		mocks.apiGetTradesByTx.mockImplementation(async () => {
+			const request = mocks.apiGetSwapCalldataV2.mock.calls.at(-1)?.[0];
+			if (!request) throw new Error('missing calldata request');
+			return indexedTradeResponse(request);
+		});
 		mocks.sendTransaction.mockResolvedValue(TRADE_HASH);
 		mocks.waitForTransaction.mockResolvedValue(undefined);
 		mocks.update.mockImplementation((updater) => updater({}));
@@ -143,6 +192,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 			amount: 2_000_000_000_000_000_000n,
 			inputMode: 'amount',
 			slippageBps: 50,
+			referenceIoRatio: '2500',
 			...tokens,
 			network
 		});
@@ -155,6 +205,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 			mode: 'buyUpTo',
 			amount: '2',
 			slippageBps: 50,
+			referenceIoRatio: '2500',
 			denomination: 'wrapped'
 		});
 		expect(mocks.sendTransaction).toHaveBeenCalledWith({
@@ -162,7 +213,56 @@ describe('executeMarketOrder REST calldata execution', () => {
 			data: expect.stringMatching(/^0x69c72856/),
 			value: 0n
 		});
-		expect(mocks.transactionSuccess).toHaveBeenCalledWith(TRADE_HASH, 'Market order confirmed');
+		expect(mocks.apiGetTradesByTx).toHaveBeenCalledWith(TRADE_HASH);
+		expect(mocks.transactionSuccess).toHaveBeenCalledWith(TRADE_HASH, 'Market order confirmed', {
+			marketOrderSummary: expect.objectContaining({
+				inputAmount: 2_000_000_000_000_000_000n,
+				outputAmount: 100_000_000n,
+				isPartialFill: false,
+				isNoFill: false
+			})
+		});
+	});
+
+	it('reports a spend-anchored partial fill from indexed REST trade totals', async () => {
+		mocks.apiGetTradesByTx.mockResolvedValue({
+			...indexedTradeResponse({
+				taker: TAKER,
+				inputToken: ASSET,
+				outputToken: PAYMENT,
+				mode: 'spendUpTo',
+				amount: '3',
+				slippageBps: 100,
+				denomination: 'wrapped'
+			}),
+			totals: {
+				totalInputAmount: '1',
+				totalOutputAmount: '100',
+				averageIoRatio: '0.01'
+			}
+		});
+
+		const result = await executeMarketOrder({
+			orderSide: 'Sell',
+			inputMode: 'amount',
+			amount: 3_000_000_000_000_000_000n,
+			...tokens,
+			network
+		});
+
+		expect(result).toEqual({ success: true });
+		expect(mocks.transactionSuccess).toHaveBeenCalledWith(TRADE_HASH, 'Market order confirmed', {
+			marketOrderSummary: expect.objectContaining({
+				inputAmount: 100_000_000n,
+				outputAmount: 1_000_000_000_000_000_000n,
+				requestedInputAmount: 3_000_000_000_000_000_000n,
+				isPartialFill: true,
+				isNoFill: false
+			})
+		});
+		expect(mocks.invalidateDashboardBalances.mock.invocationCallOrder[0]).toBeLessThan(
+			mocks.transactionSuccess.mock.invocationCallOrder[0]
+		);
 	});
 
 	it('does not import browser-side SDK calldata or order-walking code', () => {

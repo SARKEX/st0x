@@ -3,15 +3,18 @@
  *
  * The browser deliberately does not walk orders, hydrate SDK objects, simulate
  * candidates, derive price caps, or build takeOrders calldata. Those decisions
- * live in the REST API and the Raindex SDK it calls. This module only validates
- * the returned transactions, handles approvals, and submits them to the wallet.
+ * live in the REST API and the Raindex SDK it calls. This module validates the
+ * returned transactions, handles approvals, submits them, and reports indexed
+ * fill totals after confirmation.
  */
 
 import {
 	apiGetSwapCalldataV2,
+	apiGetTradesByTx,
 	type ApiApproval,
 	type ApiSwapCalldataV2Request,
-	type ApiSwapCalldataV2Response
+	type ApiSwapCalldataV2Response,
+	type ApiTradesByTxResponse
 } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
@@ -34,6 +37,7 @@ import {
 	transactionStoreInternal,
 	validateOrderbookAddress
 } from '$lib/stores/transactionShared';
+import { detectPartialFill } from '$lib/stores/partialFillDetection';
 import type { TokenInfo } from '$lib/types/transactions';
 import {
 	clampSlippageBps,
@@ -60,6 +64,8 @@ export interface MarketOrderInput {
 	/** Anchor chosen by the UI: asset amount, input spend, or output receive. */
 	inputMode?: 'amount' | 'spend' | 'receive';
 	slippageBps?: number;
+	/** Input-token per output-token oracle ratio used by the REST price guard. */
+	referenceIoRatio?: string;
 	assetToken: TokenInfo;
 	paymentToken: TokenInfo;
 	network: Network;
@@ -69,6 +75,14 @@ export interface MarketOrderResult {
 	success: boolean;
 	error?: string;
 	errorClass?: ErrorClass;
+}
+
+export function oracleReferenceIoRatio(
+	orderSide: MarketOrderInput['orderSide'],
+	oraclePrice: number | null | undefined
+): string | undefined {
+	if (!oraclePrice || !Number.isFinite(oraclePrice) || oraclePrice <= 0) return undefined;
+	return String(orderSide === 'Buy' ? oraclePrice : 1 / oraclePrice);
 }
 
 function buildCalldataRequest(input: MarketOrderInput, taker: string): ApiSwapCalldataV2Request {
@@ -86,6 +100,7 @@ function buildCalldataRequest(input: MarketOrderInput, taker: string): ApiSwapCa
 		mode: isOutputAnchored ? 'buyUpTo' : 'spendUpTo',
 		amount: formatUnits(amount, amountToken.decimals),
 		slippageBps: clampSlippageBps(input.slippageBps ?? DEFAULT_MARKET_ORDER_SLIPPAGE_BPS),
+		...(input.referenceIoRatio ? { referenceIoRatio: input.referenceIoRatio } : {}),
 		denomination: 'wrapped'
 	};
 }
@@ -252,6 +267,101 @@ function validateReadyCalldata(
 	return { to: response.to, data: response.data, value };
 }
 
+const TRADE_INDEX_MAX_ATTEMPTS = 60;
+const TRADE_INDEX_POLL_INTERVAL_MS = 5_000;
+
+async function pollForIndexedTrade(hash: string): Promise<ApiTradesByTxResponse | null> {
+	for (let attempt = 0; attempt < TRADE_INDEX_MAX_ATTEMPTS; attempt++) {
+		try {
+			const response = await apiGetTradesByTx(hash);
+			if (response.trades.length > 0) return response;
+		} catch (error) {
+			if (attempt === TRADE_INDEX_MAX_ATTEMPTS - 1) {
+				console.warn('[executeMarketOrder] confirmed trade was not indexed in time:', error);
+				return null;
+			}
+		}
+		await new Promise((resolve) => setTimeout(resolve, TRADE_INDEX_POLL_INTERVAL_MS));
+	}
+	return null;
+}
+
+function parseAbsoluteAmount(value: string, decimals: number): bigint {
+	const normalized = value.startsWith('-') ? value.slice(1) : value;
+	try {
+		return parseUnits(normalized, decimals);
+	} catch {
+		throw new Error('Trade API returned an invalid indexed amount');
+	}
+}
+
+function buildMarketOrderSummary(
+	input: MarketOrderInput,
+	request: ApiSwapCalldataV2Request,
+	hash: string,
+	response: ApiTradesByTxResponse
+) {
+	const isBuy = input.orderSide === 'Buy';
+	const takerWantsToken = isBuy ? input.assetToken : input.paymentToken;
+	const takerPaysToken = isBuy ? input.paymentToken : input.assetToken;
+	if (
+		response.trades.length === 0 ||
+		response.trades.some(
+			(trade) =>
+				trade.request.inputToken.toLowerCase() !== request.inputToken.toLowerCase() ||
+				trade.request.outputToken.toLowerCase() !== request.outputToken.toLowerCase()
+		)
+	) {
+		throw new Error('Trade API returned an unexpected indexed token pair');
+	}
+	if (response.txHash.toLowerCase() !== hash.toLowerCase()) {
+		throw new Error('Trade API returned an unexpected transaction hash');
+	}
+
+	const totalTakerPaysAmount = parseAbsoluteAmount(
+		response.totals.totalInputAmount,
+		takerPaysToken.decimals
+	);
+	const totalTakerWantsAmount = parseAbsoluteAmount(
+		response.totals.totalOutputAmount,
+		takerWantsToken.decimals
+	);
+	const requestedAmount = input.amount;
+	const isOutputAnchored = request.mode === 'buyUpTo';
+	const requestedTakerWantsAmount = isOutputAnchored ? requestedAmount : totalTakerWantsAmount;
+	const requestedTakerPaysAmount = isOutputAnchored ? undefined : requestedAmount;
+	const wants = Number(formatUnits(totalTakerWantsAmount, takerWantsToken.decimals));
+	const pays = Number(formatUnits(totalTakerPaysAmount, takerPaysToken.decimals));
+	const ioRatio = pays > 0 ? wants / pays : 0;
+
+	const summary = detectPartialFill({
+		totalTakerWantsAmount,
+		totalTakerPaysAmount,
+		requestedTakerWantsAmount,
+		requestedTakerPaysAmount,
+		inputTokenSymbol: takerWantsToken.symbol,
+		inputTokenAddress: takerWantsToken.address,
+		inputTokenDecimals: takerWantsToken.decimals,
+		outputTokenSymbol: takerPaysToken.symbol,
+		outputTokenAddress: takerPaysToken.address,
+		outputTokenDecimals: takerPaysToken.decimals,
+		ioRatio,
+		actualSlippage: 0n
+	});
+
+	// The summary card compares asset quantity on both Buy and Sell. When the
+	// user anchored on payment, actual asset quantity is the only comparable
+	// value available after execution.
+	const requestedAssetAmount =
+		(input.orderSide === 'Buy' && input.inputMode !== 'spend') ||
+		(input.orderSide === 'Sell' && input.inputMode !== 'receive')
+			? requestedAmount
+			: isBuy
+				? totalTakerWantsAmount
+				: totalTakerPaysAmount;
+	return { ...summary, requestedInputAmount: requestedAssetAmount };
+}
+
 /** Execute a market order using calldata built entirely by the REST API. */
 export async function executeMarketOrder(input: MarketOrderInput): Promise<MarketOrderResult> {
 	const { orderSide, assetToken, paymentToken, network } = input;
@@ -330,7 +440,11 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		});
 		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'completed');
 		invalidateDashboardBalances();
-		transactionStoreInternal.transactionSuccess(hash, 'Market order confirmed');
+		const indexedTrade = await pollForIndexedTrade(hash);
+		const metadata = indexedTrade
+			? { marketOrderSummary: buildMarketOrderSummary(input, request, hash, indexedTrade) }
+			: undefined;
+		transactionStoreInternal.transactionSuccess(hash, 'Market order confirmed', metadata);
 		return { success: true };
 	} catch (error) {
 		console.error(`[executeMarketOrder] ${activeStage} failed:`, error);
