@@ -79,7 +79,8 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
 	{ method: 'POST', pattern: /^v1\/trades\/query$/ },
 	{ method: 'POST', pattern: /^v1\/swap\/quote$/ },
-	{ method: 'POST', pattern: /^v1\/swap\/calldata$/ }
+	{ method: 'POST', pattern: /^v1\/swap\/calldata$/ },
+	{ method: 'POST', pattern: /^v2\/swap\/calldata$/ }
 ];
 
 function matchProxyRoute(method: string, pathSuffix: string): { cache?: string } | null {
