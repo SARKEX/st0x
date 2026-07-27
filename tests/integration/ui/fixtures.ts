@@ -4,7 +4,7 @@
 // - tokens: USDC + wtCOIN + wtNVDA + wtAMZN
 // - page: extended with EIP-1193 stub injected via addInitScript before any goto()
 //
-// Design note — NO stubs for Hermes, ST0x REST orders API, or Goldsky subgraph.
+// Design note — NO default stubs for Hermes, ST0x REST orders API, or Goldsky subgraph.
 // globalSetup picks a recent NYSE-market-hours block so LIVE data sources
 // (Pyth Hermes price, ST0x REST quotes, Goldsky subgraph order list) are
 // effectively at the same chain head the fork is at, and the SDK's on-chain
@@ -286,9 +286,8 @@ export const test = base.extend<UiFixtures>({
 			window.localStorage.setItem('wagmi.recentConnectorId', '"injected"');
 			window.localStorage.setItem('wagmi.injected.connected', 'true');
 		});
-		// Cache Goldsky GraphQL responses across tests in this worker. The Raindex
-		// SDK in the browser hits the Goldsky subgraph during the hydration step
-		// of marketOrderExecution.ts (one getOrders call per walk-fill orderHash).
+		// Cache Goldsky GraphQL responses across tests in this worker. Display quote
+		// queries still read Goldsky; submitted market calldata comes from REST v2.
 		// Free-tier Goldsky rate-limits hard under that burst — and once
 		// rate-limited the response comes back without CORS headers, which the
 		// browser surfaces as a CORS error. The SDK then can't hydrate and the
