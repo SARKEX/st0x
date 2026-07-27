@@ -165,6 +165,11 @@
 					$walletAddress ?? undefined
 				)
 			: null;
+	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
+		queryKey: ['swapQuoteV2', undefined, null],
+		enabled: false,
+		queryFn: () => Promise.reject(new Error('Missing swap quote request'))
+	});
 	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['swapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
 		enabled: browser && Boolean(marketQuoteRequest),
@@ -286,7 +291,7 @@
 	$: bestBidPrice = bidQuotes.length > 0 ? bidQuotes[0].quotePerAsset : null;
 
 	// ============ AUTHORITATIVE REST QUOTE ============
-	$: quote = toDisplayQuote($marketQuoteQuery.data, isBuying, lastEditedField);
+	$: quote = toDisplayQuote($marketQuoteQuery?.data, isBuying, lastEditedField);
 
 	$: syncOtherField(quote, lastEditedField);
 

@@ -340,6 +340,44 @@ describe('executeMarketOrder REST calldata execution', () => {
 		);
 	});
 
+	it('keeps a confirmed transaction successful when indexed summary data is malformed', async () => {
+		mocks.apiGetTradesByTx.mockResolvedValue({
+			...indexedTradeResponse({
+				taker: TAKER,
+				inputToken: PAYMENT,
+				outputToken: ASSET,
+				mode: 'buyUpTo',
+				amount: '1',
+				slippageBps: 100,
+				denomination: 'wrapped'
+			}),
+			txHash: APPROVAL_HASH
+		});
+
+		const result = await executeMarketOrder({
+			orderSide: 'Buy',
+			amount: 1_000_000_000_000_000_000n,
+			...tokens,
+			network
+		});
+
+		expect(result).toEqual({ success: true });
+		expect(mocks.transactionSuccess).toHaveBeenCalledWith(
+			TRADE_HASH,
+			'Market order confirmed',
+			undefined
+		);
+		expect(mocks.captureTradeFlowError).toHaveBeenCalledWith(
+			expect.objectContaining({
+				message: 'Trade API returned an unexpected transaction hash'
+			}),
+			expect.objectContaining({
+				stage: 'confirmation',
+				operation: 'build_market_order_summary'
+			})
+		);
+	});
+
 	it('does not import browser-side SDK calldata or order-walking code', () => {
 		const source = readFileSync(
 			resolve(process.cwd(), 'src/lib/services/marketOrderExecution.ts'),

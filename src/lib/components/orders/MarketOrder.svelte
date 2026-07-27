@@ -352,6 +352,11 @@
 					$walletAddress ?? undefined
 				)
 			: null;
+	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
+		queryKey: ['marketSwapQuoteV2', undefined, null],
+		enabled: false,
+		queryFn: () => Promise.reject(new Error('Missing market quote request'))
+	});
 	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['marketSwapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
 		enabled: Boolean(marketQuoteRequest),
@@ -362,7 +367,7 @@
 			return apiGetSwapQuoteV2(marketQuoteRequest);
 		}
 	});
-	$: marketQuote = $marketQuoteQuery.data;
+	$: marketQuote = $marketQuoteQuery?.data;
 	$: {
 		insufficientLiquidityWarning = Boolean(
 			selectedAmount > 0n && marketQuote && !marketQuote.fullyFilled
@@ -484,13 +489,13 @@
 		showHighSlippageWarning = false;
 	}
 
-	$: isLoadingPrice = selectedAmount > 0n && $marketQuoteQuery.isFetching;
-	$: priceError = selectedAmount > 0n && $marketQuoteQuery.isError;
+	$: isLoadingPrice = selectedAmount > 0n && Boolean($marketQuoteQuery?.isFetching);
+	$: priceError = selectedAmount > 0n && Boolean($marketQuoteQuery?.isError);
 	$: {
 		if (!priceError) {
 			priceErrorReason = null;
 		} else {
-			const message = String($marketQuoteQuery.error ?? '').toLowerCase();
+			const message = String($marketQuoteQuery?.error ?? '').toLowerCase();
 			priceErrorReason =
 				message.includes('liquidity') || message.includes('not found') ? 'no_quotes' : 'error';
 		}

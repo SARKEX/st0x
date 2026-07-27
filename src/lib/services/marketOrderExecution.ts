@@ -376,7 +376,10 @@ function buildMarketOrderSummary(
 /** Execute a market order using calldata built entirely by the REST API. */
 export async function executeMarketOrder(input: MarketOrderInput): Promise<MarketOrderResult> {
 	const { orderSide, assetToken, paymentToken, network } = input;
-	const flowContext = (stage: 'quote' | 'calldata' | 'submission', operation: string) => ({
+	const flowContext = (
+		stage: 'quote' | 'calldata' | 'submission' | 'confirmation',
+		operation: string
+	) => ({
 		stage,
 		operation,
 		orderType: 'market' as const,
@@ -452,9 +455,17 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'completed');
 		invalidateDashboardBalances();
 		const indexedTrade = await pollForIndexedTrade(hash);
-		const metadata = indexedTrade
-			? { marketOrderSummary: buildMarketOrderSummary(input, request, hash, indexedTrade) }
-			: undefined;
+		let metadata: { marketOrderSummary: ReturnType<typeof buildMarketOrderSummary> } | undefined;
+		if (indexedTrade) {
+			try {
+				metadata = {
+					marketOrderSummary: buildMarketOrderSummary(input, request, hash, indexedTrade)
+				};
+			} catch (error) {
+				console.warn('[executeMarketOrder] confirmed trade summary could not be built:', error);
+				captureTradeFlowError(error, flowContext('confirmation', 'build_market_order_summary'));
+			}
+		}
 		transactionStoreInternal.transactionSuccess(hash, 'Market order confirmed', metadata);
 		return { success: true };
 	} catch (error) {
