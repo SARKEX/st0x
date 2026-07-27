@@ -137,6 +137,65 @@ describe('/api/st0x proxy', () => {
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
+	it('allows POST /v2/swap/quote and forwards slippage without caching', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					inputToken: '0xIn',
+					outputToken: '0xOut',
+					mode: 'spendUpTo',
+					amount: '100',
+					denomination: 'wrapped',
+					estimatedInput: '100',
+					estimatedOutput: '0.75',
+					estimatedIoRatio: '133.33',
+					fullyFilled: true,
+					resolvedPriceCap: '134.66'
+				}),
+				{ status: 200, headers: { 'Content-Type': 'application/json' } }
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const body = JSON.stringify({
+			taker: '0xTaker',
+			inputToken: '0xIn',
+			outputToken: '0xOut',
+			mode: 'spendUpTo',
+			amount: '100',
+			slippageBps: 100
+		});
+
+		const response = await POST(proxyEvent('POST', 'v2/swap/quote', body));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.example.test/v2/swap/quote?page=1',
+			expect.objectContaining({ method: 'POST' })
+		);
+		const init = fetchMock.mock.calls[0][1] as RequestInit;
+		expect(await new Response(init.body).text()).toBe(body);
+	});
+
+	it('allows GET /v1/trades/tx/:hash without caching', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify({ txHash: '0x1234', trades: [], totals: {} }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(proxyEvent('GET', 'v1/trades/tx/0x1234'));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.example.test/v1/trades/tx/0x1234?page=1',
+			expect.objectContaining({ method: 'GET' })
+		);
+	});
+
 	it('allows cached wrap-ratio endpoints', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ data: [], errors: [] }), {

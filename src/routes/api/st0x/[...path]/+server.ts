@@ -75,11 +75,13 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v1\/trades\/tx\/[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|query$)[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
 	{ method: 'POST', pattern: /^v1\/trades\/query$/ },
 	{ method: 'POST', pattern: /^v1\/swap\/quote$/ },
 	{ method: 'POST', pattern: /^v1\/swap\/calldata$/ },
+	{ method: 'POST', pattern: /^v2\/swap\/quote$/ },
 	{ method: 'POST', pattern: /^v2\/swap\/calldata$/ }
 ];
 

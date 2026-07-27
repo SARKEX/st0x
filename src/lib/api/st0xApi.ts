@@ -69,8 +69,7 @@ export interface ApiSwapCalldataResponse {
 
 export type ApiSwapCalldataMode = 'buyUpTo' | 'spendExact' | 'spendUpTo';
 
-interface ApiSwapCalldataV2RequestCommon {
-	taker: string;
+export interface ApiSwapV2RequestCommon {
 	inputToken: string;
 	outputToken: string;
 	mode: ApiSwapCalldataMode;
@@ -78,8 +77,27 @@ interface ApiSwapCalldataV2RequestCommon {
 	denomination?: 'wrapped' | 'unwrapped';
 }
 
-export type ApiSwapCalldataV2Request = ApiSwapCalldataV2RequestCommon &
-	({ priceCap: string; slippageBps?: never } | { priceCap?: never; slippageBps: number });
+type ApiSwapV2PriceLimit =
+	| { priceCap: string; slippageBps?: never; referenceIoRatio?: never }
+	| { priceCap?: never; slippageBps: number; referenceIoRatio?: string };
+
+export type ApiSwapQuoteV2Request = ApiSwapV2RequestCommon &
+	ApiSwapV2PriceLimit & {
+		taker?: string;
+	};
+
+export interface ApiSwapQuoteV2Response extends ApiSwapV2RequestCommon {
+	estimatedInput: string;
+	estimatedOutput: string;
+	estimatedIoRatio: string;
+	fullyFilled: boolean;
+	resolvedPriceCap: string;
+}
+
+export type ApiSwapCalldataV2Request = ApiSwapV2RequestCommon &
+	ApiSwapV2PriceLimit & {
+		taker: string;
+	};
 
 export interface ApiSwapCalldataV2Response extends ApiSwapCalldataResponse {
 	denomination: 'wrapped' | 'unwrapped';
@@ -146,6 +164,35 @@ export interface ApiTradesPagination {
 export interface ApiTradesByAddressResponse {
 	trades: ApiTradeByAddress[];
 	pagination: ApiTradesPagination;
+}
+
+export interface ApiTradeByTxEntry {
+	orderHash: string;
+	orderOwner: string;
+	request: {
+		inputToken: string;
+		outputToken: string;
+		maximumInput: string;
+		maximumIoRatio: string;
+	};
+	result: {
+		inputAmount: string;
+		outputAmount: string;
+		actualIoRatio: string;
+	};
+}
+
+export interface ApiTradesByTxResponse {
+	txHash: string;
+	blockNumber: number;
+	timestamp: number;
+	sender: string;
+	trades: ApiTradeByTxEntry[];
+	totals: {
+		totalInputAmount: string;
+		totalOutputAmount: string;
+		averageIoRatio: string;
+	};
 }
 
 // ============================================================================
@@ -414,6 +461,21 @@ export async function apiGetSwapQuote(request: ApiSwapQuoteRequest): Promise<Api
 }
 
 /**
+ * Fetch a mode-based swap quote from the same API simulation used to resolve
+ * v2 calldata. This is the authoritative market-order display quote.
+ */
+export async function apiGetSwapQuoteV2(
+	request: ApiSwapQuoteV2Request
+): Promise<ApiSwapQuoteV2Response> {
+	assertBrowser('apiGetSwapQuoteV2');
+	return fetchJson<ApiSwapQuoteV2Response>(apiUrl('/v2/swap/quote'), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(request)
+	});
+}
+
+/**
  * Fetch ready-to-send swap calldata from the API.
  */
 export async function apiGetSwapCalldata(
@@ -472,6 +534,12 @@ export async function apiGetTakerTrades(
 		pageSize: options?.pageSize
 	});
 	return fetchJson<ApiTradesByAddressResponse>(url);
+}
+
+/** Fetch the indexed trade totals for one confirmed transaction. */
+export async function apiGetTradesByTx(txHash: string): Promise<ApiTradesByTxResponse> {
+	assertBrowser('apiGetTradesByTx');
+	return fetchJson<ApiTradesByTxResponse>(apiUrl(`/v1/trades/tx/${txHash}`), { retries: 0 });
 }
 
 /**
