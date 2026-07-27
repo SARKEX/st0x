@@ -23,24 +23,29 @@ function quote(symbol: string, close: number): TradingViewQuote {
 }
 
 describe('price feed sources', () => {
-	it('includes Pyth and fallback-backed Base tokens', () => {
+	it('includes Pyth-backed Base tokens', () => {
 		const base = networks.find((network) => network.chainId === 8453) ?? null;
 		const symbols = tokensWithPriceSource(base).map((token) => token.symbol);
 
 		expect(symbols).toEqual(
-			expect.arrayContaining(['wtCEG', 'wtTSM', 'wtASML', 'wtDRAM', 'wtSKHY', 'wtSPCX'])
+			expect.arrayContaining([
+				'wtCEG',
+				'wtTSM',
+				'wtASML',
+				'wtGOOGL',
+				'wtINTC',
+				'wtAAPL',
+				'wtMSFT',
+				'wtLLY'
+			])
 		);
 	});
 
-	it('uses the refreshed configured fallback prices', () => {
+	it('excludes Base tokens without a configured price source', () => {
 		const base = networks.find((network) => network.chainId === 8453) ?? null;
-		const fallbackPrices = Object.fromEntries(
-			tokensWithPriceSource(base)
-				.filter((token) => ['wtDRAM', 'wtSKHY', 'wtSPCX'].includes(token.symbol))
-				.map((token) => [token.symbol, token.fallbackPrice])
-		);
+		const symbols = tokensWithPriceSource(base).map((token) => token.symbol);
 
-		expect(fallbackPrices).toEqual({ wtDRAM: 63.04, wtSKHY: 149, wtSPCX: 145.3 });
+		expect(symbols).not.toEqual(expect.arrayContaining(['wtDRAM', 'wtSKHY', 'wtSPCX', 'wtPTY']));
 	});
 
 	it('replaces the SPYM fallback with the live monitor quote', () => {
