@@ -19,6 +19,7 @@ import {
 import { mockCurrentNetwork } from '../mocks/mockCurrentNetwork';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { decodeFunctionData } from 'viem';
+import { HttpError } from '$lib/clients/http';
 
 // Shared mock network object to avoid repetition
 const mockNetwork = mockCurrentNetwork;
@@ -381,6 +382,39 @@ describe('transactionStore tests', () => {
 	}
 
 	// Unified parameterized tests for all deployment handlers
+	it.each([
+		['DCA', deploymentHandlers[1], getDcaDeploymentArgs],
+		['Limit Order', deploymentHandlers[2], getLimitOrderDeploymentArgs]
+	] as const)(
+		'preserves structured API failures for %s preparation',
+		async (_name, deployment, deploymentArgsMock) => {
+			const failure = new HttpError({
+				status: 503,
+				code: 'UPSTREAM_UNAVAILABLE',
+				requestId: 'request-deploy-42',
+				publicMessage: 'Trading service unavailable',
+				retryAfter: null
+			});
+			vi.mocked(deploymentArgsMock).mockRejectedValueOnce(failure);
+
+			await expect(deployment.handler(transactionStore)).rejects.toBe(failure);
+			let state: unknown;
+			const unsubscribe = transactionStore.subscribe((value) => {
+				state = value;
+			});
+			unsubscribe();
+
+			expect(state).toMatchObject({
+				status: 'Something went wrong',
+				tradeError: {
+					code: 'UPSTREAM_UNAVAILABLE',
+					requestId: 'request-deploy-42',
+					stage: 'calldata'
+				}
+			});
+		}
+	);
+
 	deploymentHandlers.forEach(({ name, handler, expectedFn }) => {
 		it(`should call handle${name}Deploy`, async () => {
 			const deployPromise = handler(transactionStore);

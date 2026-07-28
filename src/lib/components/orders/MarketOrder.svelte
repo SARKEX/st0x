@@ -27,7 +27,13 @@
 		type TradeFlowStage
 	} from '$lib/services/observability/tradeFlow';
 	import { withTradeId } from '$lib/services/observability/tradeId';
-	import { toUserFacingTradeError } from '$lib/services/tradeError';
+	import {
+		createTradeError,
+		toUserFacingTradeError,
+		type UserFacingTradeError
+	} from '$lib/services/tradeError';
+	import TradeErrorPanel from '$lib/components/trade/TradeErrorPanel.svelte';
+	import { selectVisibleTradeError } from '$lib/components/trade/tradeErrorUi';
 	import { onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
@@ -229,10 +235,6 @@
 
 	$: isQuoteStale = quoteFreshnessSeconds > ORDERBOOK_MAX_STALENESS_MS / 1000;
 
-	// Keep the API's terminal no-liquidity failure inline without resetting the
-	// user's input. The REST service owns quote selection and calldata generation.
-	$: noLiquidityError = (orderPreparationError ?? '').includes('No liquidity available right now');
-
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
 	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
@@ -240,16 +242,13 @@
 	let priceError = false;
 	let priceErrorReason: 'no_quotes' | 'no_fill' | 'error' | null = null;
 	let orderPreparationError: string | null = null;
+	let orderPreparationTradeError: UserFacingTradeError | null = null;
 
 	// Best orderbook price based on order side (from parent props)
 	// Buy: use sellPrice (best ask - what you pay when buying)
 	// Sell: use buyPrice (best bid - what you get when selling)
 	$: bestOrderbookPrice = orderSide === 'Buy' ? sellPrice : buyPrice;
 
-	// Clear preparation error when inputs change
-	$: if (selectedAmount || orderSide) {
-		orderPreparationError = null;
-	}
 	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.paymentTokens?.[0];
 	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
 
@@ -315,11 +314,23 @@
 	// + trade_failed event_class never disagree with the service's own
 	// classification. Reset on each new submit; null when no service-side error
 	// is in flight (the reactive block below then falls back to the local
-	// signals: insufficientBalanceError, noLiquidityError, priceError, …).
+	// signals: insufficientBalanceError, priceError, …).
 	let serviceErrorClass: ErrorClass | null = null;
+	// Clear only failure state when the trade context changes. The amount and
+	// other form choices remain intact so the user can correct and retry.
+	$: if (
+		selectedAmount ||
+		orderSide ||
+		assetToken?.address ||
+		paymentToken?.address ||
+		$currentNetwork?.id
+	) {
+		orderPreparationError = null;
+		orderPreparationTradeError = null;
+		serviceErrorClass = null;
+	}
 	$: errorClass = (() => {
 		if (insufficientBalanceError) return 'insufficient_balance';
-		if (noLiquidityError) return 'no_liquidity';
 		if (serviceErrorClass) return serviceErrorClass;
 		if (isOutsideMarketHours() && orderPreparationError) return 'market_closed';
 		if (priceError && (priceErrorReason === 'no_quotes' || priceErrorReason === 'no_fill'))
@@ -330,6 +341,26 @@
 
 	// The REST quote uses the same mode, amount, slippage and oracle guard as
 	// calldata generation. The browser only formats the returned simulation.
+	$: marketQuoteTradeError =
+		$marketQuoteQuery?.isError && !$marketQuoteQuery?.data
+			? toUserFacingTradeError($marketQuoteQuery?.error, 'quote')
+			: null;
+	$: quoteCalculationTradeError =
+		priceError && selectedAmount > 0n
+			? createTradeError(
+					priceErrorReason === 'no_quotes' || priceErrorReason === 'no_fill'
+						? 'SWAP_NO_LIQUIDITY'
+						: 'SWAP_QUOTE_FAILED',
+					{ stage: 'quote' }
+				)
+			: null;
+	$: visibleTradeError = selectVisibleTradeError(
+		marketQuoteTradeError,
+		orderPreparationTradeError,
+		quoteCalculationTradeError
+	);
+
+	// Liquidity warning: check if there's enough liquidity within price guard
 	let insufficientLiquidityWarning: boolean = false;
 	let availableLiquidityFormatted: string = '0';
 	$: quoteOraclePrice = assetToken
@@ -528,6 +559,7 @@
 		}
 		isSubmittingMarketOrder = true;
 		orderPreparationError = null;
+		orderPreparationTradeError = null;
 		serviceErrorClass = null;
 
 		// Mint after early-return guards so unauthenticated/idle clicks do not
@@ -565,7 +597,10 @@
 						new Error('Payment token configuration is incomplete'),
 						flowContext('quote', 'validate_token_config')
 					);
-					orderPreparationError = 'Token configuration error. Please refresh the page.';
+					orderPreparationTradeError = createTradeError('SWAP_QUOTE_FAILED', {
+						stage: 'quote'
+					});
+					orderPreparationError = orderPreparationTradeError.message;
 					return;
 				}
 				if (!assetToken || typeof assetToken.decimals !== 'number') {
@@ -573,7 +608,10 @@
 						new Error('Asset token configuration is incomplete'),
 						flowContext('quote', 'validate_token_config')
 					);
-					orderPreparationError = 'Token configuration error. Please refresh the page.';
+					orderPreparationTradeError = createTradeError('SWAP_QUOTE_FAILED', {
+						stage: 'quote'
+					});
+					orderPreparationError = orderPreparationTradeError.message;
 					return;
 				}
 				// Execution requests fresh REST API-built calldata with the same
@@ -604,6 +642,7 @@
 				if (!result.success && result.error) {
 					const userFacingError =
 						result.tradeError ?? toUserFacingTradeError(result.error, activeStage);
+					orderPreparationTradeError = userFacingError;
 					orderPreparationError = userFacingError.message;
 					// Prefer the service's discriminated errorClass; fall back to
 					// substring-classifying the user-facing string only if absent
@@ -648,6 +687,7 @@
 					activeStage === 'calldata' ? inferWalletFailureStage(error) : activeStage;
 				captureTradeFlowError(error, flowContext(failureStage, 'submit_market_order'));
 				const userFacingError = toUserFacingTradeError(error, failureStage);
+				orderPreparationTradeError = userFacingError;
 				orderPreparationError = userFacingError.message;
 				trackTradeEvent('trade_failed', {
 					order_type: 'market',
@@ -812,15 +852,6 @@
 							{/if}
 						</p>
 					{/if}
-					<!-- TRADE-03 D-05 (Plan 02-06): terminal-state inline error when the
-					 pre-flight + auto-retry cascade exhausts. User input stays intact (no
-					 form reset, no toast). Copy locked in 02-CONTEXT.md D-05. -->
-					{#if noLiquidityError}
-						<p class="mt-2 text-xs text-red-400">
-							No liquidity available right now for this size. Try a smaller amount or check back in
-							a minute.
-						</p>
-					{/if}
 				</div>
 			</div>
 
@@ -957,30 +988,9 @@
 								{/if}
 							</div>
 						{/if}
-						{#if priceError && selectedAmount && selectedAmount > 0n}
-							<div
-								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-							>
-								{#if priceErrorReason === 'no_quotes'}
-									No orders available within acceptable price range. Try a limit order instead to
-									set your own price.
-								{:else if priceErrorReason === 'no_fill'}
-									Order amount too large for current liquidity. Try a smaller amount or use a limit
-									order.
-								{:else}
-									Unable to fetch market price. Please try again or use a limit order.
-								{/if}
-							</div>
-						{/if}
-						{#if orderPreparationError && !noLiquidityError}
-							<!-- TRADE-03: when the D-05 inline block above is rendering the
-							 verbatim "No liquidity available right now ..." copy, suppress
-							 the generic orderPreparationError box so the message is not
-							 duplicated. Other preparation errors still surface here. -->
-							<div
-								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-							>
-								{orderPreparationError}
+						{#if visibleTradeError}
+							<div class="mt-2">
+								<TradeErrorPanel error={visibleTradeError} />
 							</div>
 						{/if}
 					</div>

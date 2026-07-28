@@ -58,6 +58,7 @@ import { getRaindexOrderUrl, getRaindexVaultUrl, isPaymentToken } from '$lib/uti
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
 import { getMakerOutputTokenAddress, getMakerInputTokenAddress } from '$lib/types/orderPerspective';
 import { TransactionErrorMessage } from '$lib/types/errors';
+import { toUserFacingTradeError } from '$lib/services/tradeError';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import {
 	transactionStoreInternal,
@@ -130,6 +131,17 @@ const {
 	transactionError
 } = transactionStoreInternal;
 
+/** Preserve the original failure long enough to retain typed codes and request IDs. */
+function setDeployTransactionError(
+	error: unknown,
+	eventContext: DeployEventContext | undefined,
+	stage: TradeFlowStage,
+	message: TransactionErrorMessage = extractTransactionError(error),
+	hash?: string
+): void {
+	transactionError(message, hash, eventContext ? toUserFacingTradeError(error, stage) : undefined);
+}
+
 // Find a vault by matching both vault ID and token address
 // Vault IDs can be decimal strings or hex strings, so we check both formats
 function findVaultByIdAndToken(
@@ -183,13 +195,23 @@ export const handleStrategyDeployment = async (
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'submission', 'wallet_config', network?.id);
-		return transactionError(error.message as TransactionErrorMessage);
+		return setDeployTransactionError(
+			error,
+			eventContext,
+			'submission',
+			error.message as TransactionErrorMessage
+		);
 	}
 	const $signerAddress = get(walletAddress);
 	if (!$signerAddress) {
 		const error = new Error('Signer address not found');
 		reportDeployFailure(error, eventContext, 'signing', 'wallet_identity', network?.id);
-		return transactionError(error.message as TransactionErrorMessage);
+		return setDeployTransactionError(
+			error,
+			eventContext,
+			'signing',
+			error.message as TransactionErrorMessage
+		);
 	}
 
 	// Security: Validate orderbook address BEFORE any approvals are granted
@@ -198,7 +220,12 @@ export const handleStrategyDeployment = async (
 		validateOrderbookAddress(deploymentArgs.raindexAddress, network);
 	} catch (error) {
 		reportDeployFailure(error, eventContext, 'calldata', 'validate_orderbook', network.id);
-		return transactionError((error as Error).message as TransactionErrorMessage);
+		return setDeployTransactionError(
+			error,
+			eventContext,
+			'calldata',
+			(error as Error).message as TransactionErrorMessage
+		);
 	}
 
 	// Decode each approval calldata once + check balances in parallel.
@@ -225,7 +252,7 @@ export const handleStrategyDeployment = async (
 		});
 	} catch (error) {
 		reportDeployFailure(error, eventContext, 'calldata', 'decode_approval', network.id);
-		return transactionError(extractTransactionError(error));
+		return setDeployTransactionError(error, eventContext, 'calldata');
 	}
 
 	if (decodedApprovals.length > 0) {
@@ -255,7 +282,7 @@ export const handleStrategyDeployment = async (
 			)) as bigint[];
 		} catch (error) {
 			reportDeployFailure(error, eventContext, 'approval', 'check_balances', network.id);
-			return transactionError(extractTransactionError(error));
+			return setDeployTransactionError(error, eventContext, 'approval');
 		}
 		if (approvalContext) addTradeFlowBreadcrumb(approvalContext, 'completed');
 
@@ -264,7 +291,10 @@ export const handleStrategyDeployment = async (
 			if (balances[i] < requiredAmount) {
 				const error = new Error(`Insufficient ${approval.symbol} balance`);
 				reportDeployFailure(error, eventContext, 'approval', 'check_balances', network.id);
-				return transactionError(
+				return setDeployTransactionError(
+					error,
+					eventContext,
+					'approval',
 					`Insufficient ${approval.symbol} balance. Please add more ${approval.symbol} to your wallet or reduce the ${approval.symbol} deposit amount in advanced options.` as TransactionErrorMessage
 				);
 			}
@@ -286,18 +316,18 @@ export const handleStrategyDeployment = async (
 					setStatus: (s) => transactionStoreInternal.update((state) => ({ ...state, status: s }))
 				});
 			} catch (error) {
-				reportDeployFailure(
-					error,
-					eventContext,
-					inferWalletFailureStage(error) === 'signing' ? 'signing' : 'approval',
-					'approve_token',
-					network.id
-				);
+				const failureStage = inferWalletFailureStage(error) === 'signing' ? 'signing' : 'approval';
+				reportDeployFailure(error, eventContext, failureStage, 'approve_token', network.id);
 				if (isStaleWalletSessionError(error)) {
 					const msg = await handleStaleWalletSession(config);
-					return transactionError(msg as TransactionErrorMessage);
+					return setDeployTransactionError(
+						error,
+						eventContext,
+						failureStage,
+						msg as TransactionErrorMessage
+					);
 				}
-				return transactionError(extractTransactionError(error));
+				return setDeployTransactionError(error, eventContext, failureStage);
 			}
 		}
 	}
@@ -327,18 +357,18 @@ export const handleStrategyDeployment = async (
 			});
 		}
 	} catch (error) {
-		reportDeployFailure(
-			error,
-			eventContext,
-			inferWalletFailureStage(error),
-			'deploy_strategy',
-			network.id
-		);
+		const failureStage = inferWalletFailureStage(error);
+		reportDeployFailure(error, eventContext, failureStage, 'deploy_strategy', network.id);
 		if (isStaleWalletSessionError(error)) {
 			const msg = await handleStaleWalletSession(config);
-			return transactionError(msg as TransactionErrorMessage);
+			return setDeployTransactionError(
+				error,
+				eventContext,
+				failureStage,
+				msg as TransactionErrorMessage
+			);
 		}
-		return transactionError(extractTransactionError(error));
+		return setDeployTransactionError(error, eventContext, failureStage);
 	}
 
 	// OBS-07: emit `confirmed` once the deploy is confirmed on-chain. The
@@ -502,6 +532,12 @@ export const handleDcaDeploy = async (
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'calldata', 'prepare_dca', network?.id);
+		setDeployTransactionError(
+			error,
+			eventContext,
+			'calldata',
+			error.message as TransactionErrorMessage
+		);
 		throw error;
 	}
 	awaitWalletConfirmation(`Preparing strategy...`);
@@ -517,6 +553,7 @@ export const handleDcaDeploy = async (
 		));
 	} catch (error) {
 		reportDeployFailure(error, eventContext, 'calldata', 'prepare_dca', network.id);
+		setDeployTransactionError(error, eventContext, 'calldata');
 		throw error;
 	}
 	if (calldataContext) addTradeFlowBreadcrumb(calldataContext, 'completed');
@@ -545,6 +582,12 @@ export const handleLimitDeploy = async (
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'calldata', 'prepare_limit', network?.id);
+		setDeployTransactionError(
+			error,
+			eventContext,
+			'calldata',
+			error.message as TransactionErrorMessage
+		);
 		throw error;
 	}
 	awaitWalletConfirmation(`Preparing strategy...`);
@@ -560,6 +603,7 @@ export const handleLimitDeploy = async (
 		));
 	} catch (error) {
 		reportDeployFailure(error, eventContext, 'calldata', 'prepare_limit', network.id);
+		setDeployTransactionError(error, eventContext, 'calldata');
 		throw error;
 	}
 	if (calldataContext) addTradeFlowBreadcrumb(calldataContext, 'completed');

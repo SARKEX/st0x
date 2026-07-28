@@ -16,6 +16,8 @@
 		getMakerOutputTokenAddress
 	} from '$lib/types/orderPerspective';
 	import Button from './ui/Button.svelte';
+	import TradeErrorPanel from './trade/TradeErrorPanel.svelte';
+	import { selectVisibleTradeError, toTradeFailureAnalytics } from './trade/tradeErrorUi';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
 	import QuickTradeChart from './QuickTradeChart.svelte';
@@ -27,7 +29,11 @@
 		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS
 	} from '$lib/services/marketOrderExecution';
-	import { createTradeError, toUserFacingTradeError } from '$lib/services/tradeError';
+	import {
+		createTradeError,
+		toUserFacingTradeError,
+		type UserFacingTradeError
+	} from '$lib/services/tradeError';
 
 	// Quick Trade intentionally uses a fixed 1% slippage tolerance to keep the
 	// simplified flow free of advanced order controls.
@@ -78,7 +84,7 @@
 		topAmount = '';
 		bottomAmount = '';
 		lastEditedField = null;
-		tradeError = null;
+		tradeErrorDetails = null;
 	}
 
 	function toggleDropdown(e: MouseEvent) {
@@ -115,7 +121,18 @@
 	let isBuying = true;
 	let lastEditedField: 'top' | 'bottom' | null = null;
 	let isExecutingTrade = false;
-	let tradeError: string | null = null;
+	let tradeErrorDetails: UserFacingTradeError | null = null;
+	$: tradeError = tradeErrorDetails?.message ?? null;
+	let tradeErrorNetworkId = $currentNetwork?.id;
+
+	function clearTradeError() {
+		tradeErrorDetails = null;
+	}
+
+	$: if ($currentNetwork?.id !== tradeErrorNetworkId) {
+		tradeErrorNetworkId = $currentNetwork?.id;
+		clearTradeError();
+	}
 
 	// ============ DATA LOADING ============
 	$: paymentToken = $currentNetwork?.defaultPaymentToken;
@@ -181,6 +198,13 @@
 			return apiGetSwapQuoteV2(marketQuoteRequest);
 		}
 	});
+	$: quoteTradeError =
+		$marketQuoteQuery?.isError && !$marketQuoteQuery?.data
+			? toUserFacingTradeError($marketQuoteQuery?.error, 'quote')
+			: null;
+	// A blocking no-data quote failure describes the current form context and
+	// must not be hidden by an older execution failure.
+	$: visibleTradeError = selectVisibleTradeError(quoteTradeError, tradeErrorDetails);
 
 	// On mount: analytics only. The selected-token query above fetches the visible quote data.
 	onMount(() => {
@@ -346,6 +370,7 @@
 		lastEditedField = 'top';
 		// Clear the other field to prevent both having user-entered values while prices load
 		bottomAmount = '';
+		clearTradeError();
 	}
 
 	function handleBottomInput(e: Event) {
@@ -354,10 +379,12 @@
 		lastEditedField = 'bottom';
 		// Clear the other field to prevent both having user-entered values while prices load
 		topAmount = '';
+		clearTradeError();
 	}
 
 	function handleSwapDirection() {
 		isBuying = !isBuying;
+		clearTradeError();
 		track('quick_trade_direction_changed', {
 			direction: isBuying ? 'buy' : 'sell',
 			token_symbol: selectedToken?.symbol
@@ -370,6 +397,7 @@
 		const flooredAmount = Math.floor(amount * 100) / 100;
 		topAmount = flooredAmount.toFixed(2);
 		lastEditedField = 'top';
+		clearTradeError();
 	}
 
 	function handleTokenPercentClick(percent: number) {
@@ -378,6 +406,7 @@
 		const flooredAmount = Math.floor(amount * 1e6) / 1e6;
 		bottomAmount = flooredAmount.toFixed(6);
 		lastEditedField = 'bottom';
+		clearTradeError();
 	}
 
 	// ============ TRADE EXECUTION ============
@@ -408,12 +437,12 @@
 
 		const orderSide = isBuying ? 'Buy' : 'Sell';
 		if (!tradeAnchor) {
-			tradeError = createTradeError('SWAP_QUOTE_FAILED', { stage: 'quote' }).message;
+			tradeErrorDetails = createTradeError('SWAP_QUOTE_FAILED', { stage: 'quote' });
 			return;
 		}
 
 		isExecutingTrade = true;
-		tradeError = null;
+		tradeErrorDetails = null;
 
 		try {
 			const { executeMarketOrder } = await import('$lib/services/marketOrderExecution');
@@ -439,16 +468,14 @@
 			if (!result.success) {
 				const userFacingError =
 					result.tradeError ?? toUserFacingTradeError(result.error, 'submission');
-				tradeError = userFacingError.message;
+				tradeErrorDetails = userFacingError;
 				track('quick_trade_failed', {
 					token_symbol: selectedToken?.symbol,
 					direction: isBuying ? 'buy' : 'sell',
 					usdc_amount: topAmount,
 					token_amount: bottomAmount,
 					avg_price: quote?.avgPrice,
-					error: tradeError,
-					error_code: userFacingError.code,
-					request_id: userFacingError.requestId
+					...toTradeFailureAnalytics(userFacingError)
 				});
 			} else {
 				tradeSubmittedSuccessfully = true;
@@ -466,16 +493,14 @@
 		} catch (error) {
 			console.error('Trade error:', error);
 			const userFacingError = toUserFacingTradeError(error, 'submission');
-			tradeError = userFacingError.message;
+			tradeErrorDetails = userFacingError;
 			track('quick_trade_failed', {
 				token_symbol: selectedToken?.symbol,
 				direction: isBuying ? 'buy' : 'sell',
 				usdc_amount: topAmount,
 				token_amount: bottomAmount,
 				avg_price: quote?.avgPrice,
-				error: tradeError,
-				error_code: userFacingError.code,
-				request_id: userFacingError.requestId
+				...toTradeFailureAnalytics(userFacingError)
 			});
 		} finally {
 			isExecutingTrade = false;
@@ -742,10 +767,8 @@
 		</div>
 
 		<!-- Error display -->
-		{#if tradeError}
-			<div class="rounded-lg bg-down-soft px-3 py-2 text-center text-sm text-down">
-				{tradeError}
-			</div>
+		{#if visibleTradeError}
+			<TradeErrorPanel error={visibleTradeError} />
 		{/if}
 
 		<!-- Action button -->
