@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { pickLevelForRoute, getRequestContext, getLogger } from '$lib/server/logger';
+import {
+	pickLevelForRoute,
+	getRequestContext,
+	getLogger,
+	requestContextHandle
+} from '$lib/server/logger';
 
 describe('pickLevelForRoute', () => {
 	// Status takes precedence over route. Verified for every route bucket
@@ -79,6 +84,30 @@ describe('pickLevelForRoute', () => {
 });
 
 describe('getRequestContext', () => {
+	it('replaces an invalid incoming request id before context, logging, and response handling', async () => {
+		const incomingId = 'x'.repeat(129);
+		let contextId: string | undefined;
+		const event = {
+			request: new Request('http://localhost/api/st0x/health', {
+				headers: { 'x-request-id': incomingId }
+			}),
+			url: new URL('http://localhost/api/st0x/health'),
+			cookies: { get: () => undefined }
+		};
+
+		const response = await requestContextHandle({
+			event,
+			resolve: async () => {
+				contextId = getRequestContext()?.request_id;
+				return new Response('ok');
+			}
+		} as unknown as Parameters<typeof requestContextHandle>[0]);
+
+		expect(contextId).toMatch(/^[0-9a-f-]{36}$/);
+		expect(contextId).not.toBe(incomingId);
+		expect(response.headers.get('x-request-id')).toBe(contextId);
+	});
+
 	// requestContextHandle calls contextStore.run(...) inside a SvelteKit hook;
 	// at the unit-test level we can't easily spin a real Handle event, so the
 	// smoke test below uses an internal AsyncLocalStorage instance to exercise

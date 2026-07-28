@@ -280,11 +280,14 @@ export async function fetchAndQuotePaymentTokenOrders(
 		}
 	});
 
-	// Log any failed token fetches
-	for (const result of results) {
-		if (result.status === 'rejected') {
-			console.warn('[orders] Token fetch failed:', result.reason);
-		}
+	const failures = results.filter(
+		(result): result is PromiseRejectedResult => result.status === 'rejected'
+	);
+	if (failures.length > 0 && processedQuotes.length === 0) {
+		throw failures[0].reason;
+	}
+	for (const failure of failures) {
+		console.warn('[orders] Token fetch failed; using partial orderbook:', failure.reason);
 	}
 
 	return processedQuotes;
@@ -366,8 +369,12 @@ export async function fetchAndQuoteTokenOrders(
 			hasMore = response.pagination.hasMore;
 			page++;
 		} catch (error) {
-			console.warn(`[orders] Page ${page} fetch failed for token ${tokenAddress}:`, error);
-			break;
+			if (processedQuotes.length === 0) throw error;
+			console.warn(
+				`[orders] Page ${page} fetch failed for token ${tokenAddress}; using partial orderbook:`,
+				error
+			);
+			hasMore = false;
 		}
 	}
 	if (hasMore) {
