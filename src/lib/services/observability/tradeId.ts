@@ -16,7 +16,7 @@
  * the `withTradeId` wrapper, which owns the mint/clear lifecycle.
  *
  * Project convention: logging never throws back into the caller. Every Sentry call is
- * wrapped in try/catch — see `captureTakeOrderFailure.ts` for the same pattern.
+ * wrapped in try/catch — see `tradeFlow.ts` for the same pattern.
  */
 
 import * as Sentry from '@sentry/sveltekit';

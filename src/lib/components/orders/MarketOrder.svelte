@@ -1,39 +1,39 @@
 <script lang="ts">
 	import type { CategorizedToken } from '$lib/config/network';
 	import { currentNetwork } from '$lib/stores';
-	import { type ProcessedQuote, walkOrderbook } from '$lib/api/orders';
-	import {
-		getMakerInputTokenAddress,
-		getMakerOutputTokenAddress
-	} from '$lib/types/orderPerspective';
-	import { normalizeAddress } from '$lib/utils/tokenMath';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits } from 'viem';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
-	import { isAuthenticated } from '$lib/stores/authStore';
+	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import { promptWalletConnection } from '$lib/stores/accessStore';
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
-	import type { CreateQueryResult } from '@tanstack/svelte-query';
+	import { createQuery, type CreateQueryResult } from '@tanstack/svelte-query';
+	import { apiGetSwapQuoteV2, type ApiSwapQuoteV2Response } from '$lib/api/st0xApi';
 	import {
+		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
 		MAX_SLIPPAGE_BPS,
 		executeMarketOrder,
-		filterQuotesForSide,
-		sortQuotesByPrice
+		oracleReferenceIoRatio
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
-	import { classifyError } from '$lib/services/observability/classifyError';
 	import {
-		addTradeFlowBreadcrumb,
 		captureTradeFlowError,
 		inferWalletFailureStage,
 		type TradeFlowStage
 	} from '$lib/services/observability/tradeFlow';
 	import { withTradeId } from '$lib/services/observability/tradeId';
+	import {
+		createTradeError,
+		toUserFacingTradeError,
+		type UserFacingTradeError
+	} from '$lib/services/tradeError';
+	import TradeErrorPanel from '$lib/components/trade/TradeErrorPanel.svelte';
+	import { selectVisibleTradeError } from '$lib/components/trade/tradeErrorUi';
 	import { onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
@@ -235,15 +235,6 @@
 
 	$: isQuoteStale = quoteFreshnessSeconds > ORDERBOOK_MAX_STALENESS_MS / 1000;
 
-	// TRADE-03 D-05 (Plan 02-06): detect terminal-state failure from the pre-flight
-	// + auto-retry cascade. The user-facing error string carrying the D-05 copy is
-	// returned by `executeMarketOrder()` and stored locally in `orderPreparationError`
-	// (see handleMarketOrder below). When the cascade exhausts (auto_retry_exhausted
-	// or preflight_order_vanished), the inline block below renders without a form
-	// reset or toast — user input stays intact. (See `marketOrderExecution.ts` for
-	// the failWith() user-facing copy that lands here.)
-	$: noLiquidityError = (orderPreparationError ?? '').includes('No liquidity available right now');
-
 	// State for market price and quantity
 	let marketPrice: number = 0; // Human-readable price (quote per asset)
 	let selectedAmount: bigint = 0n; // Quantity to acquire from order outputs (in output token decimals)
@@ -251,17 +242,12 @@
 	let priceError = false;
 	let priceErrorReason: 'no_quotes' | 'no_fill' | 'error' | null = null;
 	let orderPreparationError: string | null = null;
+	let orderPreparationTradeError: UserFacingTradeError | null = null;
 
 	// Best orderbook price based on order side (from parent props)
 	// Buy: use sellPrice (best ask - what you pay when buying)
 	// Sell: use buyPrice (best bid - what you get when selling)
 	$: bestOrderbookPrice = orderSide === 'Buy' ? sellPrice : buyPrice;
-
-	// Clear preparation error when inputs change
-	$: if (selectedAmount || orderSide) {
-		orderPreparationError = null;
-	}
-	let hasAvailableOrders = false;
 
 	$: paymentToken = $currentNetwork?.defaultPaymentToken || $currentNetwork?.paymentTokens?.[0];
 	$: paymentTokenSymbol = paymentToken?.symbol ?? 'Quote';
@@ -299,47 +285,26 @@
 	// Token being spent
 	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
 
-	// The retained REST midpoint is only a conversion fallback for percentage
-	// buttons. Executable quote selection is governed by quote freshness,
-	// liquidity and the user's explicit slippage tolerance.
-	$: referencePrice = getMidpointPrice($midpointPricesQuery?.data, assetToken?.address)?.price;
-	// In 'spend' mode, no conversion needed - direct percentage of balance
-	$: percentageButtonsDisabled =
-		orderSide === 'Buy' &&
-		inputMode === 'amount' &&
-		!(referencePrice && referencePrice > 0) &&
-		!($orderbookQuotesQuery?.data?.quotes?.length ?? 0) &&
-		spendingTokenBalance > 0n;
-
-	// Calculate the amount being spent and check against balance
+	// Exact spend-anchored inputs can be checked against the wallet balance
+	// without estimating a price. Buy-by-amount is intentionally left to REST,
+	// because a browser-side cost estimate must not reject an executable order.
 	$: {
-		if (!selectedAmount || selectedAmount === 0n || !marketPrice || isLoadingPrice) {
+		if (!selectedAmount || selectedAmount === 0n) {
 			insufficientBalanceError = false;
 		} else if (orderSide === 'Sell') {
-			// For SELL: user is spending the asset token
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else if (inputMode === 'spend') {
-			// For BUY in spend mode: selectedAmount is the exact payment amount
 			insufficientBalanceError = selectedAmount > spendingTokenBalance;
 		} else {
-			// For BUY in amount mode: user is spending the payment token (USDC)
-			// Calculate the estimated cost using floor to avoid false "insufficient balance" errors
-			// when clicking MAX button (precision errors from float conversion)
-			const assetDecimals = assetToken?.decimals ?? 18;
-			const paymentDecimals = paymentToken?.decimals ?? 6;
-			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetDecimals));
-			const estimatedCost = outputInTokens * marketPrice;
-			// Use floor instead of ceil to prevent rounding up beyond actual balance
-			const estimatedCostBigInt = BigInt(Math.floor(estimatedCost * 10 ** paymentDecimals));
-			insufficientBalanceError = estimatedCostBigInt > spendingTokenBalance;
+			insufficientBalanceError = false;
 		}
 	}
 
 	// D-09 error-class taxonomy (compound testid for TEST-08 assertions):
-	//   - slippage             ← ratio-cap math reject (slippage_cap reason in failWith transcript)
-	//   - no_liquidity         ← OBS-03 no_quotes_available / preflight_order_vanished cascade
-	//   - stale_oracle         ← OBS-03 preflight_chain_unreachable / pyth-staleness
-	//   - insufficient_balance ← wallet/approval failure (selected amount > balance)
+	//   - slippage             ← REST/SDK price-cap rejection
+	//   - no_liquidity         ← REST/SDK reports no executable route
+	//   - stale_oracle         ← REST/SDK oracle validation fails
+	//   - insufficient_balance ← exact spend exceeds the local wallet balance
 	//   - market_closed        ← marketHours.isOutsideMarketHours()
 	// Order is precedence-significant: highest-priority class wins when multiple are
 	// active (e.g. insufficient_balance trumps no_liquidity to surface the actionable
@@ -349,11 +314,23 @@
 	// + trade_failed event_class never disagree with the service's own
 	// classification. Reset on each new submit; null when no service-side error
 	// is in flight (the reactive block below then falls back to the local
-	// signals: insufficientBalanceError, noLiquidityError, priceError, …).
+	// signals: insufficientBalanceError, priceError, …).
 	let serviceErrorClass: ErrorClass | null = null;
+	// Clear only failure state when the trade context changes. The amount and
+	// other form choices remain intact so the user can correct and retry.
+	$: if (
+		selectedAmount ||
+		orderSide ||
+		assetToken?.address ||
+		paymentToken?.address ||
+		$currentNetwork?.id
+	) {
+		orderPreparationError = null;
+		orderPreparationTradeError = null;
+		serviceErrorClass = null;
+	}
 	$: errorClass = (() => {
 		if (insufficientBalanceError) return 'insufficient_balance';
-		if (noLiquidityError) return 'no_liquidity';
 		if (serviceErrorClass) return serviceErrorClass;
 		if (isOutsideMarketHours() && orderPreparationError) return 'market_closed';
 		if (priceError && (priceErrorReason === 'no_quotes' || priceErrorReason === 'no_fill'))
@@ -362,94 +339,82 @@
 		return null;
 	})();
 
-	// Liquidity warning: check the executable two-token book.
+	// The REST quote uses the same mode, amount, slippage and reference-price guard as
+	// calldata generation. The browser only formats the returned simulation.
+	$: marketQuoteTradeError =
+		$marketQuoteQuery?.isError && !$marketQuoteQuery?.data
+			? toUserFacingTradeError($marketQuoteQuery?.error, 'quote')
+			: null;
+	$: quoteCalculationTradeError =
+		priceError && selectedAmount > 0n
+			? createTradeError(
+					priceErrorReason === 'no_quotes' || priceErrorReason === 'no_fill'
+						? 'SWAP_NO_LIQUIDITY'
+						: 'SWAP_QUOTE_FAILED',
+					{ stage: 'quote' }
+				)
+			: null;
+	$: visibleTradeError = selectVisibleTradeError(
+		marketQuoteTradeError,
+		orderPreparationTradeError,
+		quoteCalculationTradeError
+	);
+
+	// Liquidity warning: check if there's enough liquidity within price guard
 	let insufficientLiquidityWarning: boolean = false;
 	let availableLiquidityFormatted: string = '0';
-
-	// Calculate available liquidity.
+	$: quoteReferencePrice = assetToken
+		? getMidpointPrice($midpointPricesQuery?.data, assetToken.address)?.price
+		: undefined;
+	$: quoteReferenceIoRatio = oracleReferenceIoRatio(orderSide, quoteReferencePrice);
+	$: marketQuoteRequest =
+		selectedAmount > 0n && assetToken && paymentToken && $currentNetwork
+			? buildMarketSwapQuoteRequest(
+					{
+						orderSide,
+						amount: selectedAmount,
+						inputMode,
+						slippageBps,
+						referenceIoRatio: quoteReferenceIoRatio,
+						assetToken,
+						paymentToken,
+						network: $currentNetwork
+					},
+					$walletAddress ?? undefined
+				)
+			: null;
+	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
+		queryKey: ['marketSwapQuoteV2', undefined, null],
+		enabled: false,
+		queryFn: () => Promise.reject(new Error('Missing market quote request'))
+	});
+	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
+		queryKey: ['marketSwapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
+		enabled: Boolean(marketQuoteRequest),
+		staleTime: 5_000,
+		retry: 1,
+		queryFn: () => {
+			if (!marketQuoteRequest) throw new Error('Missing market quote request');
+			return apiGetSwapQuoteV2(marketQuoteRequest);
+		}
+	});
+	$: marketQuote = $marketQuoteQuery?.data;
 	$: {
-		if (!selectedAmount || selectedAmount === 0n || !assetToken) {
-			insufficientLiquidityWarning = false;
+		insufficientLiquidityWarning = Boolean(
+			selectedAmount > 0n && marketQuote && !marketQuote.fullyFilled
+		);
+		if (!marketQuote || !assetToken) {
 			availableLiquidityFormatted = '0';
+		} else if (inputMode === 'spend') {
+			availableLiquidityFormatted = `${Number(marketQuote.estimatedInput).toFixed(2)} ${
+				paymentToken?.symbol ?? 'USDC'
+			}`;
 		} else {
-			const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-			const assetAddressNormalized = normalizeAddress(assetToken.address);
-			const paymentTokenAddressNormalized = normalizeAddress(
-				paymentToken?.address?.toLowerCase() || ''
-			);
-
-			// Filter quotes by side and token pair
-			const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-				const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
-				const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
-				const targetOutputAddress =
-					orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
-				const targetInputAddress =
-					orderSide === 'Buy' ? paymentTokenAddressNormalized : assetAddressNormalized;
-				const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
-				const quotePerAsset = quote.quotePerAsset;
-
-				return (
-					quoteOutputAddressNormalized === targetOutputAddress &&
-					quoteInputAddressNormalized === targetInputAddress &&
-					quote.side === targetSide &&
-					quotePerAsset !== undefined &&
-					Number.isFinite(quotePerAsset) &&
-					quotePerAsset > 0
-				);
-			});
-
-			if (relevantQuotes.length === 0) {
-				insufficientLiquidityWarning = false;
-			} else {
-				// Walk the orderbook to calculate available liquidity
-				const assetDecimals = assetToken?.decimals ?? 18;
-				const paymentDecimals = paymentToken?.decimals ?? 6;
-
-				// Sort quotes by price (best first)
-				const sortedQuotes = [...relevantQuotes].sort((a, b) => {
-					if (orderSide === 'Buy') {
-						return (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0);
-					} else {
-						return (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0);
-					}
-				});
-
-				// Walk to calculate total available liquidity
-				const walkResult = walkOrderbook({
-					quotes: sortedQuotes,
-					orderSide,
-					selectedAmount: BigInt('0xffffffffffffffffffffffffffffffff'), // Max value to get total liquidity
-					assetDecimals,
-					paymentDecimals
-				});
-
-				// Compare based on input mode:
-				// - amount mode: compare selectedAmount (asset) against available asset amount
-				// - spend mode: compare selectedAmount (payment) against available payment capacity
-				if (inputMode === 'spend') {
-					// In spend mode, selectedAmount is payment amount
-					// For BUY: outputAmountGiven is payment capacity
-					const availablePaymentCapacity = walkResult.outputAmountGiven;
-					insufficientLiquidityWarning = selectedAmount > availablePaymentCapacity;
-					// Format available amount for display
-					const availableFloat = parseFloat(formatUnits(availablePaymentCapacity, paymentDecimals));
-					availableLiquidityFormatted = `${availableFloat.toFixed(2)} ${
-						paymentToken?.symbol ?? 'USDC'
-					}`;
-				} else {
-					// In amount mode, selectedAmount is asset amount
-					// For BUY: inputAmountFilled is asset amount, For SELL: outputAmountGiven is asset amount
-					const availableAssetAmount =
-						orderSide === 'Buy' ? walkResult.inputAmountFilled : walkResult.outputAmountGiven;
-					insufficientLiquidityWarning = selectedAmount > availableAssetAmount;
-					// Format available amount for display
-					const availableFloat = parseFloat(formatUnits(availableAssetAmount, assetDecimals));
-					availableLiquidityFormatted = `${availableFloat.toFixed(4)} ${
-						assetToken?.symbol ?? 'tokens'
-					}`;
-				}
-			}
+			const availableAsset =
+				orderSide === 'Buy' ? marketQuote.estimatedOutput : marketQuote.estimatedInput;
+			availableLiquidityFormatted = `${Number(availableAsset).toFixed(4)} ${
+				assetToken.symbol ?? 'tokens'
+			}`;
 		}
 	}
 
@@ -461,44 +426,37 @@
 
 	$: disableDeploy =
 		!selectedAmount ||
-		!marketPrice ||
 		!assetToken ||
 		selectedAmountError ||
 		insufficientBalanceError ||
-		isLoadingPrice ||
-		priceError ||
 		isSubmittingMarketOrder;
 
 	// Calculate the "other side" of the trade for display
 	// In amount mode: show how much payment token you'll spend
 	// In spend mode: show how many asset tokens you'll receive
 	$: estimatedTradeResult = (() => {
-		if (!selectedAmount || !marketPrice) return { value: '0.00', label: '' };
+		if (!selectedAmount || !marketQuote) return { value: '0.00', label: '' };
 		if (inputMode === 'spend') {
-			// Spend mode: show estimated tokens received
-			const spendInTokens = parseFloat(formatUnits(selectedAmount, paymentToken?.decimals || 6));
-			const tokensReceived = spendInTokens / marketPrice;
 			return {
-				value: `~${tokensReceived.toFixed(4)} ${assetToken?.symbol ?? 'tokens'}`,
+				value: `~${Number(marketQuote.estimatedOutput).toFixed(4)} ${
+					assetToken?.symbol ?? 'tokens'
+				}`,
 				label: 'Est. tokens'
 			};
 		} else {
-			// Amount mode: show estimated cost
-			const outputInTokens = parseFloat(formatUnits(selectedAmount, assetToken?.decimals || 18));
-			const total = outputInTokens * marketPrice;
+			const paymentEstimate =
+				orderSide === 'Buy' ? marketQuote.estimatedInput : marketQuote.estimatedOutput;
 			return {
-				value: `~${total.toFixed(2)} ${paymentTokenSymbol}`,
-				label: 'Est. cost'
+				value: `~${Number(paymentEstimate).toFixed(2)} ${paymentTokenSymbol}`,
+				label: orderSide === 'Buy' ? 'Est. cost' : 'Est. proceeds'
 			};
 		}
 	})();
 
 	let isSubmittingMarketOrder = false;
 
-	// Handle percentage button clicks for setting amount based on wallet balance
-	// Small safety buffer (0.1%) for Max to handle rounding and minor price fluctuations
-	const MAX_SAFETY_BUFFER = 0.999;
-
+	// Percentage actions are exact spend anchors. For Buy this switches to spend
+	// mode so REST receives the chosen payment-token amount directly.
 	const handlePercentageClick = (percent: number) => {
 		if (!spendingTokenBalance || spendingTokenBalance === 0n) return;
 		if (spendingTokenBalanceDecimals === null) return;
@@ -508,44 +466,10 @@
 			// For SELL: balance is in asset token, amount is in asset token - direct calculation
 			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
 			tradeAmountInputRef.setAmountValue(percentAmount);
-		} else if (inputMode === 'spend') {
-			// For BUY in spend mode: balance is in payment token, amount is in payment token - direct calculation
+		} else {
+			inputMode = 'spend';
 			const percentAmount = (spendingTokenBalance * BigInt(percent)) / 100n;
 			tradeAmountInputRef.setAmountValue(percentAmount);
-		} else {
-			// For BUY in amount mode: balance is in payment token (USDC), need to convert to asset amount
-			// Use actual market prices by walking the orderbook in spend mode
-			const paymentDecimals = spendingTokenBalanceDecimals;
-			const assetDecimals = assetToken?.decimals ?? 18;
-
-			// Calculate payment amount to spend (percent of balance)
-			// Apply small safety buffer for Max to handle rounding edge cases
-			let paymentToSpend = (spendingTokenBalance * BigInt(percent)) / 100n;
-			if (percent === 100) {
-				const paymentFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
-				paymentToSpend = BigInt(
-					Math.floor(paymentFloat * MAX_SAFETY_BUFFER * 10 ** paymentDecimals)
-				);
-			}
-
-			// Walk the orderbook in spend mode to get the exact asset amount at market prices
-			const assetAmount = calculateAssetAmountForSpend(
-				paymentToSpend,
-				assetDecimals,
-				paymentDecimals
-			);
-
-			if (assetAmount && assetAmount > 0n) {
-				tradeAmountInputRef.setAmountValue(assetAmount);
-			} else {
-				// Fall back to the retained REST midpoint if the orderbook walk fails.
-				if (!referencePrice || referencePrice <= 0) return;
-
-				const paymentInFloat = parseFloat(formatUnits(paymentToSpend, paymentDecimals));
-				const assetAmountFloat = paymentInFloat / referencePrice;
-				const assetAmountScaled = Math.floor(assetAmountFloat * 10 ** assetDecimals);
-				tradeAmountInputRef.setAmountValue(BigInt(assetAmountScaled));
-			}
 		}
 	};
 
@@ -596,206 +520,27 @@
 		showHighSlippageWarning = false;
 	}
 
-	// Calculate how much asset can be bought for a given payment amount using actual orderbook prices
-	function calculateAssetAmountForSpend(
-		paymentAmount: bigint,
-		assetDecimals: number,
-		paymentDecimals: number
-	): bigint | null {
-		if (!assetToken || !paymentToken) return null;
-
-		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-		const assetAddressNormalized = normalizeAddress(assetToken.address);
-		const paymentTokenAddressNormalized = normalizeAddress(
-			paymentToken.address?.toLowerCase() || ''
-		);
-
-		// Filter quotes for the requested BUY pair.
-		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-			const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
-			const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
-			const quotePerAsset = quote.quotePerAsset;
-
-			return (
-				quoteOutputAddressNormalized === assetAddressNormalized &&
-				quoteInputAddressNormalized === paymentTokenAddressNormalized &&
-				quote.side === 'ask' &&
-				quotePerAsset !== undefined &&
-				Number.isFinite(quotePerAsset) &&
-				quotePerAsset > 0
-			);
-		});
-
-		if (relevantQuotes.length === 0) return null;
-
-		// Sort by price (best first for BUY)
-		const sortedQuotes = [...relevantQuotes].sort(
-			(a, b) => (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0)
-		);
-
-		// Walk orderbook in spend mode to get asset amount for the payment
-		const walkResult = walkOrderbook({
-			quotes: sortedQuotes,
-			orderSide: 'Buy',
-			selectedAmount: paymentAmount,
-			assetDecimals,
-			paymentDecimals,
-			mode: 'spend'
-		});
-
-		// Return the asset amount that would be received
-		return walkResult.inputAmountFilled;
-	}
-
-	async function fetchMarketPrice() {
-		if (!assetToken || !orderSide) {
-			isLoadingPrice = false;
-			return;
-		}
-
-		try {
-			isLoadingPrice = true;
-			priceError = false;
+	$: isLoadingPrice = selectedAmount > 0n && Boolean($marketQuoteQuery?.isFetching);
+	$: priceError = selectedAmount > 0n && Boolean($marketQuoteQuery?.isError);
+	$: {
+		if (!priceError) {
 			priceErrorReason = null;
-
-			// If no selected amount, don't calculate a price estimate
-			if (!selectedAmount || selectedAmount === 0n) {
-				marketPrice = 0;
-				hasAvailableOrders = false;
-				return;
-			}
-
-			const walkResult = calculateOrderbookWalk();
-
-			if (!walkResult) {
-				console.warn('No relevant quotes found');
-				priceError = true;
-				priceErrorReason = 'no_quotes';
-				isLoadingPrice = false;
-				return;
-			}
-
-			const { inputAmountFilled, outputAmountGiven, ioRatio, fills } = walkResult;
-
-			// Check if anything was filled (asset amount)
-			const assetFilled = orderSide === 'Buy' ? inputAmountFilled : outputAmountGiven;
-			if (assetFilled > 0n) {
-				// Convert ioRatio to price (quote per asset) for display
-				// BUY: ioRatio = asset/payment, so price = 1/ioRatio
-				// SELL: ioRatio = payment/asset = price
-				marketPrice = orderSide === 'Buy' ? (ioRatio > 0 ? 1 / ioRatio : 0) : ioRatio;
-				hasAvailableOrders = fills.length > 0;
-			} else {
-				console.warn('No quantity filled from orderbook', {
-					selectedAmount: selectedAmount.toString(),
-					ordersWalked: fills.length
-				});
-				priceError = true;
-				priceErrorReason = 'no_fill';
-				isLoadingPrice = false;
-				return;
-			}
-		} catch (error) {
-			console.error('Error calculating market price:', error);
-			priceError = true;
-			priceErrorReason = 'error';
-		} finally {
-			isLoadingPrice = false;
+		} else {
+			const message = String($marketQuoteQuery?.error ?? '').toLowerCase();
+			priceErrorReason =
+				message.includes('liquidity') || message.includes('not found') ? 'no_quotes' : 'error';
 		}
 	}
-
-	// Fetch market price when component mounts or dependencies change
-	// Only calculates price when user has entered a quantity (selectedAmount > 0)
-	// This ensures we only show price estimates when there's a meaningful quantity to estimate for
-	$: if (assetToken && orderSide && selectedAmount > 0n && $orderbookQuotesQuery?.data?.quotes) {
-		fetchMarketPrice();
-	} else if (!selectedAmount || selectedAmount === 0n) {
-		// Clear price when quantity is cleared
-		marketPrice = 0;
-		hasAvailableOrders = false;
-	}
-
-	// Walk the current executable orderbook with the selected amount.
-	function calculateOrderbookWalk() {
-		if (!assetToken || !orderSide || !selectedAmount || selectedAmount === 0n) {
-			return null;
+	$: {
+		if (!marketQuote) {
+			marketPrice = 0;
+		} else {
+			const estimatedInput = Number(marketQuote.estimatedInput);
+			const estimatedOutput = Number(marketQuote.estimatedOutput);
+			const price =
+				orderSide === 'Buy' ? estimatedInput / estimatedOutput : estimatedOutput / estimatedInput;
+			marketPrice = Number.isFinite(price) && price > 0 ? price : 0;
 		}
-
-		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-		const assetAddressNormalized = normalizeAddress(assetToken.address);
-		const paymentTokenAddressNormalized = normalizeAddress(
-			paymentToken?.address?.toLowerCase() || ''
-		);
-
-		const relevantQuotes = allQuotes.filter((quote: ProcessedQuote) => {
-			const quoteOutputAddressNormalized = normalizeAddress(getMakerOutputTokenAddress(quote));
-			const quoteInputAddressNormalized = normalizeAddress(getMakerInputTokenAddress(quote));
-			const targetOutputAddress =
-				orderSide === 'Buy' ? assetAddressNormalized : paymentTokenAddressNormalized;
-			const targetInputAddress =
-				orderSide === 'Buy' ? paymentTokenAddressNormalized : assetAddressNormalized;
-			const targetSide = orderSide === 'Buy' ? 'ask' : 'bid';
-			const quotePerAsset = quote.quotePerAsset;
-
-			return (
-				quoteOutputAddressNormalized === targetOutputAddress &&
-				quoteInputAddressNormalized === targetInputAddress &&
-				quote.side === targetSide &&
-				quotePerAsset !== undefined &&
-				Number.isFinite(quotePerAsset) &&
-				quotePerAsset > 0
-			);
-		});
-
-		if (relevantQuotes.length === 0) {
-			return null;
-		}
-
-		// Validate token decimals are defined
-		if (typeof assetToken.decimals !== 'number') {
-			console.error('Asset token decimals are not defined');
-			return null;
-		}
-		if (!paymentToken || typeof paymentToken.decimals !== 'number') {
-			console.error('Payment token or its decimals are not defined');
-			return null;
-		}
-
-		const sortedQuotes = [...relevantQuotes].sort((a, b) => {
-			if (orderSide === 'Buy') {
-				return (a.quotePerAsset ?? 0) - (b.quotePerAsset ?? 0);
-			} else {
-				return (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0);
-			}
-		});
-
-		return walkOrderbook({
-			quotes: sortedQuotes,
-			orderSide,
-			selectedAmount,
-			assetDecimals: assetToken.decimals,
-			paymentDecimals: paymentToken.decimals,
-			mode: inputMode === 'spend' ? 'spend' : 'receive'
-		});
-	}
-
-	// Select and sort executable quotes for the requested token pair. The
-	// execution service applies the user's slippage cap to the resulting walk.
-	function getExecutableQuotes(): ProcessedQuote[] {
-		if (!assetToken || !paymentToken) return [];
-
-		const allQuotes = $orderbookQuotesQuery?.data?.quotes ?? [];
-		const assetAddressNormalized = normalizeAddress(assetToken.address) ?? '';
-		const paymentTokenAddressNormalized = normalizeAddress(paymentToken.address) ?? '';
-
-		const filteredQuotes = filterQuotesForSide(
-			allQuotes,
-			orderSide,
-			assetAddressNormalized,
-			paymentTokenAddressNormalized
-		);
-
-		return sortQuotesByPrice(filteredQuotes, orderSide);
 	}
 
 	const handleMarketOrder = async () => {
@@ -805,7 +550,7 @@
 			return;
 		}
 
-		if (!hasAvailableOrders || !selectedAmount) {
+		if (!selectedAmount) {
 			return;
 		}
 
@@ -814,6 +559,7 @@
 		}
 		isSubmittingMarketOrder = true;
 		orderPreparationError = null;
+		orderPreparationTradeError = null;
 		serviceErrorClass = null;
 
 		// Mint after early-return guards so unauthenticated/idle clicks do not
@@ -831,7 +577,6 @@
 				paymentSymbol: paymentToken?.symbol
 			});
 			try {
-				addTradeFlowBreadcrumb(flowContext('quote', 'select_executable_quotes'), 'started');
 				trackTradeEvent('trade_button_clicked', {
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
@@ -852,7 +597,10 @@
 						new Error('Payment token configuration is incomplete'),
 						flowContext('quote', 'validate_token_config')
 					);
-					orderPreparationError = 'Token configuration error. Please refresh the page.';
+					orderPreparationTradeError = createTradeError('SWAP_QUOTE_FAILED', {
+						stage: 'quote'
+					});
+					orderPreparationError = orderPreparationTradeError.message;
 					return;
 				}
 				if (!assetToken || typeof assetToken.decimals !== 'number') {
@@ -860,70 +608,26 @@
 						new Error('Asset token configuration is incomplete'),
 						flowContext('quote', 'validate_token_config')
 					);
-					orderPreparationError = 'Token configuration error. Please refresh the page.';
+					orderPreparationTradeError = createTradeError('SWAP_QUOTE_FAILED', {
+						stage: 'quote'
+					});
+					orderPreparationError = orderPreparationTradeError.message;
 					return;
 				}
-
-				// Refresh orderbook quotes if stale
-				const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
-				const isStaleQuotes = !lastUpdated || Date.now() - lastUpdated > ORDERBOOK_MAX_STALENESS_MS;
-				if (isStaleQuotes) {
-					const refreshResult = await $orderbookQuotesQuery?.refetch?.();
-					if (refreshResult?.isError) {
-						captureTradeFlowError(
-							refreshResult.error ?? new Error('Orderbook quote refresh failed'),
-							flowContext('quote', 'refresh_quotes')
-						);
-						priceError = true;
-						priceErrorReason = 'error';
-						return;
-					}
-					await fetchMarketPrice();
-					if (priceError) {
-						captureTradeFlowError(
-							new Error(`Quote refresh failed: ${priceErrorReason ?? 'unknown'}`),
-							flowContext('quote', 'refresh_quotes')
-						);
-						return;
-					}
-				}
-
-				const filteredQuotes = getExecutableQuotes();
-				if (filteredQuotes.length === 0) {
-					captureTradeFlowError(
-						new Error('No executable quotes are available'),
-						flowContext('quote', 'select_executable_quotes')
-					);
-					priceError = true;
-					priceErrorReason = 'no_quotes';
-					return;
-				}
-				addTradeFlowBreadcrumb(flowContext('quote', 'select_executable_quotes'), 'completed');
-
-				// OBS-07 funnel step: post-walk, pre-execute. Once we have at least one
-				// executable quote we count `quote_received` as fired.
-				trackTradeEvent('quote_received', {
-					order_type: 'market',
-					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-					asset_symbol: assetToken?.symbol,
-					payment_symbol: paymentToken?.symbol,
-					amount: formatUnits(
-						selectedAmount,
-						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
-					),
-					quote_count: filteredQuotes.length,
-					slippage_bps: slippageBps
-				});
-
-				// Execute market order using shared service.
-				// `broadcast` and `confirmed` step events are emitted from
-				// `marketOrderExecution.ts` at SDK callback boundaries (Task 1b).
+				// Execution requests fresh REST API-built calldata with the same
+				// request semantics used by the display quote above.
+				const referencePrice = getMidpointPrice(
+					$midpointPricesQuery?.data,
+					assetToken.address
+				)?.price;
+				const referenceIoRatio = oracleReferenceIoRatio(orderSide, referencePrice);
 				activeStage = 'calldata';
 				const result = await executeMarketOrder({
 					orderSide,
 					amount: selectedAmount,
 					inputMode,
 					slippageBps,
+					referenceIoRatio,
 					assetToken: {
 						address: assetToken.address,
 						decimals: assetToken.decimals,
@@ -934,17 +638,18 @@
 						decimals: paymentToken.decimals,
 						symbol: paymentToken.symbol
 					},
-					quotes: filteredQuotes,
 					network: $currentNetwork
 				});
 
 				if (!result.success && result.error) {
-					orderPreparationError = result.error;
+					const userFacingError =
+						result.tradeError ?? toUserFacingTradeError(result.error, activeStage);
+					orderPreparationTradeError = userFacingError;
+					orderPreparationError = userFacingError.message;
 					// Prefer the service's discriminated errorClass; fall back to
 					// substring-classifying the user-facing string only if absent
 					// (shouldn't happen post-Phase-2 but kept as a defence).
-					const eventErrorClass =
-						result.errorClass ?? classifyError(new Error(result.error), 'market');
+					const eventErrorClass = result.errorClass ?? userFacingError.errorClass;
 					serviceErrorClass = eventErrorClass;
 					trackTradeEvent('trade_failed', {
 						order_type: 'market',
@@ -957,7 +662,9 @@
 						),
 						avg_price: marketPrice,
 						error_class: eventErrorClass,
-						error_message: result.error
+						error_message: userFacingError.message,
+						error_code: userFacingError.code,
+						...(userFacingError.requestId ? { request_id: userFacingError.requestId } : {})
 					});
 				} else if (result.success) {
 					tradeSubmittedSuccessfully = true;
@@ -981,7 +688,9 @@
 				const failureStage =
 					activeStage === 'calldata' ? inferWalletFailureStage(error) : activeStage;
 				captureTradeFlowError(error, flowContext(failureStage, 'submit_market_order'));
-				orderPreparationError = error instanceof Error ? error.message : 'Unknown error occurred';
+				const userFacingError = toUserFacingTradeError(error, failureStage);
+				orderPreparationTradeError = userFacingError;
+				orderPreparationError = userFacingError.message;
 				trackTradeEvent('trade_failed', {
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
@@ -992,8 +701,10 @@
 						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
 					),
 					avg_price: marketPrice,
-					error_class: classifyError(error, 'market'),
-					error_message: orderPreparationError
+					error_class: userFacingError.errorClass,
+					error_message: userFacingError.message,
+					error_code: userFacingError.code,
+					...(userFacingError.requestId ? { request_id: userFacingError.requestId } : {})
 				});
 			} finally {
 				isSubmittingMarketOrder = false;
@@ -1097,19 +808,12 @@
 							<button
 								type="button"
 								on:click={() => handlePercentageClick(percent)}
-								disabled={percentageButtonsDisabled}
-								class="flex-1 rounded border border-line bg-surface-3 px-2 py-1 text-xs text-text-2 transition-colors hover:border-line-strong hover:bg-overlay-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:bg-surface-3"
-								title={percentageButtonsDisabled ? 'Price data unavailable' : ''}
+								class="flex-1 rounded border border-line bg-surface-3 px-2 py-1 text-xs text-text-2 transition-colors hover:border-line-strong hover:bg-overlay-hover"
 							>
 								{percent === 100 ? 'Max' : `${percent}%`}
 							</button>
 						{/each}
 					</div>
-					{#if percentageButtonsDisabled}
-						<p class="mt-1 text-xs text-amber-700 dark:text-amber-400/80">
-							Enter amount manually - price data loading
-						</p>
-					{/if}
 				</div>
 				<div>
 					<div class="mb-2 block text-sm font-medium text-text-2">
@@ -1148,15 +852,6 @@
 							{:else}
 								Updated {quoteFreshnessSeconds}s ago
 							{/if}
-						</p>
-					{/if}
-					<!-- TRADE-03 D-05 (Plan 02-06): terminal-state inline error when the
-					 pre-flight + auto-retry cascade exhausts. User input stays intact (no
-					 form reset, no toast). Copy locked in 02-CONTEXT.md D-05. -->
-					{#if noLiquidityError}
-						<p class="mt-2 text-xs text-red-400">
-							No liquidity available right now for this size. Try a smaller amount or check back in
-							a minute.
 						</p>
 					{/if}
 				</div>
@@ -1295,30 +990,9 @@
 								{/if}
 							</div>
 						{/if}
-						{#if priceError && selectedAmount && selectedAmount > 0n}
-							<div
-								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-							>
-								{#if priceErrorReason === 'no_quotes'}
-									No orders available within acceptable price range. Try a limit order instead to
-									set your own price.
-								{:else if priceErrorReason === 'no_fill'}
-									Order amount too large for current liquidity. Try a smaller amount or use a limit
-									order.
-								{:else}
-									Unable to fetch market price. Please try again or use a limit order.
-								{/if}
-							</div>
-						{/if}
-						{#if orderPreparationError && !noLiquidityError}
-							<!-- TRADE-03: when the D-05 inline block above is rendering the
-							 verbatim "No liquidity available right now ..." copy, suppress
-							 the generic orderPreparationError box so the message is not
-							 duplicated. Other preparation errors still surface here. -->
-							<div
-								class="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-300"
-							>
-								{orderPreparationError}
+						{#if visibleTradeError}
+							<div class="mt-2">
+								<TradeErrorPanel error={visibleTradeError} />
 							</div>
 						{/if}
 					</div>

@@ -34,7 +34,7 @@ const ZERO_BALANCE_HEX =
  * bigint → `Float.fromFixedDecimalLossy(raw, decimals)`. Float is a
  * decimal-floating-point type that carries its own scale, so the string form
  * is the canonical input — matches the production usage in
- * `src/lib/stores/marketTakeStore.ts:124`. The error-union shape
+ * the browser's display quote loader. The error-union shape
  * (`{ error, value }`) is the WASM SDK's standard result envelope.
  */
 function encodeVaultBalanceHex(decimalString: string): string {

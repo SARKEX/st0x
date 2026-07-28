@@ -1,157 +1,62 @@
-// TEST-07 — Sell market order via UI (Path-B deploy-and-take).
-//
-// Mirror of marketBuy.spec.ts on the opposite side: deploy a maker BID (the
-// maker GIVES USDC, TAKES wtCOIN), then drive the UI through a market SELL of
-// wtCOIN against it. Same fixed-limit registry path — no Pyth / NYSE-hours
-// gates on the maker order itself.
-//
-// On-chain assertion: taker's wtCOIN balance dropped (sold) AND USDC balance
-// grew (proceeds received). See marketBuy.spec.ts for the architectural notes
-// and the synthetic-stub fixes that unblock Path-B.
-import {
-	test,
-	expect,
-	fundToken,
-	clickModeTab,
-	openTradePanel,
-	MAKER_ACCOUNT
-} from './fixtures';
-import { deployMakerLimitOrder } from '../../helpers/makerOrders';
-import { registerMakerOrders } from './syntheticOrdersStub';
-import { erc20Abi, parseUnits } from 'viem';
+// Browser contract test for the market-sell REST calldata boundary.
+import { test, expect, fundToken, clickModeTab, openTradePanel } from './fixtures';
+import { parseUnits } from 'viem';
 
 test.skip(!process.env.BASE_RPC_URL, 'BASE_RPC_URL required for anvil fork');
 
-test.describe('TEST-07 — Sell market order via UI (Path-B)', () => {
-	test('takes a maker bid: wtCOIN sold, USDC received', async ({
+test.describe('TEST-07 — Sell market order via REST calldata', () => {
+	test('posts spendUpTo with optional slippage and surfaces an API rejection', async ({
 		page,
 		testClient,
 		tokens,
 		fundedAccount
 	}) => {
-		test.setTimeout(180_000);
-
-		page.on('console', (msg) => {
-			const text = msg.text();
-			if (
-				text.includes('take-order failed') ||
-				text.includes('SDK error') ||
-				text.includes('readableMsg') ||
-				text.includes('no_liquidity') ||
-				text.includes('preflight') ||
-				msg.type() === 'error'
-			) {
-				console.log(`[browser ${msg.type()}] ${text.slice(0, 600)}`);
-			}
-		});
-		page.on('pageerror', (err) => console.log(`[pageerror] ${err.message}`));
-
-		// 1) Fund maker with USDC — output token for a bid (maker GIVES USDC).
-		//    200 USDC is enough for the taker to sell ~1 wtCOIN at ~$180/coin.
-		const makerDeposit = parseUnits('200', tokens.USDC.decimals);
-		await fundToken({
-			client: testClient,
-			token: tokens.USDC,
-			holder: MAKER_ACCOUNT.address,
-			amount: makerDeposit
-		});
-
-		// 2) Deploy maker bid at 200 USDC/wtCOIN — within the PRICE_GUARD_MULTIPLIER
-		//    ±5% band around the ~$180-$185 oracle, taker-favorable on a sell.
-		const maker = await deployMakerLimitOrder({
-			testClient,
-			makerPrivateKey: MAKER_ACCOUNT.privateKey,
-			assetToken: {
-				address: tokens.wtCOIN.address,
-				symbol: 'wtCOIN',
-				decimals: tokens.wtCOIN.decimals
-			},
-			paymentToken: {
-				address: tokens.USDC.address,
-				symbol: 'USDC',
-				decimals: tokens.USDC.decimals
-			},
-			side: 'buy',
-			pricePaymentPerAsset: '200',
-			depositAmount: makerDeposit
-		});
-		registerMakerOrders(maker);
-
-		// 3) Fund taker with wtCOIN.
-		const initialAsset = parseUnits('1', tokens.wtCOIN.decimals);
 		await fundToken({
 			client: testClient,
 			token: tokens.wtCOIN,
 			holder: fundedAccount.address,
-			amount: initialAsset
+			amount: parseUnits('1', tokens.wtCOIN.decimals)
 		});
 
-		const initialUsdc = await testClient.readContract({
-			address: tokens.USDC.address,
-			abi: erc20Abi,
-			functionName: 'balanceOf',
-			args: [fundedAccount.address]
+		let resolveRequest!: (body: Record<string, unknown>) => void;
+		const requestReceived = new Promise<Record<string, unknown>>((resolve) => {
+			resolveRequest = resolve;
+		});
+		await page.route('**/api/st0x/v2/swap/calldata', async (route) => {
+			resolveRequest(route.request().postDataJSON() as Record<string, unknown>);
+			await route.fulfill({
+				status: 400,
+				contentType: 'text/plain',
+				body: 'No liquidity available right now'
+			});
 		});
 
-		// 4) Drive UI: market SELL 0.05 wtCOIN.
 		await page.goto(`${process.env.PREVIEW_URL}/trade/${tokens.wtCOIN.id}`);
-
 		await openTradePanel(page, 'sell');
 		await clickModeTab(page, 'market');
 		await page.click('[data-testid="side-toggle"][data-side="sell"]');
 		await page.waitForSelector('[data-testid="market-form-loaded"]');
 
-		// Sell side is asset-anchored by default; the spend-input/asset-input
-		// testid auto-switches to `asset-input` for sell. Fill the asset amount
-		// directly (no input-mode toggle needed on sell — only buy exposes the
-		// USD-anchored "spend up to" path).
-		// Wait for the wagmi balance read of wtCOIN to settle AND the orderbook
-		// quote to compute the bid price BEFORE filling the asset input.
-		// TradeAmountInput holds `inputAmount` as a string and re-derives
-		// `amount` from it via `$: amount = parseUnits(inputAmount,
-		// amountDecimals)` — but ONLY when amountDecimals is already set.
-		// amountDecimals is populated from the balance read's decimals lookup;
-		// fill before that lands and the string "0.05" parses to `undefined`,
-		// `selectedAmount` in MarketOrder stays `0n`, and the submit gate
-		// stays disabled even though the input visually shows "0.05".
-		await expect(
-			page.getByText(/Balance:\s*1\.000?/i).first()
-		).toBeVisible({ timeout: 30_000 });
-		// Also wait for the orderbook to surface the maker bid so marketPrice
-		// can be computed once selectedAmount lands.
-		await expect(page.getByText(/Bid Price/i).first()).toBeVisible({ timeout: 30_000 });
-		await expect(
-			page.locator('text=Bid Price').locator('xpath=following::*[1]')
-		).toContainText(/\$[1-9]/, { timeout: 30_000 });
-		await page.locator('[data-testid="asset-input"] input').first().fill('0.05');
-		// Give Svelte one tick to flush the inputAmount → amount → selectedAmount
-		// reactive cascade before checking submit-enabled.
-		await page.waitForTimeout(100);
+		await page.locator('[data-testid="asset-input"] input').first().fill('0.1');
+		await page.locator('[data-testid="slippage-input"]').fill('1.25');
+		await page.locator('[data-testid="slippage-input"]').blur();
 
 		const submit = page.locator('[data-testid="trade-submit"][data-side="sell"]');
-		await expect(submit).toBeEnabled({ timeout: 60_000 });
+		await expect(submit).toBeEnabled();
 		await submit.click();
 
-		// 5) On-chain assertion: USDC credited, wtCOIN debited.
-		await expect
-			.poll(
-				async () =>
-					await testClient.readContract({
-						address: tokens.USDC.address,
-						abi: erc20Abi,
-						functionName: 'balanceOf',
-						args: [fundedAccount.address]
-					}),
-				{ timeout: 90_000, intervals: [1_000, 2_000, 5_000] }
-			)
-			.toBeGreaterThan(initialUsdc);
-
-		const wtCoinBalance = await testClient.readContract({
-			address: tokens.wtCOIN.address,
-			abi: erc20Abi,
-			functionName: 'balanceOf',
-			args: [fundedAccount.address]
+		expect(await requestReceived).toEqual({
+			taker: fundedAccount.address,
+			inputToken: tokens.wtCOIN.address,
+			outputToken: tokens.USDC.address,
+			mode: 'spendUpTo',
+			amount: '0.1',
+			slippageBps: 125,
+			denomination: 'wrapped'
 		});
-		expect(wtCoinBalance).toBeLessThan(initialAsset);
+		await expect(
+			page.locator('[data-testid="error-banner"][data-error-class="no_liquidity"]')
+		).toBeVisible();
+		await expect(page.locator('[data-testid="success-toast"]')).not.toBeVisible();
 	});
 });

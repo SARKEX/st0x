@@ -49,6 +49,7 @@ describe('transactionShared leaf module', () => {
 				data: null,
 				functionName: '',
 				message: '',
+				tradeError: null,
 				multiTxAcknowledged: false,
 				onMultiTxAcknowledge: null
 			});
@@ -83,12 +84,8 @@ describe('transactionShared leaf module', () => {
 		} as unknown as Network;
 
 		it('isOrderbookTrusted is case-insensitive', () => {
-			expect(
-				isOrderbookTrusted('0xabc0000000000000000000000000000000000001', network)
-			).toBe(true);
-			expect(
-				isOrderbookTrusted('0x0000000000000000000000000000000000000bad', network)
-			).toBe(false);
+			expect(isOrderbookTrusted('0xabc0000000000000000000000000000000000001', network)).toBe(true);
+			expect(isOrderbookTrusted('0x0000000000000000000000000000000000000bad', network)).toBe(false);
 		});
 
 		it('validateOrderbookAddress throws on untrusted address', () => {

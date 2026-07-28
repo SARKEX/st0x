@@ -1,234 +1,390 @@
 /**
- * Market Order Execution Service
+ * Market order execution through REST API-built calldata.
  *
- * Shared logic for executing market orders, used by both MarketOrder.svelte and QuickTrade.svelte
+ * The browser deliberately does not walk orders, hydrate SDK objects, simulate
+ * candidates, derive price caps, or build takeOrders calldata. Those decisions
+ * live in the REST API and the Raindex SDK it calls. This module validates the
+ * returned transactions, handles approvals, submits them, and reports indexed
+ * fill totals after confirmation.
  */
 
 import {
-	OrderV4_ABI,
-	normalizeOrderData,
-	type ProcessedQuote,
-	walkOrderbook
-} from '$lib/api/orders';
-
-// Re-export so observability helpers (Plan 01-07 OBS-03) can import the same shape
-// from the service module without reaching through to $lib/api/orders.
-export type { ProcessedQuote };
-import { getLoadBalancedClient } from '$lib/clients/raindex';
+	apiGetSwapCalldataV2,
+	apiGetTradesByTx,
+	type ApiApproval,
+	type ApiSwapCalldataV2Request,
+	type ApiSwapCalldataV2Response,
+	type ApiSwapQuoteV2Request,
+	type ApiTradesByTxResponse
+} from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
-import type { TakeOrdersParams, TokenInfo } from '$lib/types/transactions';
+import { invalidateDashboardBalances } from '$lib/queries/balances';
 import {
-	RaindexOrders,
-	type OrderV4,
-	type RaindexOrder,
-	type RaindexOrderQuote,
-	type SgOrder,
-	type TakeOrdersMode,
-	type TakeOrdersRequest,
-	type WasmEncodedResult
-} from '@rainlanguage/raindex';
-import { AbiCoder } from 'ethers';
-import { formatUnits } from 'viem';
-import { Float } from '@rainlanguage/float';
-import { get } from 'svelte/store';
-import { TransactionStatus, transactionStoreInternal } from '$lib/stores/transactionShared';
+	APPROVAL_TX_CONFIRMATIONS,
+	getSignerAddress,
+	sendTransaction,
+	waitForTransaction
+} from '$lib/services/walletService';
 import {
-	preloadAggregatedTakeOrdersCalldata,
-	handleAggregatedTakeOrdersCalldata,
-	handleOracleOrders
-} from '$lib/stores/marketTakeStore';
-import { getSignerAddress } from '$lib/services/walletService';
+	toUserFacingTradeError,
+	type TradeErrorStage,
+	type UserFacingTradeError
+} from '$lib/services/tradeError';
 import {
-	computeRatioMultiplier,
+	addTradeFlowBreadcrumb,
+	captureTradeFlowError
+} from '$lib/services/observability/tradeFlow';
+import { getCurrentTradeId } from '$lib/services/observability/tradeId';
+import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
+import { TAKE_ORDERS_4_ABI } from '$lib/services/takeOrders4Abi';
+import {
+	TransactionStatus,
+	transactionStoreInternal,
+	validateOrderbookAddress
+} from '$lib/stores/transactionShared';
+import { detectPartialFill } from '$lib/stores/partialFillDetection';
+import type { TokenInfo } from '$lib/types/transactions';
+import {
+	clampSlippageBps,
 	DEFAULT_MARKET_ORDER_SLIPPAGE_BPS as DEFAULT_BPS,
 	MAX_SLIPPAGE_BPS as MAX_BPS
 } from '$lib/utils/marketOrderFill';
 import {
-	captureTakeOrderFailure,
-	type TakeOrderTranscript,
-	type TakeOrderFailureReason
-} from '$lib/services/observability/captureTakeOrderFailure';
-import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
-import { addTradeFlowBreadcrumb } from '$lib/services/observability/tradeFlow';
-import { getCurrentTradeId } from '$lib/services/observability/tradeId';
-import {
-	getMakerInputIOIndex,
-	getMakerOutputIOIndex,
-	getMakerInputTokenAddress,
-	getMakerOutputTokenAddress
-} from '$lib/types/orderPerspective';
-import { withRetry } from '$lib/utils/retry';
+	decodeFunctionData,
+	erc20Abi,
+	formatUnits,
+	isAddress,
+	isHex,
+	parseUnits,
+	type Hex
+} from 'viem';
 
-// TRADE-03 (Plan 02-06): pre-flight + auto-walk depth bound. Two walks max — the
-// subgraph that produced these candidates is what's stale, so re-walking from
-// scratch beyond level 2 has no better information source. Future tunable.
-const PREFLIGHT_MAX_WALKS = 2;
-
-// Re-export so existing imports (`MarketOrder.svelte`, `QuickTrade.svelte`) keep working.
 export const DEFAULT_MARKET_ORDER_SLIPPAGE_BPS = DEFAULT_BPS;
 export const MAX_SLIPPAGE_BPS = MAX_BPS;
 
-/**
- * `getTakeOrdersCalldata` / oracle take helpers expect `priceCap` as a **human** decimal:
- * max sell (payment token) per 1 buy (asset token) for typical buy flows — i.e. the same units as
- * `quotePerAsset` from the orderbook walk (~USDC per wtIAU), not the on-chain IO `ratio` Float hex.
- */
-function humanPriceCapStr(
-	worstFillPrice: number,
-	ratioMultiplier: string,
-	fallbackEmergencyRatioHex: `0x${string}`
-): string {
-	const mult = Number(ratioMultiplier);
-	if (Number.isFinite(worstFillPrice) && worstFillPrice > 0 && Number.isFinite(mult) && mult > 0) {
-		return String(worstFillPrice * mult);
-	}
-	const emergencyFloat = Float.fromHex(fallbackEmergencyRatioHex);
-	return String(emergencyFloat.value?.format().value ?? '1');
-}
-
-/**
- * Compute emergency ratio hex from a quote's worst fill ratio.
- * Returns the ratio as a hex string, or null if any Float operation fails.
- */
-function computeEmergencyRatioHex(
-	ratioHex: `0x${string}`,
-	multiplierRaw: string
-): `0x${string}` | null {
-	const ratio = Float.fromHex(ratioHex);
-	if (ratio.error || !ratio.value) return null;
-
-	const multiplier = Float.parse(multiplierRaw);
-	if (multiplier.error || !multiplier.value) return null;
-
-	const emergency = ratio.value.mul(multiplier.value);
-	if (emergency.error || !emergency.value) return null;
-
-	return emergency.value.asHex();
-}
-
 export interface MarketOrderInput {
-	// Order parameters
 	orderSide: 'Buy' | 'Sell';
-	/** For Buy: amount of asset tokens to receive. For Sell: amount of asset tokens to sell */
+	/** For Buy: asset received. For Sell: asset spent. */
 	amount: bigint;
-	/** 'amount' = specify asset quantity, 'spend' = specify payment amount (Buy only) */
-	inputMode?: 'amount' | 'spend';
-	/** User-configurable slippage in basis points (100 = 1%). */
+	/** Anchor chosen by the UI: asset amount, input spend, or output receive. */
+	inputMode?: 'amount' | 'spend' | 'receive';
 	slippageBps?: number;
-
-	// Tokens
+	/** Input-token per output-token oracle ratio used by the REST price guard. */
+	referenceIoRatio?: string;
 	assetToken: TokenInfo;
 	paymentToken: TokenInfo;
-
-	// Quotes
-	quotes: ProcessedQuote[];
-
-	// Network
 	network: Network;
 }
 
 export interface MarketOrderResult {
 	success: boolean;
 	error?: string;
-	/**
-	 * Discriminated error category for the UI — set whenever `success` is false
-	 * so the component can render the right `data-error-class` (and PostHog event
-	 * picks up the right `error_class`) without substring-matching the
-	 * user-facing `error` string. Maps internal `TakeOrderFailureReason` codes
-	 * to the user-facing `ErrorClass` taxonomy used by tradeEvents + the D-09
-	 * error-banner. Absent on success.
-	 */
 	errorClass?: ErrorClass;
+	tradeError?: UserFacingTradeError;
 }
 
-/**
- * Pure mapping from internal failure reason to the user-facing `ErrorClass`
- * taxonomy. Centralised here so the component never has to re-parse the
- * user-facing error string (the CodeRabbit-flagged brittleness).
- */
-function errorClassForReason(reason: TakeOrderFailureReason): ErrorClass {
-	switch (reason) {
-		case 'no_quotes_available':
-		case 'no_walk_fills':
-		case 'preflight_order_vanished':
-			return 'no_liquidity';
-		case 'auto_retry_exhausted':
-			return 'auto_retry_exhausted';
-		case 'preflight_chain_unreachable':
-			return 'preflight_chain_unreachable';
-		case 'unhydrated_fills':
-		case 'aggregated_failed':
-		case 'caught_exception':
-		default:
-			return 'unknown';
+export function oracleReferenceIoRatio(
+	orderSide: MarketOrderInput['orderSide'],
+	oraclePrice: number | null | undefined
+): string | undefined {
+	if (!oraclePrice || !Number.isFinite(oraclePrice) || oraclePrice <= 0) return undefined;
+	return String(orderSide === 'Buy' ? oraclePrice : 1 / oraclePrice);
+}
+
+export function buildMarketSwapQuoteRequest(
+	input: MarketOrderInput,
+	taker?: string
+): ApiSwapQuoteV2Request {
+	const { orderSide, inputMode = 'amount', amount, assetToken, paymentToken } = input;
+	const isBuy = orderSide === 'Buy';
+	const inputToken = isBuy ? paymentToken : assetToken;
+	const outputToken = isBuy ? assetToken : paymentToken;
+	const isOutputAnchored = (isBuy && inputMode === 'amount') || (!isBuy && inputMode === 'receive');
+	const amountToken = isOutputAnchored ? outputToken : inputToken;
+
+	return {
+		...(taker ? { taker } : {}),
+		inputToken: inputToken.address,
+		outputToken: outputToken.address,
+		mode: isOutputAnchored ? 'buyUpTo' : 'spendUpTo',
+		amount: formatUnits(amount, amountToken.decimals),
+		slippageBps: clampSlippageBps(input.slippageBps ?? DEFAULT_MARKET_ORDER_SLIPPAGE_BPS),
+		...(input.referenceIoRatio ? { referenceIoRatio: input.referenceIoRatio } : {}),
+		denomination: 'wrapped'
+	};
+}
+
+function buildCalldataRequest(input: MarketOrderInput, taker: string): ApiSwapCalldataV2Request {
+	return {
+		...buildMarketSwapQuoteRequest(input),
+		taker
+	};
+}
+
+function buildApprovalRetryRequest(
+	request: ApiSwapCalldataV2Request,
+	resolvedPriceCap: string
+): ApiSwapCalldataV2Request {
+	if (!resolvedPriceCap) {
+		throw new Error('Calldata API returned an empty resolved price cap');
+	}
+	return {
+		taker: request.taker,
+		inputToken: request.inputToken,
+		outputToken: request.outputToken,
+		mode: request.mode,
+		amount: request.amount,
+		priceCap: resolvedPriceCap,
+		denomination: request.denomination
+	};
+}
+
+function validateApproval(
+	approval: ApiApproval,
+	request: ApiSwapCalldataV2Request,
+	network: Network,
+	inputTokenDecimals: number
+): { token: `0x${string}`; data: Hex } {
+	if (
+		!isAddress(approval.token) ||
+		approval.token.toLowerCase() !== request.inputToken.toLowerCase()
+	) {
+		throw new Error('Calldata API returned an approval for an unexpected token');
+	}
+	if (!isAddress(approval.spender)) {
+		throw new Error('Calldata API returned an invalid approval spender');
+	}
+	validateOrderbookAddress(approval.spender, network);
+	if (!isHex(approval.approvalData)) {
+		throw new Error('Calldata API returned invalid approval calldata');
+	}
+
+	let decoded: ReturnType<typeof decodeFunctionData>;
+	try {
+		decoded = decodeFunctionData({ abi: erc20Abi, data: approval.approvalData });
+	} catch {
+		throw new Error('Calldata API returned undecodable approval calldata');
+	}
+	if (decoded.functionName !== 'approve') {
+		throw new Error('Calldata API returned non-approval calldata');
+	}
+	const [calldataSpender, calldataAmount] = decoded.args;
+	let expectedAmount: bigint;
+	try {
+		expectedAmount = parseUnits(approval.amount, inputTokenDecimals);
+	} catch {
+		throw new Error('Calldata API returned an invalid approval amount');
+	}
+	if (
+		typeof calldataSpender !== 'string' ||
+		typeof calldataAmount !== 'bigint' ||
+		calldataSpender.toLowerCase() !== approval.spender.toLowerCase() ||
+		calldataAmount <= 0n ||
+		calldataAmount !== expectedAmount
+	) {
+		throw new Error('Calldata API approval details do not match its transaction');
+	}
+
+	return { token: approval.token, data: approval.approvalData };
+}
+
+async function submitApprovals(
+	approvals: ApiApproval[],
+	request: ApiSwapCalldataV2Request,
+	network: Network,
+	inputTokenDecimals: number
+): Promise<void> {
+	for (const approval of approvals) {
+		const transaction = validateApproval(approval, request, network, inputTokenDecimals);
+		trackTradeEvent('sign_approval', { order_type: 'market' });
+		transactionStoreInternal.awaitWalletConfirmation(
+			`Awaiting wallet confirmation to approve ${approval.symbol || 'token'}...`
+		);
+		const hash = await sendTransaction({ to: transaction.token, data: transaction.data });
+		transactionStoreInternal.awaitApprovalTx(hash);
+		await waitForTransaction(hash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
 	}
 }
 
-function getQuoteMakerAddress(quote: ProcessedQuote): string | null {
-	const ownerFromOrderData = quote.orderData?.owner;
-	if (typeof ownerFromOrderData === 'string' && ownerFromOrderData.length > 0) {
-		return ownerFromOrderData;
+function validateReadyCalldata(
+	response: ApiSwapCalldataV2Response,
+	request: ApiSwapCalldataV2Request,
+	network: Network
+): { to: `0x${string}`; data: Hex; value: bigint } {
+	if (response.approvals.length > 0) {
+		throw new Error('Calldata API still requires approval after approval confirmation');
 	}
-	const ownerFromSgOrder = (quote.sgOrder as { owner?: unknown } | undefined)?.owner;
-	if (typeof ownerFromSgOrder === 'string' && ownerFromSgOrder.length > 0) {
-		return ownerFromSgOrder;
+	if (!isAddress(response.to)) {
+		throw new Error('Calldata API returned an invalid transaction target');
+	}
+	validateOrderbookAddress(response.to, network);
+	if (!isHex(response.data) || response.data === '0x') {
+		throw new Error('Calldata API returned empty transaction calldata');
+	}
+	if (response.denomination !== request.denomination) {
+		throw new Error('Calldata API returned an unexpected denomination');
+	}
+
+	let value: bigint;
+	try {
+		value = BigInt(response.value);
+	} catch {
+		throw new Error('Calldata API returned an invalid transaction value');
+	}
+	if (value !== 0n) {
+		throw new Error('Calldata API returned an unexpected native token value');
+	}
+
+	type DecodedTakeOrder = {
+		inputIOIndex: bigint;
+		outputIOIndex: bigint;
+		order: {
+			validInputs: readonly { token: string }[];
+			validOutputs: readonly { token: string }[];
+		};
+	};
+	type DecodedTakeOrdersConfig = {
+		IOIsInput: boolean;
+		orders: readonly DecodedTakeOrder[];
+	};
+	let config: DecodedTakeOrdersConfig;
+	try {
+		const decoded = decodeFunctionData({ abi: TAKE_ORDERS_4_ABI, data: response.data });
+		if (decoded.functionName !== 'takeOrders4') {
+			throw new Error('unexpected selector');
+		}
+		[config] = decoded.args as unknown as readonly [DecodedTakeOrdersConfig];
+	} catch {
+		throw new Error('Calldata API returned malformed takeOrders4 calldata');
+	}
+	if (config.orders.length === 0) {
+		throw new Error('Calldata API returned takeOrders4 calldata without orders');
+	}
+	const expectedIOIsInput = request.mode === 'buyUpTo';
+	if (config.IOIsInput !== expectedIOIsInput) {
+		throw new Error('Calldata API returned calldata for an unexpected swap mode');
+	}
+	for (const orderConfig of config.orders) {
+		// eslint-disable-next-line no-restricted-syntax -- decoding canonical REST takeOrders4 calldata requires validating its raw IO indexes before submission
+		const inputIndex = Number(orderConfig.inputIOIndex);
+		// eslint-disable-next-line no-restricted-syntax -- decoding canonical REST takeOrders4 calldata requires validating its raw IO indexes before submission
+		const outputIndex = Number(orderConfig.outputIOIndex);
+		const input = orderConfig.order.validInputs[inputIndex];
+		const output = orderConfig.order.validOutputs[outputIndex];
+		if (
+			!input ||
+			!output ||
+			input.token.toLowerCase() !== request.inputToken.toLowerCase() ||
+			output.token.toLowerCase() !== request.outputToken.toLowerCase()
+		) {
+			throw new Error('Calldata API returned calldata for an unexpected token pair');
+		}
+	}
+	return { to: response.to, data: response.data, value };
+}
+
+const TRADE_INDEX_MAX_ATTEMPTS = 60;
+const TRADE_INDEX_POLL_INTERVAL_MS = 5_000;
+
+async function pollForIndexedTrade(hash: string): Promise<ApiTradesByTxResponse | null> {
+	for (let attempt = 0; attempt < TRADE_INDEX_MAX_ATTEMPTS; attempt++) {
+		try {
+			const response = await apiGetTradesByTx(hash);
+			if (response.trades.length > 0) return response;
+		} catch (error) {
+			if (attempt === TRADE_INDEX_MAX_ATTEMPTS - 1) {
+				console.warn('[executeMarketOrder] confirmed trade was not indexed in time:', error);
+				return null;
+			}
+		}
+		await new Promise((resolve) => setTimeout(resolve, TRADE_INDEX_POLL_INTERVAL_MS));
 	}
 	return null;
 }
 
-export function excludeTakerOwnedQuotes(
-	quotes: ProcessedQuote[],
-	takerAddress: string
-): ProcessedQuote[] {
-	const normalizedTaker = takerAddress.toLowerCase();
-	return quotes.filter((quote) => {
-		const maker = getQuoteMakerAddress(quote);
-		return !maker || maker.toLowerCase() !== normalizedTaker;
-	});
+function parseAbsoluteAmount(value: string, decimals: number): bigint {
+	const normalized = value.startsWith('-') ? value.slice(1) : value;
+	try {
+		return parseUnits(normalized, decimals);
+	} catch {
+		throw new Error('Trade API returned an invalid indexed amount');
+	}
 }
 
-/**
- * Execute a market order by walking the orderbook and taking available orders
- */
-export async function executeMarketOrder(input: MarketOrderInput): Promise<MarketOrderResult> {
-	const {
-		orderSide,
-		amount,
-		inputMode = 'amount',
-		slippageBps = DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
-		assetToken,
-		paymentToken,
-		quotes,
-		network
-	} = input;
+function buildMarketOrderSummary(
+	input: MarketOrderInput,
+	request: ApiSwapCalldataV2Request,
+	hash: string,
+	response: ApiTradesByTxResponse
+) {
+	const isBuy = input.orderSide === 'Buy';
+	const takerWantsToken = isBuy ? input.assetToken : input.paymentToken;
+	const takerPaysToken = isBuy ? input.paymentToken : input.assetToken;
+	if (
+		response.trades.length === 0 ||
+		response.trades.some(
+			(trade) =>
+				trade.request.inputToken.toLowerCase() !== request.inputToken.toLowerCase() ||
+				trade.request.outputToken.toLowerCase() !== request.outputToken.toLowerCase()
+		)
+	) {
+		throw new Error('Trade API returned an unexpected indexed token pair');
+	}
+	if (response.txHash.toLowerCase() !== hash.toLowerCase()) {
+		throw new Error('Trade API returned an unexpected transaction hash');
+	}
 
-	// OBS-03 transcript — built at function entry, mutated as the function progresses,
-	// dispatched on every failure path via `failWith`. Per CONTEXT D-15: client-side
-	// dual-sink (Sentry + console.error JSON line). NOT a server-relayed endpoint.
-	// vaultBalance stays null in Phase 1 (D-08-LIMITATION — Phase 2 / TRADE-03 introduces
-	// a server-side pre-flight read). request_id stays null on browser-only paths
-	// (logger.ts is server-only).
-	const transcript: TakeOrderTranscript = {
-		subgraphQuoteHash: null,
-		fullQuotePayload: quotes ?? [],
-		onChainStateRead: {
-			orderHash: null,
-			vaultBalance: null,
-			IOIndex: { input: null, output: null }
-		},
-		ratio: null,
-		slippageBps,
-		priceCap: null,
-		// Taker Buy crosses ask (counterparty sells); taker Sell crosses bid (counterparty buys).
-		side: orderSide === 'Buy' ? 'ask' : 'bid',
-		takerAction: orderSide,
-		userAction: orderSide,
-		mode: orderSide === 'Sell' || inputMode === 'spend' ? 'spendUpTo' : 'buyUpTo',
-		walletAddress: null,
-		request_id: null,
-		timestamp: new Date().toISOString()
-	};
-	const flowContext = (stage: 'quote' | 'calldata' | 'submission', operation: string) => ({
+	const totalTakerPaysAmount = parseAbsoluteAmount(
+		response.totals.totalInputAmount,
+		takerPaysToken.decimals
+	);
+	const totalTakerWantsAmount = parseAbsoluteAmount(
+		response.totals.totalOutputAmount,
+		takerWantsToken.decimals
+	);
+	const requestedAmount = input.amount;
+	const isOutputAnchored = request.mode === 'buyUpTo';
+	const requestedTakerWantsAmount = isOutputAnchored ? requestedAmount : totalTakerWantsAmount;
+	const requestedTakerPaysAmount = isOutputAnchored ? undefined : requestedAmount;
+	const wants = Number(formatUnits(totalTakerWantsAmount, takerWantsToken.decimals));
+	const pays = Number(formatUnits(totalTakerPaysAmount, takerPaysToken.decimals));
+	const ioRatio = pays > 0 ? wants / pays : 0;
+
+	const summary = detectPartialFill({
+		totalTakerWantsAmount,
+		totalTakerPaysAmount,
+		requestedTakerWantsAmount,
+		requestedTakerPaysAmount,
+		inputTokenSymbol: takerWantsToken.symbol,
+		inputTokenAddress: takerWantsToken.address,
+		inputTokenDecimals: takerWantsToken.decimals,
+		outputTokenSymbol: takerPaysToken.symbol,
+		outputTokenAddress: takerPaysToken.address,
+		outputTokenDecimals: takerPaysToken.decimals,
+		ioRatio,
+		actualSlippage: 0n
+	});
+
+	// The summary card compares asset quantity on both Buy and Sell. When the
+	// user anchored on payment, actual asset quantity is the only comparable
+	// value available after execution.
+	const requestedAssetAmount =
+		(input.orderSide === 'Buy' && input.inputMode !== 'spend') ||
+		(input.orderSide === 'Sell' && input.inputMode !== 'receive')
+			? requestedAmount
+			: isBuy
+				? totalTakerWantsAmount
+				: totalTakerPaysAmount;
+	return { ...summary, requestedInputAmount: requestedAssetAmount };
+}
+
+/** Execute a market order using calldata built entirely by the REST API. */
+export async function executeMarketOrder(input: MarketOrderInput): Promise<MarketOrderResult> {
+	const { orderSide, assetToken, paymentToken, network } = input;
+	const flowContext = (
+		stage: 'quote' | 'calldata' | 'submission' | 'confirmation',
+		operation: string
+	) => ({
 		stage,
 		operation,
 		orderType: 'market' as const,
@@ -238,558 +394,100 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		assetSymbol: assetToken.symbol,
 		paymentSymbol: paymentToken.symbol
 	});
-	addTradeFlowBreadcrumb(flowContext('quote', 'build_market_route'), 'started');
-	let activeStage: 'quote' | 'calldata' | 'submission' = 'quote';
+	let activeStage: 'quote' | 'calldata' | 'submission' = 'calldata';
+	let activeTradeErrorStage: TradeErrorStage = 'calldata';
 
-	// Single-seam dispatcher: every failure-return path routes through this so the
-	// transcript-builder pattern stays correct under future edits. Phase 1 fence:
-	// user-facing error strings are preserved verbatim (Phase 2 / TRADE-04 owns any
-	// UX refactor of these messages).
-	const failWith = (
-		reason: TakeOrderFailureReason,
-		errOrMessage: unknown,
-		userFacingError: string,
-		stageOverride?: 'quote' | 'calldata' | 'submission'
-	): MarketOrderResult => {
-		captureTakeOrderFailure(errOrMessage, transcript, reason, stageOverride ?? activeStage);
-		return { success: false, error: userFacingError, errorClass: errorClassForReason(reason) };
+	const failWith = (error: unknown): MarketOrderResult => {
+		const rawMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+		const tradeError = toUserFacingTradeError(error, activeTradeErrorStage);
+		transactionStoreInternal.update((state) => ({
+			...state,
+			status: TransactionStatus.ERROR,
+			error: tradeError.message
+		}));
+		return {
+			success: false,
+			error: rawMessage,
+			errorClass: tradeError.errorClass,
+			tradeError
+		};
 	};
 
 	try {
-		const takerAddress = getSignerAddress();
-		if (!takerAddress) {
-			// SKIP — not a no-liquidity scenario per RESEARCH §OBS-03 (the user disconnected
-			// the wallet; nothing to capture in a take-order transcript).
-			return { success: false, error: 'Wallet not connected. Please reconnect and try again.' };
-		}
-		transcript.walletAddress = takerAddress;
-		const externalQuotes = excludeTakerOwnedQuotes(quotes, takerAddress);
-		transcript.fullQuotePayload = externalQuotes;
-		// Per CONTEXT D-08 + checker W2: populate subgraphQuoteHash via SHA-256 of the
-		// serialized payload so the transcript field is non-null at emit time.
-		// crypto.subtle is available in browser context (this module is client-side).
-		try {
-			const hashBuf = await crypto.subtle.digest(
-				'SHA-256',
-				new TextEncoder().encode(JSON.stringify(externalQuotes))
-			);
-			transcript.subgraphQuoteHash =
-				'0x' +
-				Array.from(new Uint8Array(hashBuf))
-					.map((b) => b.toString(16).padStart(2, '0'))
-					.join('');
-		} catch {
-			// crypto.subtle should always be present in supported browsers; fall back to
-			// null rather than throwing through the trade UI.
-			transcript.subgraphQuoteHash = null;
+		const taker = getSignerAddress();
+		if (!taker) {
+			activeTradeErrorStage = 'signing';
+			return failWith(new Error('Wallet not connected. Please reconnect and try again.'));
 		}
 
-		if (externalQuotes.length === 0) {
-			return failWith(
-				'no_quotes_available',
-				new Error('No external orders available to fill'),
-				'No external orders available to fill'
-			);
-		}
-		// 1. Walk the orderbook to get fills (best-priced quotes first — required for correct splitting
-		// across multiple maker orders: e.g. take all available at the thin 0x846f… leg, then the rest
-		// from the deep 0x4bc4… leg).
-		const orderedQuotes = sortQuotesByPrice(externalQuotes, orderSide);
-		const walkResult = walkOrderbook({
-			quotes: orderedQuotes,
-			orderSide,
-			selectedAmount: amount,
-			assetDecimals: assetToken.decimals,
-			paymentDecimals: paymentToken.decimals,
-			mode: inputMode === 'spend' ? 'spend' : 'receive'
+		const request = buildCalldataRequest(input, taker);
+		transactionStoreInternal.checkingWalletAllowance('Preparing market order...');
+		addTradeFlowBreadcrumb(flowContext('calldata', 'request_api_calldata'), 'started');
+		let response = await apiGetSwapCalldataV2(request);
+		addTradeFlowBreadcrumb(flowContext('calldata', 'request_api_calldata'), 'completed');
+		trackTradeEvent('quote_received', {
+			order_type: 'market',
+			order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+			mode: request.mode === 'buyUpTo' ? 'buyUpTo' : 'spendUpTo',
+			asset_symbol: assetToken.symbol,
+			payment_symbol: paymentToken.symbol,
+			amount: request.amount,
+			slippage_bps: 'slippageBps' in request ? request.slippageBps : undefined
 		});
 
-		if (!walkResult || walkResult.fills.length === 0) {
-			return failWith(
-				'no_walk_fills',
-				new Error('No orders available to fill at current prices'),
-				'No orders available to fill'
+		if (response.approvals.length > 0) {
+			activeTradeErrorStage = 'approval';
+			const inputTokenDecimals = orderSide === 'Buy' ? paymentToken.decimals : assetToken.decimals;
+			await submitApprovals(response.approvals, request, network, inputTokenDecimals);
+			activeTradeErrorStage = 'calldata';
+			response = await apiGetSwapCalldataV2(
+				buildApprovalRetryRequest(request, response.resolvedPriceCap)
 			);
 		}
 
-		// Emergency ratio from worst priced leg (used for aggregated SDK take + legacy paths)
-		const worstFill = walkResult.fills[walkResult.fills.length - 1];
-		if (!worstFill?.quote?.ratio) {
-			return failWith(
-				'caught_exception',
-				new Error('worstFill missing ratio'),
-				'Unable to calculate order price. Please try again.'
-			);
-		}
-		transcript.ratio = worstFill.quote.ratio;
-		const isBuy = orderSide === 'Buy';
-		// Apply user-configured slippage to BOTH Buy and Sell. Previously Sell hardcoded
-		// a 2x emergency multiplier (~100% tolerance) regardless of user input — meaning
-		// a user setting "0.1% slippage" on a sell would still get filled at deep
-		// discounts. The SDK's `priceCap` is per-leg in either direction, so the same
-		// formula applies symmetrically.
-		const ratioMultiplier = computeRatioMultiplier(slippageBps);
-		const emergencyRatioHex = computeEmergencyRatioHex(
-			worstFill.quote.ratio as `0x${string}`,
-			ratioMultiplier
-		);
-		if (!emergencyRatioHex) {
-			return failWith(
-				'caught_exception',
-				new Error('emergencyRatioHex computation returned null'),
-				'Unable to calculate order price. Please try again.'
-			);
-		}
-
-		const priceCapStrForSdk = isBuy
-			? humanPriceCapStr(worstFill.price, ratioMultiplier, emergencyRatioHex)
-			: String(Float.fromHex(emergencyRatioHex).value?.format().value ?? '1e+18');
-		transcript.priceCap = priceCapStrForSdk;
-
-		// Hydrate orderData/sgOrder for quotes sourced from the REST API (which only
-		// returns summaries). We need the full on-chain OrderV4 struct for take-order calldata.
-		const quotesToHydrate = walkResult.fills
-			.map((f) => f.quote as ProcessedQuote)
-			.filter((q) => !q.orderData || !q.sgOrder?.orderBytes || !q.raindexOrder);
-		if (quotesToHydrate.length > 0) {
-			const client = await getLoadBalancedClient(network);
-			const uniqueHashes = [...new Set(quotesToHydrate.map((q) => q.orderHash))];
-			await Promise.all(
-				uniqueHashes.map(async (hash) => {
-					try {
-						const ordersResult = await client.getOrders(
-							[network.id],
-							{ orderHash: hash as `0x${string}`, owners: [] },
-							1
-						);
-						if (ordersResult.error || !ordersResult.value?.orders.length) return;
-						const raindexOrder = ordersResult.value.orders[0];
-						const sgResult = raindexOrder.convertToSgOrder();
-						if (sgResult.error || !sgResult.value) return;
-						const sgOrder = sgResult.value;
-						const decoded = AbiCoder.defaultAbiCoder().decode([OrderV4_ABI], sgOrder.orderBytes);
-						const orderData = normalizeOrderData(decoded[0] as OrderV4);
-						for (const fill of walkResult.fills) {
-							if (fill.quote.orderHash === hash) {
-								fill.quote.sgOrder = sgOrder;
-								fill.quote.orderData = orderData;
-								fill.quote.raindexOrder = raindexOrder as unknown as RaindexOrder;
-							}
-						}
-					} catch (e) {
-						console.warn(`[executeMarketOrder] Failed to hydrate order ${hash}:`, e);
-					}
-				})
-			);
-		}
-
-		// Build aggregated take via RaindexClient.getTakeOrdersCalldata(): one tx, subgraph-driven
-		// route across multiple maker orders (handles split across thin + deep liquidity).
-		// Verify all fills have orderData after hydration
-		const unhydratedFills = walkResult.fills.filter(
-			(f) => !f.quote.orderData || !(f.quote as ProcessedQuote).sgOrder?.orderBytes
-		);
-		if (unhydratedFills.length > 0) {
-			console.warn(
-				`[executeMarketOrder] ${unhydratedFills.length}/${walkResult.fills.length} fills missing orderData after hydration`
-			);
-		}
-		const firstQuote = walkResult.fills[0].quote as ProcessedQuote;
-		// Per CONTEXT D-08 + checker W3: orderHash + IOIndex.{input,output} are available
-		// locally on firstQuote (no new on-chain read required). Populate from the same
-		// data dispatchTakeOrders already receives below via aggregatedParams.
-		// vaultBalance stays null — populating it requires a new on-chain getVaultBalance
-		// call which is Phase 2 / TRADE-03 scope (the freshness-illusion fix introduces a
-		// server-side pre-flight read).
-		transcript.onChainStateRead.orderHash =
-			(firstQuote.sgOrder as { orderHash?: string } | undefined)?.orderHash ??
-			firstQuote.orderHash ??
-			null;
-		transcript.onChainStateRead.IOIndex.input = getMakerInputIOIndex(firstQuote) ?? null;
-		transcript.onChainStateRead.IOIndex.output = getMakerOutputIOIndex(firstQuote) ?? null;
-		if (!firstQuote.orderData || !firstQuote.sgOrder) {
-			return failWith(
-				'unhydrated_fills',
-				new Error('firstQuote missing orderData/sgOrder after hydration'),
-				'Unable to prepare aggregated order route. Please refresh and retry.',
-				'calldata'
-			);
-		}
-
-		// === TRADE-03 (Plan 02-06): pre-flight multicall + auto-walk ===
-		// Per Decision D-03: silent safety net — slippage protects "price moved within
-		// an order"; pre-flight catches "order isn't there anymore" (filled / drained /
-		// cancelled). The two safeguards coexist non-redundantly. Per D-04: on detected
-		// staleness, auto-walk to the next-best on-chain order (≤ 2 levels) using fresh
-		// on-chain truth, NOT the stale subgraph.
-		// Per D-06: every error-return path routes through `failWith()` so the OBS-03
-		// transcript captures the failure mode. This block contributes 3 new failWith
-		// call sites (preflight_chain_unreachable, preflight_order_vanished, auto_retry_exhausted).
-		let preflightWalkCount = 0;
-		let workingFills = walkResult.fills;
-		let preflightCompleted = false;
-		while (preflightWalkCount < PREFLIGHT_MAX_WALKS) {
-			const targetedOrders: RaindexOrder[] = workingFills
-				.map((f) => f.quote.raindexOrder)
-				.filter((o): o is RaindexOrder => Boolean(o));
-
-			if (targetedOrders.length === 0) {
-				return failWith(
-					'preflight_chain_unreachable',
-					new Error('No hydrated RaindexOrder instances available to pre-flight'),
-					'Unable to verify orderbook state. Please refresh quotes and retry.'
-				);
-			}
-
-			const ordersWrapper = new RaindexOrders();
-			for (const o of targetedOrders) ordersWrapper.push(o);
-
-			const preflightClient = await getLoadBalancedClient(network);
-			let preflightResult: WasmEncodedResult<RaindexOrderQuote[][]>;
-			try {
-				preflightResult = await withRetry(() =>
-					preflightClient.getOrderQuotesBatch(ordersWrapper, null, null)
-				);
-			} catch (e) {
-				return failWith(
-					'preflight_chain_unreachable',
-					e instanceof Error ? e : new Error(String(e)),
-					'Unable to verify orderbook state. Please refresh quotes and retry.'
-				);
-			}
-
-			if (preflightResult.error || !preflightResult.value) {
-				return failWith(
-					'preflight_chain_unreachable',
-					new Error(preflightResult.error?.readableMsg ?? 'getOrderQuotesBatch returned no value'),
-					'Unable to verify orderbook state. Please refresh quotes and retry.'
-				);
-			}
-
-			// Pitfall 3 (02-RESEARCH): SDK returns RaindexOrderQuote[][] — outer array per
-			// order, inner array per IO-pair quote. Use `result[i]?.[0]?.data?.formattedMaxOutput`
-			// (with the `[0]` to pick the first inner element), NOT `result[i].data.formattedMaxOutput`.
-			// Populate transcript.vaultBalance from the first (best) candidate — closes the
-			// Phase 1 D-08 LIMITATION (`01-CONTEXT.md` left it null deliberately). Populated
-			// BEFORE any failure path can fire so even `preflight_order_vanished` carries it.
-			transcript.onChainStateRead.vaultBalance =
-				preflightResult.value[0]?.[0]?.data?.formattedMaxOutput ?? null;
-
-			// Filter candidates: drop any with success=false OR maxOutput==='0'.
-			const survivors = workingFills.filter((_fill, i) => {
-				const candidateQuote = preflightResult.value![i]?.[0];
-				if (!candidateQuote) return false;
-				if (!candidateQuote.success) return false;
-				const maxOut = candidateQuote.data?.formattedMaxOutput ?? '0';
-				return maxOut !== '0' && Number(maxOut) > 0;
-			});
-
-			if (survivors.length === workingFills.length) {
-				// All candidates passed pre-flight — proceed to dispatch with the original walk.
-				preflightCompleted = true;
-				break;
-			}
-
-			if (survivors.length > 0) {
-				// Some candidates dropped; one or more orders vanished/drained.
-				// Replace fills with survivors and re-enter loop for the next walk level.
-				workingFills = survivors;
-				preflightWalkCount += 1;
-				continue;
-			}
-
-			// All candidates dropped at this walk level.
-			if (preflightWalkCount + 1 < PREFLIGHT_MAX_WALKS) {
-				// Theoretically we could re-walk the orderbook from scratch here, but the
-				// subgraph is what produced these candidates and it's stale — we have no
-				// better source on a single page render. Fail terminally with the
-				// vanished-order signal.
-				return failWith(
-					'preflight_order_vanished',
-					new Error(
-						`All ${targetedOrders.length} candidate orders failed pre-flight at walk level ${
-							preflightWalkCount + 1
-						}`
-					),
-					'No liquidity available right now for this size. Try a smaller amount or check back in a minute.'
-				);
-			}
-
-			return failWith(
-				'auto_retry_exhausted',
-				new Error(`Pre-flight + auto-walk exhausted after ${PREFLIGHT_MAX_WALKS} levels`),
-				'No liquidity available right now for this size. Try a smaller amount or check back in a minute.'
-			);
-		}
-		if (!preflightCompleted) {
-			// Loop ran PREFLIGHT_MAX_WALKS times without locking in survivors (always had
-			// some drops but never zero — the partial-survivor branch falls through here).
-			return failWith(
-				'auto_retry_exhausted',
-				new Error(`Pre-flight + auto-walk exhausted after ${PREFLIGHT_MAX_WALKS} levels`),
-				'No liquidity available right now for this size. Try a smaller amount or check back in a minute.'
-			);
-		}
-		// After the loop: workingFills contains the survivors that passed pre-flight.
-		// Mutate walkResult.fills (NOT a fresh object) so all downstream consumers see
-		// the same shape. The aggregatedParams construction below operates on these
-		// post-pre-flight fills.
-		walkResult.fills = workingFills;
-		// Recompute aggregate totals from the survivors. walkOrderbook produced these
-		// against the ORIGINAL fills set, but the partial-fill anchor downstream
-		// (params.requestedTakerWantsAmount → pollAndFinalizeTakeOrders) reads
-		// walkResult.inputAmountFilled directly. Without this recompute, a successful
-		// trade against survivors-only liquidity would be flagged as a partial fill
-		// because the anchor was inflated by the pre-pre-flight totals.
-		// User-perspective mapping (matches walkOrderbook): Buy → input=asset/output=payment;
-		// Sell → input=payment/output=asset.
-		const survivorAssetTotal = workingFills.reduce((acc, f) => acc + f.assetAmount, 0n);
-		const survivorPaymentTotal = workingFills.reduce((acc, f) => acc + f.paymentAmount, 0n);
-		walkResult.inputAmountFilled = orderSide === 'Buy' ? survivorAssetTotal : survivorPaymentTotal;
-		walkResult.outputAmountGiven = orderSide === 'Buy' ? survivorPaymentTotal : survivorAssetTotal;
-		// === END TRADE-03 pre-flight block ===
-
-		// NOTE: Slippage cap (priceCap) constructed above operates on the survivors from
-		// TRADE-03 pre-flight. Slippage protects "price moved within an order"; pre-flight
-		// catches "order isn't there anymore". The two safeguards are non-redundant — DO NOT
-		// remove either thinking the other replaces it. (See 02-CONTEXT.md §"specifics".)
-
-		// Use *UpTo modes instead of *Exact to tolerate tiny Float precision gaps
-		// where the SDK's internal quote discovery computes available liquidity as
-		// e.g. 0.999...999 instead of exactly 1. *UpTo fills as much as available
-		// up to the requested amount, avoiding spurious "Insufficient liquidity" errors.
-		let mode: TakeOrdersMode;
-		let amountDecimals: number;
-		if (orderSide === 'Sell') {
-			mode = 'spendUpTo';
-			amountDecimals = assetToken.decimals;
-		} else if (inputMode === 'spend') {
-			mode = 'spendUpTo';
-			amountDecimals = paymentToken.decimals;
-		} else {
-			mode = 'buyUpTo';
-			amountDecimals = assetToken.decimals;
-		}
-		const takeRequest: TakeOrdersRequest = {
-			taker: takerAddress,
-			chainId: network.id,
-			sellToken: orderSide === 'Buy' ? paymentToken.address : assetToken.address,
-			buyToken: orderSide === 'Buy' ? assetToken.address : paymentToken.address,
-			mode,
-			amount: formatUnits(amount, amountDecimals),
-			priceCap: priceCapStrForSdk
-		};
-		addTradeFlowBreadcrumb(flowContext('quote', 'build_market_route'), 'completed');
-		activeStage = 'calldata';
-		addTradeFlowBreadcrumb(flowContext('calldata', 'prepare_take_order'), 'started');
-		console.log('[executeMarketOrder] TakeOrdersRequest', {
-			mode: takeRequest.mode,
-			amount: takeRequest.amount,
-			priceCap: takeRequest.priceCap,
-			sellToken: takeRequest.sellToken,
-			buyToken: takeRequest.buyToken,
-			orderSide,
-			inputMode,
-			fillCount: walkResult.fills.length,
-			walkOutputGiven: walkResult.outputAmountGiven?.toString(),
-			walkInputFilled: walkResult.inputAmountFilled?.toString()
-		});
-		// Opportunistically prefetch aggregated calldata while we build final params.
-		void preloadAggregatedTakeOrdersCalldata(takeRequest);
-		const { inputAmountFilled } = walkResult;
-		const toTokenInfo = ({ address, decimals, symbol }: TokenInfo): TokenInfo => ({
-			address,
-			decimals,
-			symbol
-		});
-		// Compute per-fill amounts for per-order fallback path
-		let orderFillAmounts: bigint[];
-		let orderFillDecimals: number;
-		if (orderSide === 'Sell') {
-			orderFillAmounts = walkResult.fills.map((f) => f.assetAmount);
-			orderFillDecimals = assetToken.decimals;
-		} else if (inputMode === 'spend') {
-			orderFillAmounts = walkResult.fills.map((f) => f.paymentAmount);
-			orderFillDecimals = paymentToken.decimals;
-		} else {
-			orderFillAmounts = walkResult.fills.map((f) => f.assetAmount);
-			orderFillDecimals = assetToken.decimals;
-		}
-		// Anchor for partial-fill detection lives on whichever side the user typed:
-		//   - Buy-by-asset (mode buyUpTo):  user's typed `amount` IS the wants amount
-		//   - Buy-by-spend  (mode spendUpTo): user's typed `amount` IS the pays amount
-		//   - Sell          (mode spendUpTo): user's typed `amount` IS the pays amount
-		// Setting `requestedTakerPaysAmount` for spend-mode flows lets downstream code
-		// compare actual paid vs typed paid (the right anchor) instead of conflating
-		// price slippage with quantity shortfall on the receive side.
-		const isSpendAnchored = orderSide === 'Sell' || inputMode === 'spend';
-		const aggregatedParams: TakeOrdersParams = {
-			orderData: firstQuote.orderData as OrderV4,
-			ioIndexes: {
-				input: getMakerInputIOIndex(firstQuote) ?? 0,
-				output: getMakerOutputIOIndex(firstQuote) ?? 0
-			},
-			takerWantsToken: toTokenInfo(isBuy ? assetToken : paymentToken),
-			takerPaysToken: toTokenInfo(isBuy ? paymentToken : assetToken),
-			requestedTakerWantsAmount: isBuy && inputMode !== 'spend' ? amount : inputAmountFilled,
-			requestedTakerPaysAmount: isSpendAnchored ? amount : undefined,
-			simulation: walkResult,
-			orderFillAmounts,
-			orderFillDecimals
-		};
-		addTradeFlowBreadcrumb(flowContext('calldata', 'prepare_take_order'), 'completed');
+		const transaction = validateReadyCalldata(response, request, network);
 		activeStage = 'submission';
+		activeTradeErrorStage = 'signing';
 		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'started');
-		const approvalSymbol = isBuy ? paymentToken.symbol : assetToken.symbol;
-		const aggregatedHandled = await handleAggregatedTakeOrdersCalldata(
-			takeRequest,
-			firstQuote.sgOrder as SgOrder,
-			aggregatedParams,
-			approvalSymbol
-		);
-		if (!aggregatedHandled) {
-			// Aggregated SDK path failed (often stale subgraph vault balances).
-			// Fall back to per-order execution using hydrated RaindexOrder instances.
-			const indexedFills = walkResult.fills
-				.map((f, i) => ({ fill: f, fillAmount: orderFillAmounts[i] ?? 0n }))
-				.filter(
-					({ fill }) =>
-						fill.quote.raindexOrder &&
-						fill.quote.orderData &&
-						(fill.quote as ProcessedQuote).sgOrder?.orderBytes
-				);
-			if (indexedFills.length === 0) {
-				return failWith(
-					'aggregated_failed',
-					new Error('indexedFills empty in fallback path'),
-					'Unable to prepare order transaction. Please refresh quotes and retry.'
-				);
+		trackTradeEvent('sign_trade', {
+			order_type: 'market',
+			order_side: orderSide.toLowerCase() as 'buy' | 'sell'
+		});
+		transactionStoreInternal.awaitWalletConfirmation('Awaiting wallet confirmation...');
+		const hash = await sendTransaction(transaction);
+		activeTradeErrorStage = 'confirmation';
+		trackTradeEvent('broadcast', {
+			order_type: 'market',
+			order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+			asset_symbol: assetToken.symbol,
+			payment_symbol: paymentToken.symbol
+		});
+		await waitForTransaction(hash);
+		trackTradeEvent('confirmed', {
+			order_type: 'market',
+			order_side: orderSide.toLowerCase() as 'buy' | 'sell',
+			asset_symbol: assetToken.symbol,
+			payment_symbol: paymentToken.symbol
+		});
+		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'completed');
+		invalidateDashboardBalances();
+		const indexedTrade = await pollForIndexedTrade(hash);
+		let metadata: { marketOrderSummary: ReturnType<typeof buildMarketOrderSummary> } | undefined;
+		if (indexedTrade) {
+			try {
+				metadata = {
+					marketOrderSummary: buildMarketOrderSummary(input, request, hash, indexedTrade)
+				};
+			} catch (error) {
+				console.warn('[executeMarketOrder] confirmed trade summary could not be built:', error);
+				captureTradeFlowError(error, flowContext('confirmation', 'build_market_order_summary'));
 			}
-			console.log('[executeMarketOrder] Falling back to per-order execution', {
-				hydratedFills: indexedFills.length,
-				totalFills: walkResult.fills.length
-			});
-			const oracleInputs = indexedFills.map(({ fill }) => ({
-				raindexOrder: fill.quote.raindexOrder as RaindexOrder,
-				inputIndex: getMakerInputIOIndex(fill.quote) ?? 0,
-				outputIndex: getMakerOutputIOIndex(fill.quote) ?? 0,
-				amountStr: '',
-				priceCapStr: priceCapStrForSdk,
-				taker: takerAddress
-			}));
-			const fallbackParams: TakeOrdersParams = {
-				...aggregatedParams,
-				orderFillAmounts: indexedFills.map(({ fillAmount }) => fillAmount)
-			};
-			await handleOracleOrders(
-				oracleInputs,
-				mode,
-				firstQuote.sgOrder as SgOrder,
-				approvalSymbol,
-				fallbackParams
-			);
 		}
-		const { status, error: txError } = get(transactionStoreInternal);
-		if (status === TransactionStatus.SUCCESS) {
-			addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'completed');
-			// OBS-07 (Plan 02-03 Task 1b): SDK callback boundary collapse.
-			// `handleAggregatedTakeOrdersCalldata` / `handleOracleOrders` already block
-			// through wallet-sign → on-chain dispatch → receipt confirmation by the
-			// time control returns here. There is no per-callback hook at this layer
-			// to distinguish "broadcast" (post-dispatch, pre-confirm) from "confirmed"
-			// (post-receipt). Per plan §Task 1b: emit BOTH back-to-back at the same
-			// boundary so the funnel contract holds (Plan 04 §3 OBS-08 funnel definition).
-			trackTradeEvent('broadcast', {
-				order_type: 'market',
-				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-				asset_symbol: assetToken.symbol,
-				payment_symbol: paymentToken.symbol
-			});
-			trackTradeEvent('confirmed', {
-				order_type: 'market',
-				order_side: orderSide.toLowerCase() as 'buy' | 'sell',
-				asset_symbol: assetToken.symbol,
-				payment_symbol: paymentToken.symbol
-			});
-			return { success: true };
-		}
-		if (status === TransactionStatus.ERROR) {
-			return failWith(
-				'aggregated_failed',
-				new Error(txError ?? 'Transaction store reported ERROR status'),
-				txError || 'Order failed'
-			);
-		}
-		return failWith(
-			'aggregated_failed',
-			new Error(`Transaction store terminal status: ${String(status)}`),
-			'Order did not complete. Please try again.'
-		);
+		transactionStoreInternal.transactionSuccess(hash, 'Market order confirmed', metadata);
+		return { success: true };
 	} catch (error) {
-		console.error('Market order execution error:', error);
-		return failWith(
-			'caught_exception',
-			error,
-			error instanceof Error ? error.message : 'Unknown error occurred'
-		);
+		console.error(`[executeMarketOrder] ${activeStage} failed:`, error);
+		captureTradeFlowError(error, flowContext(activeStage, 'execute_market_order'));
+		return failWith(error);
 	}
-}
-
-/**
- * Helper to filter quotes for a specific order side
- */
-export function filterQuotesForSide(
-	quotes: ProcessedQuote[],
-	orderSide: 'Buy' | 'Sell',
-	assetAddress: string,
-	paymentAddress: string
-): ProcessedQuote[] {
-	const normalizedAsset = assetAddress.toLowerCase();
-	const normalizedPayment = paymentAddress.toLowerCase();
-
-	return quotes.filter((quote) => {
-		const inputAddr = getMakerInputTokenAddress(quote)?.toLowerCase();
-		const outputAddr = getMakerOutputTokenAddress(quote)?.toLowerCase();
-		const price = quote.quotePerAsset;
-
-		if (orderSide === 'Buy') {
-			// For Buy: we need ASK orders (seller offering asset for payment)
-			return (
-				inputAddr === normalizedPayment &&
-				outputAddr === normalizedAsset &&
-				quote.side === 'ask' &&
-				price !== undefined &&
-				Number.isFinite(price) &&
-				price > 0
-			);
-		} else {
-			// For Sell: we need BID orders (buyer offering payment for asset)
-			return (
-				inputAddr === normalizedAsset &&
-				outputAddr === normalizedPayment &&
-				quote.side === 'bid' &&
-				price !== undefined &&
-				Number.isFinite(price) &&
-				price > 0
-			);
-		}
-	});
-}
-
-/**
- * Sort quotes by price (best first)
- */
-export function sortQuotesByPrice(
-	quotes: ProcessedQuote[],
-	orderSide: 'Buy' | 'Sell'
-): ProcessedQuote[] {
-	return [...quotes].sort((a, b) => {
-		if (orderSide === 'Buy') {
-			// For Buy: lowest price first (best ask)
-			return (a.quotePerAsset ?? Infinity) - (b.quotePerAsset ?? Infinity);
-		} else {
-			// For Sell: highest price first (best bid)
-			return (b.quotePerAsset ?? 0) - (a.quotePerAsset ?? 0);
-		}
-	});
 }

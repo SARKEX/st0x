@@ -71,8 +71,8 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 	it('Test 4: trade_failed and trade_initiated use trackTradeEvent', () => {
 		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_failed['"]/);
 		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]trade_initiated['"]/);
-		// quote_received funnel step
-		expect(componentSource).toMatch(/trackTradeEvent\(\s*['"]quote_received['"]/);
+		// quote_received belongs to the REST calldata response boundary in the service.
+		expect(componentSource).not.toMatch(/trackTradeEvent\(\s*['"]quote_received['"]/);
 	});
 
 	it('Test 5: shared classifyError covers the market-scope ErrorClass branches', () => {
@@ -92,9 +92,10 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		expect(classifyError(undefined, 'market')).toBe('unknown');
 	});
 
-	it("Test 5b: component imports the shared classifyError + calls it with the 'market' scope", () => {
-		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/observability\/classifyError['"]/);
-		expect(componentSource).toMatch(/classifyError\s*\([^,]*,\s*['"]market['"]\s*\)/);
+	it('Test 5b: component uses the structured trade error model for failures', () => {
+		expect(componentSource).toMatch(/from\s+['"]\$lib\/services\/tradeError['"]/);
+		expect(componentSource).toMatch(/toUserFacingTradeError\s*\(/);
+		expect(componentSource).toMatch(/error_code:\s*userFacingError\.code/);
 	});
 
 	it('Test 6: panel-level events route through trackTradeEvent', () => {

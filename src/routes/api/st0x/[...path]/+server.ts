@@ -7,9 +7,27 @@
  */
 
 import { env } from '$env/dynamic/private';
+import { getLogger, getRequestContext, requestIdOrUuid } from '$lib/server/logger';
 import type { RequestEvent, RequestHandler } from './$types';
 
 const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
+
+function errorResponse(requestId: string, status: number, code: string, message: string): Response {
+	return new Response(
+		JSON.stringify({
+			request_id: requestId,
+			error: { code, message }
+		}),
+		{
+			status,
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Request-Id': requestId,
+				'Cache-Control': 'no-store'
+			}
+		}
+	);
+}
 
 function getApiBase(): string {
 	const url = env.ST0X_API_URL;
@@ -75,11 +93,14 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v1\/trades\/tx\/[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|query$)[^/]+$/ },
 	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
 	{ method: 'POST', pattern: /^v1\/trades\/query$/ },
 	{ method: 'POST', pattern: /^v1\/swap\/quote$/ },
-	{ method: 'POST', pattern: /^v1\/swap\/calldata$/ }
+	{ method: 'POST', pattern: /^v1\/swap\/calldata$/ },
+	{ method: 'POST', pattern: /^v2\/swap\/quote$/ },
+	{ method: 'POST', pattern: /^v2\/swap\/calldata$/ }
 ];
 
 function matchProxyRoute(method: string, pathSuffix: string): { cache?: string } | null {
@@ -103,6 +124,9 @@ async function shouldCacheResponse(pathSuffix: string, response: Response): Prom
 }
 
 const proxyRequest = async ({ request, params, url }: RequestEvent) => {
+	const requestId = requestIdOrUuid(
+		getRequestContext()?.request_id ?? request.headers.get('x-request-id')
+	);
 	let apiBase: string;
 	let authHeader: string;
 	try {
@@ -110,17 +134,14 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 		authHeader = getAuthHeader();
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Proxy configuration error';
-		console.error('[st0x-proxy] Config error:', msg);
-		return new Response(JSON.stringify({ error: msg }), {
-			status: 503,
-			headers: { 'Content-Type': 'application/json' }
-		});
+		getLogger().error({ error: { message: msg } }, 'st0x proxy configuration error');
+		return errorResponse(requestId, 503, 'UPSTREAM_UNAVAILABLE', 'The trading API is unavailable');
 	}
 
 	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
 	const matched = matchProxyRoute(request.method, pathSuffix);
 	if (!matched) {
-		return new Response('Not found', { status: 404 });
+		return errorResponse(requestId, 404, 'NOT_FOUND', 'Proxy route not found');
 	}
 	const targetUrl = `${apiBase}/${pathSuffix}${url.search}`;
 
@@ -128,6 +149,7 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	headers.set('Content-Type', 'application/json');
 	headers.set('Accept', 'application/json');
 	headers.set('Authorization', authHeader);
+	headers.set('X-Request-Id', requestId);
 
 	const init: RequestInit = {
 		method: request.method,
@@ -145,16 +167,22 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 		response = await fetch(targetUrl, init);
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Unknown upstream error';
-		console.error(`[st0x-proxy] Upstream fetch failed (${targetUrl}):`, msg);
-		return new Response(JSON.stringify({ error: 'Upstream API unreachable', detail: msg }), {
-			status: 502,
-			headers: { 'Content-Type': 'application/json' }
-		});
+		getLogger().error(
+			{ error: { message: msg }, upstream_path: pathSuffix },
+			'st0x upstream request failed'
+		);
+		return errorResponse(requestId, 503, 'UPSTREAM_UNAVAILABLE', 'The trading API is unavailable');
 	}
 
 	const responseHeaders = new Headers();
 	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
-	if (matched.cache && (await shouldCacheResponse(pathSuffix, response))) {
+	for (const headerName of ['x-request-id', 'retry-after']) {
+		const value = response.headers.get(headerName);
+		if (value) responseHeaders.set(headerName, value);
+	}
+	if (!response.ok) {
+		responseHeaders.set('Cache-Control', 'no-store');
+	} else if (matched.cache && (await shouldCacheResponse(pathSuffix, response))) {
 		responseHeaders.set('Cache-Control', matched.cache);
 	}
 
