@@ -64,6 +64,8 @@ export interface TradeEventProps {
 	slippage_bps?: number;
 	error_class?: ErrorClass;
 	error_message?: string;
+	error_code?: string;
+	request_id?: string;
 	// Tolerate existing call-site extras (e.g. token_symbol, intended_trade_size_usd)
 	[key: string]: unknown;
 }

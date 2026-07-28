@@ -21,13 +21,13 @@
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
-	import { classifyError } from '$lib/services/observability/classifyError';
 	import {
 		captureTradeFlowError,
 		inferWalletFailureStage,
 		type TradeFlowStage
 	} from '$lib/services/observability/tradeFlow';
 	import { withTradeId } from '$lib/services/observability/tradeId';
+	import { toUserFacingTradeError } from '$lib/services/tradeError';
 	import { onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
@@ -602,12 +602,13 @@
 				});
 
 				if (!result.success && result.error) {
-					orderPreparationError = result.error;
+					const userFacingError =
+						result.tradeError ?? toUserFacingTradeError(result.error, activeStage);
+					orderPreparationError = userFacingError.message;
 					// Prefer the service's discriminated errorClass; fall back to
 					// substring-classifying the user-facing string only if absent
 					// (shouldn't happen post-Phase-2 but kept as a defence).
-					const eventErrorClass =
-						result.errorClass ?? classifyError(new Error(result.error), 'market');
+					const eventErrorClass = result.errorClass ?? userFacingError.errorClass;
 					serviceErrorClass = eventErrorClass;
 					trackTradeEvent('trade_failed', {
 						order_type: 'market',
@@ -620,7 +621,9 @@
 						),
 						avg_price: marketPrice,
 						error_class: eventErrorClass,
-						error_message: result.error
+						error_message: userFacingError.message,
+						error_code: userFacingError.code,
+						...(userFacingError.requestId ? { request_id: userFacingError.requestId } : {})
 					});
 				} else if (result.success) {
 					tradeSubmittedSuccessfully = true;
@@ -644,7 +647,8 @@
 				const failureStage =
 					activeStage === 'calldata' ? inferWalletFailureStage(error) : activeStage;
 				captureTradeFlowError(error, flowContext(failureStage, 'submit_market_order'));
-				orderPreparationError = error instanceof Error ? error.message : 'Unknown error occurred';
+				const userFacingError = toUserFacingTradeError(error, failureStage);
+				orderPreparationError = userFacingError.message;
 				trackTradeEvent('trade_failed', {
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
@@ -655,8 +659,10 @@
 						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
 					),
 					avg_price: marketPrice,
-					error_class: classifyError(error, 'market'),
-					error_message: orderPreparationError
+					error_class: userFacingError.errorClass,
+					error_message: userFacingError.message,
+					error_code: userFacingError.code,
+					...(userFacingError.requestId ? { request_id: userFacingError.requestId } : {})
 				});
 			} finally {
 				isSubmittingMarketOrder = false;

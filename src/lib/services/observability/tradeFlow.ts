@@ -10,6 +10,8 @@
 import * as Sentry from '@sentry/sveltekit';
 import { classifyError } from './classifyError';
 import { getCurrentTradeId } from './tradeId';
+import { toUserFacingTradeError } from '$lib/services/tradeError';
+import { isHttpError } from '$lib/clients/http';
 
 export type TradeFlowStage =
 	| 'quote'
@@ -86,11 +88,15 @@ export function addTradeFlowBreadcrumb(
  */
 export function captureTradeFlowError(error: unknown, context: TradeFlowContext): void {
 	const normalized = asError(error);
-	const errorClass = classifyError(
-		normalized,
-		context.orderType === 'market' ? 'market' : 'deploy'
-	);
-	const data = compactContext(context);
+	const userFacingError = toUserFacingTradeError(error, context.stage);
+	const errorClass = isHttpError(error)
+		? userFacingError.errorClass
+		: classifyError(normalized, context.orderType === 'market' ? 'market' : 'deploy');
+	const data = {
+		...compactContext(context),
+		error_code: userFacingError.code,
+		...(userFacingError.requestId ? { request_id: userFacingError.requestId } : {})
+	};
 	const tradeId = context.tradeId ?? getCurrentTradeId();
 
 	try {
@@ -105,9 +111,11 @@ export function captureTradeFlowError(error: unknown, context: TradeFlowContext)
 				trade_operation: context.operation,
 				order_type: context.orderType,
 				error_class: errorClass,
+				error_code: userFacingError.code,
 				...(context.orderSide ? { order_side: context.orderSide } : {}),
 				...(tradeId ? { trade_id: tradeId } : {}),
-				...(context.chainId != null ? { chain_id: String(context.chainId) } : {})
+				...(context.chainId != null ? { chain_id: String(context.chainId) } : {}),
+				...(userFacingError.requestId ? { request_id: userFacingError.requestId } : {})
 			},
 			contexts: {
 				trade_flow: data
