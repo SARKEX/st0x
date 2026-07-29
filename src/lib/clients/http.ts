@@ -121,14 +121,18 @@ function httpErrorFromResponse(response: Response, text: string): HttpError {
 	});
 }
 
-function retryDelayFor(error: HttpError, fallbackMs: number): number {
-	if (!error.retryAfter) return fallbackMs;
+export function parseRetryAfterMs(value: string | null, now = Date.now()): number | null {
+	if (!value) return null;
 
-	const seconds = Number(error.retryAfter);
+	const seconds = Number(value);
 	if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
 
-	const retryAt = Date.parse(error.retryAfter);
-	return Number.isNaN(retryAt) ? fallbackMs : Math.max(0, retryAt - Date.now());
+	const retryAt = Date.parse(value);
+	return Number.isNaN(retryAt) ? null : Math.max(0, retryAt - now);
+}
+
+function retryDelayFor(error: HttpError, fallbackMs: number): number {
+	return parseRetryAfterMs(error.retryAfter) ?? fallbackMs;
 }
 
 /**

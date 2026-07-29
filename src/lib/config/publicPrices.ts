@@ -1,10 +1,7 @@
-/**
- * Cache the REST API's sampled market-price response across website clients.
- * The sampler runs independently in the REST service; the website only needs
- * to refresh often enough to pick up the latest completed sample.
- */
+/** Public prices are fresh for 90 seconds and retained for six hours. */
 export const PUBLIC_PRICES_TTL_SECONDS = 90;
 export const PUBLIC_PRICES_REFRESH_INTERVAL_MS = PUBLIC_PRICES_TTL_SECONDS * 1_000;
-export const PUBLIC_PRICES_CACHE_CONTROL = `public, s-maxage=${PUBLIC_PRICES_TTL_SECONDS}, stale-while-revalidate=${
-	PUBLIC_PRICES_TTL_SECONDS * 3
-}`;
+export const PUBLIC_PRICES_EDGE_STALE_SECONDS = PUBLIC_PRICES_TTL_SECONDS * 3;
+export const PUBLIC_PRICES_RETAINED_SECONDS = 6 * 60 * 60;
+export const PUBLIC_PRICES_FAILURE_RETRY_SECONDS = 30;
+export const PUBLIC_PRICES_REFRESH_TIMEOUT_MS = 90_000;

@@ -154,15 +154,15 @@ describe('fetchAndQuotePaymentTokenOrders', () => {
 	it('deduplicates overlapping pages by normalized order hash and preserves page order', async () => {
 		vi.mocked(apiQueryOrders)
 			.mockResolvedValueOnce({
-				orders: [orderSummary({ orderHash: '0x-order-a' })],
-				pagination: { page: 1, pageSize: 50, totalOrders: 3, totalPages: 2, hasMore: true }
-			})
-			.mockResolvedValueOnce({
 				orders: [
-					orderSummary({ orderHash: '0X-ORDER-A' }),
+					orderSummary({ orderHash: '0x-order-a' }),
 					orderSummary({ orderHash: '0x-order-b' })
 				],
-				pagination: { page: 2, pageSize: 50, totalOrders: 3, totalPages: 2, hasMore: false }
+				pagination: { page: 1, pageSize: 2, totalOrders: 3, totalPages: 2, hasMore: true }
+			})
+			.mockResolvedValueOnce({
+				orders: [orderSummary({ orderHash: '0X-ORDER-A' })],
+				pagination: { page: 2, pageSize: 2, totalOrders: 3, totalPages: 2, hasMore: false }
 			});
 
 		const quotes = await fetchAndQuotePaymentTokenOrders(8453, paymentToken);
@@ -241,7 +241,7 @@ describe('fetchAndQuotePaymentTokenOrders', () => {
 		vi.mocked(apiQueryOrders)
 			.mockResolvedValueOnce({
 				orders: [orderSummary()],
-				pagination: { page: 1, pageSize: 50, totalOrders: 2, totalPages: 2, hasMore: true }
+				pagination: { page: 1, pageSize: 1, totalOrders: 2, totalPages: 2, hasMore: true }
 			})
 			.mockRejectedValueOnce(new Error('page 2 unavailable'));
 
@@ -250,17 +250,66 @@ describe('fetchAndQuotePaymentTokenOrders', () => {
 		);
 	});
 
-	it('rejects a batch response that exceeds the safety page cap', async () => {
-		vi.mocked(apiQueryOrders).mockResolvedValue({
+	it('rejects inconsistent batch pagination metadata', async () => {
+		vi.mocked(apiQueryOrders).mockResolvedValueOnce({
 			orders: [orderSummary()],
+			pagination: { page: 1, pageSize: 50, totalOrders: 2, totalPages: 2, hasMore: false }
+		});
+
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
+			'Invalid or unstable batch pagination'
+		);
+	});
+
+	it('rejects a batch response whose total pages do not match its total orders', async () => {
+		vi.mocked(apiQueryOrders).mockResolvedValueOnce({
+			orders: [orderSummary()],
+			pagination: { page: 1, pageSize: 50, totalOrders: 100, totalPages: 1, hasMore: false }
+		});
+
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
+			'Invalid or unstable batch pagination'
+		);
+	});
+
+	it('rejects a short non-final batch page', async () => {
+		vi.mocked(apiQueryOrders).mockResolvedValueOnce({
+			orders: [orderSummary()],
+			pagination: { page: 1, pageSize: 2, totalOrders: 3, totalPages: 2, hasMore: true }
+		});
+
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
+			'Invalid or unstable batch pagination'
+		);
+	});
+
+	it('rejects pagination totals that change between pages', async () => {
+		vi.mocked(apiQueryOrders)
+			.mockResolvedValueOnce({
+				orders: [orderSummary()],
+				pagination: { page: 1, pageSize: 1, totalOrders: 2, totalPages: 2, hasMore: true }
+			})
+			.mockResolvedValueOnce({
+				orders: [orderSummary({ orderHash: '0x-second' })],
+				pagination: { page: 2, pageSize: 1, totalOrders: 3, totalPages: 3, hasMore: true }
+			});
+
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
+			'Invalid or unstable batch pagination'
+		);
+	});
+
+	it('rejects a batch response that exceeds the safety page cap', async () => {
+		vi.mocked(apiQueryOrders).mockImplementation(async (request) => ({
+			orders: [orderSummary({ orderHash: `0x-order-${request.page}` })],
 			pagination: {
-				page: 1,
-				pageSize: 50,
-				totalOrders: 5_001,
+				page: request.page ?? 1,
+				pageSize: 1,
+				totalOrders: 101,
 				totalPages: 101,
 				hasMore: true
 			}
-		});
+		}));
 
 		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
 			'Hit pagination cap'
@@ -274,7 +323,7 @@ describe('fetchAndQuotePaymentTokenOrders', () => {
 		vi.mocked(apiQueryOrders)
 			.mockResolvedValueOnce({
 				orders: [orderSummary()],
-				pagination: { page: 1, pageSize: 50, totalOrders: 2, totalPages: 2, hasMore: true }
+				pagination: { page: 1, pageSize: 1, totalOrders: 2, totalPages: 2, hasMore: true }
 			})
 			.mockImplementationOnce(async () => {
 				controller.abort();

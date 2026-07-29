@@ -1,18 +1,18 @@
 import { env } from '$env/dynamic/private';
 import type { ApiMarketPrice, ApiMarketPricesResponse } from '$lib/api/st0xApi';
+import { parseRetryAfterMs } from '$lib/clients/http';
+import { getSt0xPricesApiConfig } from '$lib/server/st0xApiConfig';
+import { logSt0xRequestBudget } from '$lib/server/st0xBudgetTelemetry';
 import type { MidpointPrice } from '$lib/utils/midpointPrice';
 
-function getApiConfig(): { apiBase: string; authHeader: string } {
-	const url = env.ST0X_API_URL;
-	const key = env.ST0X_API_KEY;
-	const secret = env.ST0X_API_SECRET;
-	if (!url || !key || !secret) {
-		throw new Error('ST0X_API_URL, ST0X_API_KEY, and ST0X_API_SECRET must be configured');
+export class St0xMarketPricesRateLimitError extends Error {
+	readonly retryAfterMs: number | null;
+
+	constructor(retryAfterMs: number | null = null) {
+		super('ST0x market prices API rate limit reached');
+		this.name = 'St0xMarketPricesRateLimitError';
+		this.retryAfterMs = retryAfterMs;
 	}
-	return {
-		apiBase: url.replace(/\/+$/, ''),
-		authHeader: `Basic ${btoa(`${key}:${secret}`)}`
-	};
 }
 
 /**
@@ -24,7 +24,11 @@ export async function fetchMarketPrices(
 	chainId: number,
 	options?: { at?: number; timeoutMs?: number; maxAttempts?: number }
 ): Promise<ApiMarketPrice[]> {
-	const { apiBase, authHeader } = getApiConfig();
+	const config = getSt0xPricesApiConfig(env);
+	if (!config) {
+		throw new Error('ST0x public-price API credentials are not configured');
+	}
+	const { apiBase, authHeader, credentialLabel } = config;
 	const params = new URLSearchParams({ chainId: String(chainId) });
 	if (options?.at !== undefined) params.set('at', String(options.at));
 
@@ -44,12 +48,18 @@ export async function fetchMarketPrices(
 			}
 			continue;
 		}
+		logSt0xRequestBudget('v1/prices', credentialLabel, response);
 		if (response.ok) {
 			const body = (await response.json()) as ApiMarketPricesResponse;
 			return body.data;
 		}
+		if (response.status === 429) {
+			throw new St0xMarketPricesRateLimitError(
+				parseRetryAfterMs(response.headers.get('Retry-After'))
+			);
+		}
 		const error = new Error(`Market prices fetch failed (${response.status})`);
-		if (response.status !== 429 && response.status < 500) {
+		if (response.status < 500) {
 			throw error;
 		}
 		lastError = error;

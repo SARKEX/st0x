@@ -51,7 +51,7 @@ describe('public trade activity', () => {
 				trades: [firstTrade],
 				pagination: {
 					page: 1,
-					pageSize: 50,
+					pageSize: 500,
 					totalTrades: 2,
 					totalPages: 2,
 					hasMore: true
@@ -61,7 +61,7 @@ describe('public trade activity', () => {
 				trades: [secondTrade],
 				pagination: {
 					page: 2,
-					pageSize: 50,
+					pageSize: 500,
 					totalTrades: 2,
 					totalPages: 2,
 					hasMore: false
@@ -82,7 +82,7 @@ describe('public trade activity', () => {
 				startTime: range.from,
 				endTime: range.to,
 				page: 1,
-				pageSize: 50,
+				pageSize: 500,
 				denomination: 'wrapped'
 			})
 		);
@@ -101,7 +101,7 @@ describe('public trade activity', () => {
 			trades: [],
 			pagination: {
 				page: 1,
-				pageSize: 50,
+				pageSize: 500,
 				totalTrades: 0,
 				totalPages: 0,
 				hasMore: false
@@ -122,7 +122,7 @@ describe('public trade activity', () => {
 				trades: [trade('0x1', '0x1', '0x2', '1', '2')],
 				pagination: {
 					page: 1,
-					pageSize: 50,
+					pageSize: 500,
 					totalTrades: 51,
 					totalPages: 2,
 					hasMore: true
@@ -141,7 +141,7 @@ describe('public trade activity', () => {
 			trades: [trade('0x1', asset.address, quote.address, '2', '100')],
 			pagination: {
 				page: 1,
-				pageSize: 50,
+				pageSize: 500,
 				totalTrades: 1,
 				totalPages: 1,
 				hasMore: false

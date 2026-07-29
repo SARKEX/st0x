@@ -36,21 +36,6 @@ import {
 export type { ProcessedQuote, TokenPriceSummary };
 export { OrderV4_ABI, normalizeOrderData, walkOrderbook };
 
-/**
- * Fetches one page of orders for a token. Defaults to the browser proxy client
- * (`apiGetOrdersByToken`); server callers inject a fetcher that hits the REST API directly
- * so the same quoting pipeline can run server-side (e.g. the public prices endpoint).
- */
-export type OrdersByTokenFetcher = (
-	tokenAddress: string,
-	options?: {
-		page?: number;
-		pageSize?: number;
-		side?: 'input' | 'output';
-		state?: 'active' | 'inactive' | 'all';
-	}
-) => Promise<ApiOrdersListResponse>;
-
 export type OrdersQueryFetcher = typeof apiQueryOrders;
 
 export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>
@@ -58,40 +43,6 @@ export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: st
 
 /** Safety cap to prevent infinite pagination loops from a buggy API response */
 const MAX_ORDER_PAGES = 100;
-
-/**
- * Max number of tokens fetched concurrently in the payment-token fan-out.
- * The book has ~29 stock-token address variants; firing them all at once (the previous
- * behaviour) overwhelmed the shared upstream and tripped its rate limit. A small pool
- * keeps throughput high while staying under the upstream's budget.
- */
-const ORDER_FETCH_CONCURRENCY = 5;
-
-/**
- * Run `worker` over `items` with at most `limit` in flight at once. Never rejects —
- * mirrors Promise.allSettled semantics so one failing token can't abort the rest.
- */
-async function runWithConcurrency<T>(
-	items: T[],
-	limit: number,
-	worker: (item: T) => Promise<void>
-): Promise<PromiseSettledResult<void>[]> {
-	const results: PromiseSettledResult<void>[] = new Array(items.length);
-	let cursor = 0;
-	const runner = async () => {
-		while (cursor < items.length) {
-			const index = cursor++;
-			try {
-				await worker(items[index]);
-				results[index] = { status: 'fulfilled', value: undefined };
-			} catch (reason) {
-				results[index] = { status: 'rejected', reason };
-			}
-		}
-	};
-	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner));
-	return results;
-}
 
 function getTokenMetadata(address: string, tokens: Token[]) {
 	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
@@ -109,9 +60,9 @@ function getTokenMetadata(address: string, tokens: Token[]) {
  * and computeEmergencyRatioHex which expect hex Float format.
  *
  * Orders with no live quote (`ioRatio === '-'`, i.e. the API's on-chain `quote()`
- * call reverted) are dropped entirely. They cannot be honoured at any displayable
- * price, so showing them in the depth chart would advertise liquidity that doesn't
- * actually execute.
+ * call reverted — typically Pyth-oracle orders quoted without a signed context) are
+ * dropped entirely. They cannot be honoured at any displayable price, so showing them
+ * in the depth chart would advertise liquidity that doesn't actually execute.
  *
  * The sgOrder is created as a minimal stub with just orderHash — marketOrderExecution.ts
  * hydrates the full order from Raindex before executing.
@@ -136,7 +87,8 @@ function convertApiOrderToProcessedQuote(
 	}
 
 	if (!order.ioRatio || order.ioRatio === '-') {
-		// The on-chain quote failed, so the order cannot be honoured at the displayed price.
+		// On-chain quote() failed (e.g. Pyth-oracle order quoted without signed context).
+		// Drop the order — it cannot be honoured at the price the chart would show.
 		return null;
 	}
 	// Convert ioRatio decimal to hex Float for consumers expecting hex (e.g. computeEmergencyRatioHex)
@@ -269,10 +221,52 @@ async function collectProcessedOrderPages({
 	const seen = new Set<string>();
 	let page = 1;
 	let hasMore = true;
+	let expectedTotalOrders: number | null = null;
+	let expectedTotalPages: number | null = null;
 
 	while (hasMore && page <= MAX_ORDER_PAGES) {
 		try {
 			const response = await fetchPage(page);
+			if (!allowPartialResults) {
+				const { pagination } = response;
+				const validIntegers =
+					Number.isInteger(pagination.page) &&
+					Number.isInteger(pagination.pageSize) &&
+					Number.isInteger(pagination.totalOrders) &&
+					Number.isInteger(pagination.totalPages);
+				const calculatedTotalPages =
+					pagination.totalOrders === 0
+						? 0
+						: Math.ceil(pagination.totalOrders / pagination.pageSize);
+				const expectedPageOrders =
+					pagination.totalPages === 0
+						? 0
+						: pagination.page < pagination.totalPages
+							? pagination.pageSize
+							: pagination.totalOrders - (pagination.totalPages - 1) * pagination.pageSize;
+				const validShape =
+					validIntegers &&
+					pagination.page === page &&
+					pagination.pageSize > 0 &&
+					pagination.pageSize <= 50 &&
+					pagination.totalOrders >= 0 &&
+					pagination.totalPages >= 0 &&
+					pagination.totalPages === calculatedTotalPages &&
+					response.orders.length === expectedPageOrders &&
+					(pagination.totalPages === 0
+						? page === 1 && pagination.totalOrders === 0
+						: page <= pagination.totalPages) &&
+					pagination.hasMore === page < pagination.totalPages;
+				if (
+					!validShape ||
+					(expectedTotalOrders !== null && pagination.totalOrders !== expectedTotalOrders) ||
+					(expectedTotalPages !== null && pagination.totalPages !== expectedTotalPages)
+				) {
+					throw new Error(`[orders] Invalid or unstable batch pagination on page ${page}`);
+				}
+				expectedTotalOrders ??= pagination.totalOrders;
+				expectedTotalPages ??= pagination.totalPages;
+			}
 			for (const order of response.orders) {
 				const quote = convertApiOrderToProcessedQuote(
 					order,
@@ -300,58 +294,6 @@ async function collectProcessedOrderPages({
 			throw new Error(paginationCapMessage);
 		}
 		console.warn(paginationCapMessage);
-	}
-
-	return processedQuotes;
-}
-
-export async function fetchAndQuotePaymentTokenOrdersByToken(
-	networkId: number = 8453,
-	overridePaymentToken?: Token,
-	fetchOrders: OrdersByTokenFetcher = apiGetOrdersByToken
-) {
-	const { paymentToken, stockTokens, allTokens } = resolveNetworkTokens(
-		networkId,
-		overridePaymentToken
-	);
-
-	const processedQuotes: ProcessedQuote[] = [];
-	const seen = new Set<string>();
-
-	const results = await runWithConcurrency(stockTokens, ORDER_FETCH_CONCURRENCY, async (token) => {
-		let page = 1;
-		let hasMore = true;
-		while (hasMore && page <= MAX_ORDER_PAGES) {
-			const response = await fetchOrders(token.address, { page, pageSize: 50 });
-			for (const order of response.orders) {
-				if (seen.has(order.orderHash)) continue;
-				seen.add(order.orderHash);
-				const quote = convertApiOrderToProcessedQuote(
-					order,
-					paymentToken.address,
-					allTokens,
-					networkId
-				);
-				if (quote) processedQuotes.push(quote);
-			}
-			hasMore = response.pagination.hasMore;
-			page++;
-		}
-		if (hasMore) {
-			console.warn(
-				`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${token.address}`
-			);
-		}
-	});
-
-	const failures = results.filter(
-		(result): result is PromiseRejectedResult => result.status === 'rejected'
-	);
-	if (failures.length > 0 && processedQuotes.length === 0) {
-		throw failures[0].reason;
-	}
-	for (const failure of failures) {
-		console.warn('[orders] Token fetch failed; using partial orderbook:', failure.reason);
 	}
 
 	return processedQuotes;

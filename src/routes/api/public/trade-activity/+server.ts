@@ -3,6 +3,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
 	computePublicTradeActivity,
+	PUBLIC_TRADE_ACTIVITY_REFRESH_TIMEOUT_MS,
 	type PublicTradeActivityResponse,
 	type PublicTradeActivitySnapshot,
 	tradeActivityWindow
@@ -12,7 +13,11 @@ import {
 	publicTradeActivityCacheControl
 } from '$lib/server/publicTradeActivityCache';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
-import { createServerTradesQueryFetcher } from '$lib/server/st0xTradesFetcher';
+import {
+	createServerTradesQueryFetcher,
+	St0xTradesRateLimitError
+} from '$lib/server/st0xTradesFetcher';
+import { getSt0xActivityApiConfig } from '$lib/server/st0xApiConfig';
 
 export type {
 	NetworkTradeStats,
@@ -20,22 +25,29 @@ export type {
 	TokenTradingRow
 } from '$lib/server/publicTradeActivity';
 
-function getApiConfig(): { apiBase: string; authHeader: string } {
-	const url = env.ST0X_API_URL;
-	const key = env.ST0X_API_KEY;
-	const secret = env.ST0X_API_SECRET;
-	if (!url || !key || !secret) {
-		throw new Error('REST API not configured');
-	}
-	return {
-		apiBase: url.replace(/\/+$/, ''),
-		authHeader: 'Basic ' + btoa(`${key}:${secret}`)
-	};
-}
-
 async function computeTradeActivity(): Promise<PublicTradeActivitySnapshot> {
-	const fetchTrades = createServerTradesQueryFetcher(getApiConfig());
-	return computePublicTradeActivity(fetchTrades);
+	const config = getSt0xActivityApiConfig(env);
+	if (!config) {
+		throw new Error('ST0x public-activity API credentials are not configured');
+	}
+	const controller = new AbortController();
+	const fetchTrades = createServerTradesQueryFetcher({ ...config, signal: controller.signal });
+	let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const refresh = computePublicTradeActivity(fetchTrades);
+		const deadline = new Promise<never>((_, reject) => {
+			refreshTimeout = setTimeout(() => {
+				controller.abort();
+				reject(new Error('Public trade activity refresh exceeded its overall deadline'));
+			}, PUBLIC_TRADE_ACTIVITY_REFRESH_TIMEOUT_MS);
+		});
+		return await Promise.race([refresh, deadline]);
+	} catch (error) {
+		controller.abort();
+		throw error;
+	} finally {
+		if (refreshTimeout) clearTimeout(refreshTimeout);
+	}
 }
 
 export const GET: RequestHandler = async ({ request }) => {
@@ -64,6 +76,25 @@ export const GET: RequestHandler = async ({ request }) => {
 			}
 		});
 	} catch (error) {
+		if (error instanceof St0xTradesRateLimitError) {
+			const retryAfterSeconds = Math.max(1, Math.ceil((error.retryAfterMs ?? 60_000) / 1_000));
+			const now = Math.floor(Date.now() / 1_000);
+			return json(
+				{
+					success: false,
+					range: tradeActivityWindow(now),
+					totals: { tradingVolume: 0, totalTrades: 0 },
+					networks: []
+				} satisfies PublicTradeActivityResponse,
+				{
+					status: 429,
+					headers: {
+						'Retry-After': String(retryAfterSeconds),
+						'Cache-Control': 'no-store'
+					}
+				}
+			);
+		}
 		console.error('[Public TradeActivity] Error:', error);
 		const now = Math.floor(Date.now() / 1000);
 		const range = tradeActivityWindow(now);

@@ -7,8 +7,9 @@ import { normalizeAddress } from '$lib/utils/tokenMath';
 import { bucketTimestamp, TRADE_WINDOW_BUCKET_SECONDS } from '$lib/utils/timeWindow';
 
 const WINDOW_SECONDS = 30 * 24 * 60 * 60;
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 500;
 const MAX_PAGES = 1_000;
+export const PUBLIC_TRADE_ACTIVITY_REFRESH_TIMEOUT_MS = 90_000;
 
 export interface TokenTradingRow {
 	address: string;
