@@ -79,11 +79,11 @@ export function createOrderbookQuotesQuery(
 		// interval already keeps this fresh. Disabled to cut load on the upstream.
 		refetchOnWindowFocus: false,
 		refetchIntervalInBackground: false,
-		queryFn: async () => {
+		queryFn: async ({ signal }) => {
 			if (!network) {
 				return { summary: {}, quotes: [] };
 			}
-			const quotes = await fetchAndQuotePaymentTokenOrders(network.id);
+			const quotes = await fetchAndQuotePaymentTokenOrders(network.id, undefined, signal);
 			const summary = buildSummaryFromQuotes(quotes, network.id);
 			return { summary, quotes };
 		}

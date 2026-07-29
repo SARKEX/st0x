@@ -88,4 +88,36 @@ describe('fetchJson structured errors', () => {
 			publicMessage: 'Bad Gateway'
 		});
 	});
+
+	it('does not retry an aborted request', async () => {
+		const abort = new Error('aborted');
+		abort.name = 'AbortError';
+		const fetchFn = vi.fn().mockRejectedValue(abort);
+		const controller = new AbortController();
+
+		await expect(
+			fetchJson('/api/st0x/v1/orders/query', {
+				fetchFn,
+				signal: controller.signal
+			})
+		).rejects.toBe(abort);
+		expect(fetchFn).toHaveBeenCalledOnce();
+	});
+
+	it('cancels a retry delay before another request is sent', async () => {
+		const controller = new AbortController();
+		const fetchFn = vi.fn().mockImplementation(async () => {
+			controller.abort();
+			return new Response('{}', { status: 502 });
+		});
+
+		await expect(
+			fetchJson('/api/st0x/v1/orders/query', {
+				fetchFn,
+				retryDelayMs: 10_000,
+				signal: controller.signal
+			})
+		).rejects.toMatchObject({ name: 'AbortError' });
+		expect(fetchFn).toHaveBeenCalledOnce();
+	});
 });

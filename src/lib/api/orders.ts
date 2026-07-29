@@ -11,6 +11,7 @@ import {
 	DEFAULT_PAYMENT_TOKENS,
 	getDefaultPaymentTokenForNetwork
 } from '$lib/config/network';
+import type { CategorizedToken } from '$lib/config/network';
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
 import type { Token } from '$lib/types';
 import { Float } from '@rainlanguage/float';
@@ -27,6 +28,7 @@ import {
 import {
 	apiGetOrdersByToken,
 	apiGetOrdersByOwner,
+	apiQueryOrders,
 	type ApiOrderSummary,
 	type ApiOrdersListResponse
 } from '$lib/api/st0xApi';
@@ -48,6 +50,8 @@ export type OrdersByTokenFetcher = (
 		state?: 'active' | 'inactive' | 'all';
 	}
 ) => Promise<ApiOrdersListResponse>;
+
+export type OrdersQueryFetcher = typeof apiQueryOrders;
 
 export const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddressRaw: string) =>
 	buildTokenPriceMapBase(quotes, quoteAddressRaw, describeQuote);
@@ -216,7 +220,11 @@ function convertApiOrderToProcessedQuote(
 function resolveNetworkTokens(
 	networkId: number,
 	overridePaymentToken?: Token
-): { paymentToken: Token; stockTokens: Token[]; allTokens: Token[] } {
+): {
+	paymentToken: Token;
+	stockTokens: CategorizedToken[];
+	allTokens: Token[];
+} {
 	if (!networks.some((n) => n.id === networkId)) {
 		throw new Error(`Network with id ${networkId} not found`);
 	}
@@ -236,11 +244,68 @@ function resolveNetworkTokens(
 	return { paymentToken, stockTokens, allTokens: [paymentToken, ...stockTokens] };
 }
 
-/**
- * Fetches all orders for all stock tokens via the REST API and converts them to ProcessedQuotes.
- * The REST API handles server-side quoting and caching.
- */
-export async function fetchAndQuotePaymentTokenOrders(
+interface CollectOrderPagesOptions {
+	fetchPage: (page: number) => Promise<ApiOrdersListResponse>;
+	paymentToken: Token;
+	allTokens: Token[];
+	networkId: number;
+	partialFailureMessage: (page: number) => string;
+	paginationCapMessage: string;
+	allowPartialResults: boolean;
+	signal?: AbortSignal;
+}
+
+async function collectProcessedOrderPages({
+	fetchPage,
+	paymentToken,
+	allTokens,
+	networkId,
+	partialFailureMessage,
+	paginationCapMessage,
+	allowPartialResults,
+	signal
+}: CollectOrderPagesOptions): Promise<ProcessedQuote[]> {
+	const processedQuotes: ProcessedQuote[] = [];
+	const seen = new Set<string>();
+	let page = 1;
+	let hasMore = true;
+
+	while (hasMore && page <= MAX_ORDER_PAGES) {
+		try {
+			const response = await fetchPage(page);
+			for (const order of response.orders) {
+				const quote = convertApiOrderToProcessedQuote(
+					order,
+					paymentToken.address,
+					allTokens,
+					networkId
+				);
+				if (!quote) continue;
+				const orderKey = `${order.orderbookId.toLowerCase()}:${order.orderHash.toLowerCase()}`;
+				if (seen.has(orderKey)) continue;
+				seen.add(orderKey);
+				processedQuotes.push(quote);
+			}
+			hasMore = response.pagination.hasMore;
+			page++;
+		} catch (error) {
+			if (signal?.aborted || !allowPartialResults || processedQuotes.length === 0) throw error;
+			console.warn(partialFailureMessage(page), error);
+			hasMore = false;
+		}
+	}
+
+	if (hasMore) {
+		if (!allowPartialResults) {
+			throw new Error(paginationCapMessage);
+		}
+		console.warn(paginationCapMessage);
+	}
+
+	return processedQuotes;
+}
+
+export async function fetchAndQuotePaymentTokenOrdersByToken(
 	networkId: number = 8453,
 	overridePaymentToken?: Token,
 	fetchOrders: OrdersByTokenFetcher = apiGetOrdersByToken
@@ -290,6 +355,55 @@ export async function fetchAndQuotePaymentTokenOrders(
 	}
 
 	return processedQuotes;
+}
+
+/**
+ * Fetches all orders for the stock-token catalog through one paginated batch
+ * request stream and converts them to ProcessedQuotes.
+ */
+export async function fetchAndQuotePaymentTokenOrders(
+	networkId: number = 8453,
+	overridePaymentToken?: Token,
+	signal?: AbortSignal,
+	fetchOrders: OrdersQueryFetcher = apiQueryOrders
+): Promise<ProcessedQuote[]> {
+	const { paymentToken, stockTokens, allTokens } = resolveNetworkTokens(
+		networkId,
+		overridePaymentToken
+	);
+	const tokenAddresses = Array.from(
+		new Set(
+			stockTokens
+				.flatMap((token) => [token.address, token.legacyAddress])
+				.filter((address): address is string => Boolean(address))
+				.map((address) => address.toLowerCase())
+		)
+	).sort();
+	if (tokenAddresses.length === 0) return [];
+
+	// Underlying unwrapped assets are not orderbook execution tokens. Query the
+	// current wrapped and legacy tradable addresses only.
+	return collectProcessedOrderPages({
+		fetchPage: (page) =>
+			fetchOrders(
+				{
+					chainId: networkId,
+					tokenAddresses,
+					state: 'active',
+					page,
+					pageSize: 50,
+					denomination: 'wrapped'
+				},
+				signal
+			),
+		paymentToken,
+		allTokens,
+		networkId,
+		partialFailureMessage: (page) => `[orders] Batch page ${page} failed; using partial orderbook:`,
+		paginationCapMessage: `[orders] Hit pagination cap (${MAX_ORDER_PAGES} batch pages)`,
+		allowPartialResults: false,
+		signal
+	});
 }
 
 /**
@@ -347,40 +461,14 @@ export async function fetchAndQuoteTokenOrders(
 ) {
 	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
 
-	const processedQuotes: ProcessedQuote[] = [];
-	const seen = new Set<string>();
-	let page = 1;
-	let hasMore = true;
-	while (hasMore && page <= MAX_ORDER_PAGES) {
-		try {
-			const response = await apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 });
-			for (const order of response.orders) {
-				if (seen.has(order.orderHash)) continue;
-				seen.add(order.orderHash);
-				const quote = convertApiOrderToProcessedQuote(
-					order,
-					paymentToken.address,
-					allTokens,
-					networkId
-				);
-				if (quote) processedQuotes.push(quote);
-			}
-			hasMore = response.pagination.hasMore;
-			page++;
-		} catch (error) {
-			if (processedQuotes.length === 0) throw error;
-			console.warn(
-				`[orders] Page ${page} fetch failed for token ${tokenAddress}; using partial orderbook:`,
-				error
-			);
-			hasMore = false;
-		}
-	}
-	if (hasMore) {
-		console.warn(
-			`[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${tokenAddress}`
-		);
-	}
-
-	return processedQuotes;
+	return collectProcessedOrderPages({
+		fetchPage: (page) => apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 }),
+		paymentToken,
+		allTokens,
+		networkId,
+		partialFailureMessage: (page) =>
+			`[orders] Page ${page} fetch failed for token ${tokenAddress}; using partial orderbook:`,
+		paginationCapMessage: `[orders] Hit pagination cap (${MAX_ORDER_PAGES} pages) for token ${tokenAddress}`,
+		allowPartialResults: true
+	});
 }

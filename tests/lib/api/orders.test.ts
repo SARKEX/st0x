@@ -1,13 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Float } from '@rainlanguage/float';
 import { fetchAndQuotePaymentTokenOrders, fetchAndQuoteTokenOrders } from '$lib/api/orders';
-import { apiGetOrdersByToken, type ApiOrderSummary } from '$lib/api/st0xApi';
+import { HttpError } from '$lib/clients/http';
+import { apiGetOrdersByToken, apiQueryOrders, type ApiOrderSummary } from '$lib/api/st0xApi';
 
 vi.mock('$lib/api/st0xApi', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/st0xApi')>();
 	return {
 		...actual,
-		apiGetOrdersByToken: vi.fn()
+		apiGetOrdersByToken: vi.fn(),
+		apiQueryOrders: vi.fn()
 	};
 });
 
@@ -65,6 +67,11 @@ function mockOrders(orders: ApiOrderSummary[]) {
 	});
 }
 
+beforeEach(() => {
+	vi.mocked(apiGetOrdersByToken).mockReset();
+	vi.mocked(apiQueryOrders).mockReset();
+});
+
 describe('fetchAndQuoteTokenOrders', () => {
 	it('uses REST maxOutput rather than outputVaultBalance', async () => {
 		mockOrders([orderSummary({ maxOutput: '2.5', outputVaultBalance: '100' })]);
@@ -121,32 +128,162 @@ describe('fetchAndQuoteTokenOrders', () => {
 });
 
 describe('fetchAndQuotePaymentTokenOrders', () => {
-	it('propagates REST failures when no usable quotes remain', async () => {
-		vi.mocked(apiGetOrdersByToken).mockReset();
-		vi.mocked(apiGetOrdersByToken).mockRejectedValue(new Error('REST unavailable'));
+	it('queries the normalized wrapped and legacy catalog in one batch request', async () => {
+		vi.mocked(apiQueryOrders).mockResolvedValueOnce({
+			orders: [orderSummary()],
+			pagination: { page: 1, pageSize: 50, totalOrders: 1, totalPages: 1, hasMore: false }
+		});
+
+		const quotes = await fetchAndQuotePaymentTokenOrders(8453, paymentToken);
+
+		expect(quotes).toHaveLength(1);
+		expect(apiQueryOrders).toHaveBeenCalledOnce();
+		const request = vi.mocked(apiQueryOrders).mock.calls[0][0];
+		expect(request).toMatchObject({
+			chainId: 8453,
+			state: 'active',
+			page: 1,
+			pageSize: 50,
+			denomination: 'wrapped'
+		});
+		expect(request.tokenAddresses).toContain(stockToken.address.toLowerCase());
+		expect(request.tokenAddresses).toContain('0x2289249984f1fa2ce86c4e8867e7eb819ea7df95');
+		expect(request.tokenAddresses).toEqual([...new Set(request.tokenAddresses)].sort());
+	});
+
+	it('deduplicates overlapping pages by normalized order hash and preserves page order', async () => {
+		vi.mocked(apiQueryOrders)
+			.mockResolvedValueOnce({
+				orders: [orderSummary({ orderHash: '0x-order-a' })],
+				pagination: { page: 1, pageSize: 50, totalOrders: 3, totalPages: 2, hasMore: true }
+			})
+			.mockResolvedValueOnce({
+				orders: [
+					orderSummary({ orderHash: '0X-ORDER-A' }),
+					orderSummary({ orderHash: '0x-order-b' })
+				],
+				pagination: { page: 2, pageSize: 50, totalOrders: 3, totalPages: 2, hasMore: false }
+			});
+
+		const quotes = await fetchAndQuotePaymentTokenOrders(8453, paymentToken);
+
+		expect(quotes.map((quote) => quote.orderHash)).toEqual(['0x-order-a', '0x-order-b']);
+		expect(vi.mocked(apiQueryOrders).mock.calls.map(([request]) => request.page)).toEqual([1, 2]);
+	});
+
+	it('keeps identical hashes from different orderbooks and ignores only usable duplicates', async () => {
+		vi.mocked(apiQueryOrders).mockResolvedValueOnce({
+			orders: [
+				orderSummary({
+					orderHash: '0x-shared',
+					orderbookId: '0x-orderbook-a',
+					ioRatio: '-',
+					maxOutput: null
+				}),
+				orderSummary({ orderHash: '0x-shared', orderbookId: '0x-orderbook-a' }),
+				orderSummary({ orderHash: '0X-SHARED', orderbookId: '0x-orderbook-b' })
+			],
+			pagination: { page: 1, pageSize: 50, totalOrders: 3, totalPages: 1, hasMore: false }
+		});
+
+		const quotes = await fetchAndQuotePaymentTokenOrders(8453, paymentToken);
+
+		expect(quotes.map((quote) => quote.orderbookId)).toEqual(['0x-orderbook-a', '0x-orderbook-b']);
+	});
+
+	it('returns an empty book without issuing token-specific requests', async () => {
+		vi.mocked(apiQueryOrders).mockResolvedValueOnce({
+			orders: [],
+			pagination: { page: 1, pageSize: 50, totalOrders: 0, totalPages: 0, hasMore: false }
+		});
+
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).resolves.toEqual([]);
+		expect(apiGetOrdersByToken).not.toHaveBeenCalled();
+	});
+
+	it('keeps usable quotes when another batch order has no live quote', async () => {
+		vi.mocked(apiQueryOrders).mockResolvedValueOnce({
+			orders: [
+				orderSummary({ orderHash: '0x-usable' }),
+				orderSummary({ orderHash: '0x-unquoted', ioRatio: '-', maxOutput: null })
+			],
+			pagination: { page: 1, pageSize: 50, totalOrders: 2, totalPages: 1, hasMore: false }
+		});
+
+		const quotes = await fetchAndQuotePaymentTokenOrders(8453, paymentToken);
+
+		expect(quotes.map((quote) => quote.orderHash)).toEqual(['0x-usable']);
+	});
+
+	it('propagates a first-page REST failure', async () => {
+		vi.mocked(apiQueryOrders).mockRejectedValueOnce(new Error('REST unavailable'));
 
 		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
 			'REST unavailable'
 		);
 	});
 
-	it('returns quotes from successful tokens when another token request fails', async () => {
-		vi.mocked(apiGetOrdersByToken).mockReset();
-		vi.mocked(apiGetOrdersByToken)
+	it('propagates a 429 without issuing another request', async () => {
+		const rateLimitError = new HttpError({
+			status: 429,
+			code: 'RATE_LIMITED',
+			requestId: 'request-429',
+			publicMessage: 'Too many requests',
+			retryAfter: '5'
+		});
+		vi.mocked(apiQueryOrders).mockRejectedValueOnce(rateLimitError);
+
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toBe(rateLimitError);
+		expect(apiQueryOrders).toHaveBeenCalledOnce();
+	});
+
+	it('rejects a later-page failure instead of replacing a complete cached book', async () => {
+		vi.mocked(apiQueryOrders)
 			.mockResolvedValueOnce({
 				orders: [orderSummary()],
-				pagination: { page: 1, pageSize: 50, totalOrders: 1, totalPages: 1, hasMore: false }
+				pagination: { page: 1, pageSize: 50, totalOrders: 2, totalPages: 2, hasMore: true }
 			})
-			.mockRejectedValue(new Error('token unavailable'));
-		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+			.mockRejectedValueOnce(new Error('page 2 unavailable'));
 
-		const quotes = await fetchAndQuotePaymentTokenOrders(8453, paymentToken);
-
-		expect(quotes).toHaveLength(1);
-		expect(warn).toHaveBeenCalledWith(
-			'[orders] Token fetch failed; using partial orderbook:',
-			expect.any(Error)
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
+			'page 2 unavailable'
 		);
-		warn.mockRestore();
+	});
+
+	it('rejects a batch response that exceeds the safety page cap', async () => {
+		vi.mocked(apiQueryOrders).mockResolvedValue({
+			orders: [orderSummary()],
+			pagination: {
+				page: 1,
+				pageSize: 50,
+				totalOrders: 5_001,
+				totalPages: 101,
+				hasMore: true
+			}
+		});
+
+		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).rejects.toThrow(
+			'Hit pagination cap'
+		);
+		expect(apiQueryOrders).toHaveBeenCalledTimes(100);
+	});
+
+	it('propagates cancellation instead of returning earlier pages as complete', async () => {
+		const controller = new AbortController();
+		const abortError = new DOMException('Aborted', 'AbortError');
+		vi.mocked(apiQueryOrders)
+			.mockResolvedValueOnce({
+				orders: [orderSummary()],
+				pagination: { page: 1, pageSize: 50, totalOrders: 2, totalPages: 2, hasMore: true }
+			})
+			.mockImplementationOnce(async () => {
+				controller.abort();
+				throw abortError;
+			});
+
+		await expect(
+			fetchAndQuotePaymentTokenOrders(8453, paymentToken, controller.signal)
+		).rejects.toBe(abortError);
+		expect(vi.mocked(apiQueryOrders).mock.calls[1][1]).toBe(controller.signal);
 	});
 });

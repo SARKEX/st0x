@@ -86,6 +86,7 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 		pattern: /^v1\/orders\/token\/[^/]+$/,
 		cache: 'public, s-maxage=5, stale-while-revalidate=120'
 	},
+	{ method: 'POST', pattern: /^v1\/orders\/query$/ },
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
