@@ -63,7 +63,7 @@ const computeLocks = new Map<string, Promise<unknown>>();
 export async function withCache<T>(
 	key: string,
 	fn: () => Promise<T>,
-	ttlSeconds = DEFAULT_TTL_SECONDS
+	ttlSeconds: number | ((value: T) => number) = DEFAULT_TTL_SECONDS
 ): Promise<T> {
 	// Try to get from cache first (cache failures are non-fatal)
 	try {
@@ -85,11 +85,14 @@ export async function withCache<T>(
 	const computePromise = (async () => {
 		try {
 			const result = await fn();
+			const resolvedTtlSeconds = typeof ttlSeconds === 'function' ? ttlSeconds(result) : ttlSeconds;
 			// Cache set failure is non-fatal - just log and continue
-			try {
-				await cacheSet(key, result, ttlSeconds);
-			} catch (cacheError) {
-				console.warn('[Cache] Set failed:', cacheError);
+			if (resolvedTtlSeconds > 0) {
+				try {
+					await cacheSet(key, result, resolvedTtlSeconds);
+				} catch (cacheError) {
+					console.warn('[Cache] Set failed:', cacheError);
+				}
 			}
 			return result;
 		} finally {
