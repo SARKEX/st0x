@@ -14,7 +14,6 @@ const tokens: CategorizedToken[] = [
 		symbol: 'wtSGOV',
 		decimals: 18,
 		name: 'Wrapped Test SGOV',
-		priceFeedId: '',
 		category: 'ST0x',
 		unwrappedAddress: '0xAsset',
 		limitOrders: []

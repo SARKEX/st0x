@@ -16,7 +16,7 @@ let memoryEntry: MemoryEntry<unknown> | null = null;
  *
  * Redis remains the cross-instance source of truth. The one-entry memory layer
  * prevents a missing or temporarily unavailable Redis connection from turning
- * every client poll into a full REST order-book fanout.
+ * every client poll into a duplicate authenticated REST price request.
  */
 export async function getCachedPublicPrices<T>(
 	compute: () => Promise<T>,

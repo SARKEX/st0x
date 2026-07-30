@@ -9,7 +9,7 @@
 	import { promptWalletConnection } from '$lib/stores/accessStore';
 	import { validateSelectedAmount } from '$lib/utils/validation';
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
-	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
+	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { createQuery, type CreateQueryResult } from '@tanstack/svelte-query';
 	import { apiGetSwapQuoteV2, type ApiSwapQuoteV2Response } from '$lib/api/st0xApi';
 	import {
@@ -17,7 +17,7 @@
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
 		MAX_SLIPPAGE_BPS,
 		executeMarketOrder,
-		oracleReferenceIoRatio
+		toReferenceIoRatio
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
@@ -75,8 +75,8 @@
 	let showHighSlippageWarning = false;
 	let pendingHighSlippageBps: number | null = null;
 
-	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
-	$: oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
+	let midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
+	$: midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 
 	// Quote freshness tracking
 	let quoteFreshnessSeconds = 0;
@@ -339,7 +339,7 @@
 		return null;
 	})();
 
-	// The REST quote uses the same mode, amount, slippage and oracle guard as
+	// The REST quote uses the same mode, amount, slippage and reference-price guard as
 	// calldata generation. The browser only formats the returned simulation.
 	$: marketQuoteTradeError =
 		$marketQuoteQuery?.isError && !$marketQuoteQuery?.data
@@ -363,10 +363,10 @@
 	// Liquidity warning: check if there's enough liquidity within price guard
 	let insufficientLiquidityWarning: boolean = false;
 	let availableLiquidityFormatted: string = '0';
-	$: quoteOraclePrice = assetToken
-		? $oracleQuotesQuery?.data?.[assetToken.address.toLowerCase()]?.price
+	$: quoteReferencePrice = assetToken
+		? getMidpointPrice($midpointPricesQuery?.data, assetToken.address)?.price
 		: undefined;
-	$: quoteReferenceIoRatio = oracleReferenceIoRatio(orderSide, quoteOraclePrice);
+	$: quoteReferenceIoRatio = toReferenceIoRatio(orderSide, quoteReferencePrice);
 	$: marketQuoteRequest =
 		selectedAmount > 0n && assetToken && paymentToken && $currentNetwork
 			? buildMarketSwapQuoteRequest(
@@ -616,9 +616,11 @@
 				}
 				// Execution requests fresh REST API-built calldata with the same
 				// request semantics used by the display quote above.
-				const oracleAddress = assetToken.address.toLowerCase();
-				const oraclePrice = $oracleQuotesQuery?.data?.[oracleAddress]?.price;
-				const referenceIoRatio = oracleReferenceIoRatio(orderSide, oraclePrice);
+				const referencePrice = getMidpointPrice(
+					$midpointPricesQuery?.data,
+					assetToken.address
+				)?.price;
+				const referenceIoRatio = toReferenceIoRatio(orderSide, referencePrice);
 				activeStage = 'calldata';
 				const result = await executeMarketOrder({
 					orderSide,

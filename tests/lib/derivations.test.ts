@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { priceToIoratioString, getPeriodInSeconds, hasValidPriceFeedId } from '$lib/utils/derivations';
+import { priceToIoratioString, getPeriodInSeconds } from '$lib/utils/derivations';
 
 describe('derivations', () => {
 	describe('priceToIoratioString', () => {
@@ -212,49 +212,6 @@ describe('derivations', () => {
 			it('should handle very large periods', () => {
 				expect(getPeriodInSeconds('999999', 'Days')).toBe(86399913600);
 			});
-		});
-	});
-
-	describe('hasValidPriceFeedId', () => {
-		it('should return true for valid price feed ID', () => {
-			const token = {
-				priceFeedId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-			};
-			expect(hasValidPriceFeedId(token as any)).toBe(true);
-		});
-
-		it.each([
-			{ desc: 'undefined', token: {} },
-			{ desc: 'null', token: { priceFeedId: null } },
-			{ desc: 'empty string', token: { priceFeedId: '' } },
-			{ desc: '0x only', token: { priceFeedId: '0x' } }
-		])('should return false for $desc price feed ID', ({ token }) => {
-			expect(hasValidPriceFeedId(token as any)).toBe(false);
-		});
-
-		it.each([
-			{ desc: 'undefined token', token: undefined },
-			{ desc: 'null token', token: null },
-			{ desc: 'empty object', token: {} }
-		])('should return false for $desc', ({ token }) => {
-			expect(hasValidPriceFeedId(token as any)).toBe(false);
-		});
-
-		it('should work with token containing other properties', () => {
-			const token = {
-				address: '0x123',
-				symbol: 'TEST',
-				decimals: 18,
-				priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace'
-			};
-			expect(hasValidPriceFeedId(token as any)).toBe(true);
-		});
-
-		it('should handle case sensitivity correctly', () => {
-			const token = {
-				priceFeedId: '0xaAbBcCdDeEfF00112233445566778899aAbBcCdDeEfF00112233445566778899'
-			};
-			expect(hasValidPriceFeedId(token as any)).toBe(true);
 		});
 	});
 });

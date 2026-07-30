@@ -10,9 +10,9 @@
 	import { formatUnits } from 'viem';
 	import { isAuthenticated } from '$lib/stores/authStore';
 	import transactionStore from '$lib/stores/transaction';
-	import { hasValidPriceFeedId } from '$lib/utils/derivations';
+	import { hasMarketPrice } from '$lib/utils/derivations';
 	import { currentNetwork } from '$lib/stores';
-	import PythOracleRow from '$lib/components/PythOracleRow.svelte';
+	import MarketPriceRow from '$lib/components/MarketPriceRow.svelte';
 	import { containerStyles } from '$lib/styles/utils';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
@@ -492,13 +492,13 @@
 								>
 								<th
 									class="px-2 py-1 text-right text-[11px] font-medium uppercase tracking-wide text-text-3"
-									>Off-chain</th
+									>24h Change</th
 								>
 							</tr>
 						</thead>
 						<tbody>
-							{#if hasValidPriceFeedId(selectedToken1)}
-								<PythOracleRow token={selectedToken1} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+							{#if hasMarketPrice(selectedToken1)}
+								<MarketPriceRow token={selectedToken1} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken1?.symbol ?? '-'}</td>
@@ -516,8 +516,8 @@
 									>
 								</tr>
 							{/if}
-							{#if hasValidPriceFeedId(selectedToken2)}
-								<PythOracleRow token={selectedToken2} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+							{#if hasMarketPrice(selectedToken2)}
+								<MarketPriceRow token={selectedToken2} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken2?.symbol ?? '-'}</td>
@@ -535,8 +535,8 @@
 									>
 								</tr>
 							{/if}
-							{#if hasValidPriceFeedId(selectedToken3)}
-								<PythOracleRow token={selectedToken3} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+							{#if hasMarketPrice(selectedToken3)}
+								<MarketPriceRow token={selectedToken3} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken3?.symbol ?? '-'}</td>
@@ -554,8 +554,8 @@
 									>
 								</tr>
 							{/if}
-							{#if hasValidPriceFeedId(selectedToken4)}
-								<PythOracleRow token={selectedToken4} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+							{#if hasMarketPrice(selectedToken4)}
+								<MarketPriceRow token={selectedToken4} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken4?.symbol ?? '-'}</td>
@@ -573,8 +573,8 @@
 									>
 								</tr>
 							{/if}
-							{#if hasValidPriceFeedId(selectedToken5)}
-								<PythOracleRow token={selectedToken5} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+							{#if hasMarketPrice(selectedToken5)}
+								<MarketPriceRow token={selectedToken5} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken5?.symbol ?? '-'}</td>
@@ -592,8 +592,8 @@
 									>
 								</tr>
 							{/if}
-							{#if hasValidPriceFeedId(selectedToken6)}
-								<PythOracleRow token={selectedToken6} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+							{#if hasMarketPrice(selectedToken6)}
+								<MarketPriceRow token={selectedToken6} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken6?.symbol ?? '-'}</td>
@@ -611,8 +611,8 @@
 									>
 								</tr>
 							{/if}
-							{#if hasValidPriceFeedId(selectedToken7)}
-								<PythOracleRow token={selectedToken7} tokenQuotes={$priceFeedsQuery?.data ?? []} />
+							{#if hasMarketPrice(selectedToken7)}
+								<MarketPriceRow token={selectedToken7} tokenQuotes={$priceFeedsQuery?.data ?? []} />
 							{:else}
 								<tr>
 									<td class="px-2 py-1">{selectedToken7?.symbol ?? '-'}</td>

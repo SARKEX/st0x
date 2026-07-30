@@ -1,5 +1,5 @@
 import { env as publicEnv } from '$env/dynamic/public';
-import type { PythToken } from '$lib/types';
+import type { Token } from '$lib/types';
 import {
 	DEFAULT_PAYMENT_TOKENS,
 	PAYMENT_TOKENS_BY_NETWORK,
@@ -26,8 +26,8 @@ export interface Network {
 	orderbook_subgraph_urls_inactive: string[];
 	/** Previous SFT subgraph URLs for historical data (legacy tokens, old vaults) */
 	subgraph_urls_legacy: string[];
-	paymentTokens: PythToken[];
-	defaultPaymentToken: PythToken;
+	paymentTokens: Token[];
+	defaultPaymentToken: Token;
 	/** Whitelist of trusted orderbook contract addresses for this network */
 	trustedOrderbooks: string[];
 }

@@ -59,7 +59,6 @@ function normalizeApiToken(token: ApiToken): CategorizedToken | null {
 		decimals: token.decimals,
 		name: token.name ?? token.label ?? token.symbol,
 		logoUrl: asString(token['logo-uri']),
-		priceFeedId: '',
 		category,
 		tradingViewSymbol: asString(extensions.tradingViewSymbol),
 		tradingViewMarket: asString(extensions.tradingViewMarket),

@@ -69,7 +69,7 @@ export interface MarketOrderInput {
 	/** Anchor chosen by the UI: asset amount, input spend, or output receive. */
 	inputMode?: 'amount' | 'spend' | 'receive';
 	slippageBps?: number;
-	/** Input-token per output-token oracle ratio used by the REST price guard. */
+	/** Input-token per output-token ratio used by the REST price guard. */
 	referenceIoRatio?: string;
 	assetToken: TokenInfo;
 	paymentToken: TokenInfo;
@@ -83,12 +83,12 @@ export interface MarketOrderResult {
 	tradeError?: UserFacingTradeError;
 }
 
-export function oracleReferenceIoRatio(
+export function toReferenceIoRatio(
 	orderSide: MarketOrderInput['orderSide'],
-	oraclePrice: number | null | undefined
+	price: number | null | undefined
 ): string | undefined {
-	if (!oraclePrice || !Number.isFinite(oraclePrice) || oraclePrice <= 0) return undefined;
-	return String(orderSide === 'Buy' ? oraclePrice : 1 / oraclePrice);
+	if (!price || !Number.isFinite(price) || price <= 0) return undefined;
+	return String(orderSide === 'Buy' ? price : 1 / price);
 }
 
 export function buildMarketSwapQuoteRequest(

@@ -69,14 +69,7 @@ export function getPeriodInSeconds(period: string, unit: 'Days' | 'Hours' | 'Min
 	}
 }
 
-/**
- * Check if a token has a valid Pyth price feed ID
- */
-type MaybePythToken = Token & { priceFeedId?: string };
-
-export function hasValidPriceFeedId(token: Token | MaybePythToken | undefined): boolean {
-	if (!token) return false;
-	const maybe = token as MaybePythToken;
-	const feedId = maybe.priceFeedId;
-	return !!feedId && feedId !== '' && feedId !== '0x';
+/** Whether the retained REST market-price service covers this token. */
+export function hasMarketPrice(token: (Token & { category?: string }) | undefined): boolean {
+	return token?.category === 'ST0x';
 }

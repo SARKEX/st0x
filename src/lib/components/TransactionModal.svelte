@@ -220,9 +220,8 @@
 								No Tokens Available
 							</div>
 							<p class="mb-3">
-								No tokens available within 10% of oracle prices. During testing we have a guardrail
-								to avoid unfavourable prices. If you still want to make this purchase, use a limit
-								order and specify the desired price.
+								No executable liquidity was available within your slippage tolerance. You can retry
+								with a different amount or use a limit order to specify the desired price.
 							</p>
 						</div>
 					{:else if marketOrderDisplay}
@@ -259,8 +258,7 @@
 							{#if marketOrderDisplay.isPartialFill}
 								<div class="mt-3 rounded-md bg-amber-900/30 p-2 text-xs text-amber-200">
 									Partial fill: not all requested quantity was available within slippage tolerance.
-									We currently have a guardrail to avoid unfavourable prices. To ignore guardrails,
-									use a limit order.
+									Use a limit order if you need a specific execution price.
 								</div>
 							{/if}
 						</div>

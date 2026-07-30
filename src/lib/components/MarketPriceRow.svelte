@@ -1,16 +1,12 @@
 <script lang="ts">
 	import { currentNetwork } from '$lib/stores';
-	import type { PythToken } from '$lib/types';
+	import type { CategorizedToken } from '$lib/config/tokens';
 	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 
-	type CommonToken = Partial<PythToken> & {
-		symbol?: string;
-		address: string;
-		tradingViewSymbol?: string;
-	};
+	type CommonToken = Partial<CategorizedToken> & { address: string };
 	export let token: CommonToken;
 	export let tokenQuotes: TradingViewQuote[] = [];
 
@@ -44,12 +40,13 @@
 	}
 
 	$: quote = tokenQuotes.find((q) => matchesQuote(q, token?.symbol, token?.tradingViewSymbol));
-	$: quotePrice = quote?.close ?? null;
+	$: change24hPercent = quote?.changePercent ?? null;
 	$: tokenAddress = token?.address?.toLowerCase?.() ?? '';
 	$: midpointQuery = createMidpointPricesQuery($currentNetwork);
 	$: midpointState = $midpointQuery ?? null;
 	$: entry = getMidpointPrice(midpointState?.data, tokenAddress);
 	$: loading =
+		!entry &&
 		(midpointState?.fetchStatus === 'fetching' || midpointState?.status === 'pending') &&
 		Boolean(tokenAddress);
 	$: error = (() => {
@@ -99,8 +96,13 @@
 			{/if}
 		</td>
 		<td class="px-2 py-1 text-right text-text-2">
-			{#if quotePrice !== null}
-				${quotePrice.toFixed(5)}
+			{#if change24hPercent !== null}
+				<span
+					class:text-green-400={change24hPercent >= 0}
+					class:text-red-400={change24hPercent < 0}
+				>
+					{change24hPercent >= 0 ? '+' : ''}{change24hPercent.toFixed(2)}%
+				</span>
 			{/if}
 		</td>
 	{:else}

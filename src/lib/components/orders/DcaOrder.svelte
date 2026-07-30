@@ -3,14 +3,15 @@
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { CategorizedToken } from '$lib/config/network';
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
-	import type { PythToken } from '$lib/types';
+	import type { Token } from '$lib/types';
 	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits } from 'viem';
 	import { isAuthenticated } from '$lib/stores/authStore';
 	import transactionStore from '$lib/stores/transaction';
-	import { hasValidPriceFeedId, priceToIoratioString } from '$lib/utils/derivations';
-	import { currentNetwork, oracleQuotes, reviewStrategyOnDeploy } from '$lib/stores';
+	import { priceToIoratioString } from '$lib/utils/derivations';
+	import { currentNetwork, midpointPrices, reviewStrategyOnDeploy } from '$lib/stores';
+	import { getMidpointPrice } from '$lib/queries/midpointPrices';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { promptWalletConnection } from '$lib/stores/accessStore';
 	import { DEFAULT_INPUT_VAULT_ID } from '$lib/services/orderDeployment';
@@ -36,7 +37,7 @@
 			? 'bg-green-500 hover:bg-green-600 text-text'
 			: 'bg-red-500 hover:bg-red-600 text-text';
 
-	export let assetToken: PythToken | undefined; // The token we're accumulating
+	export let assetToken: Token | undefined; // The token we're accumulating
 	/** Share-denominated display toggle — see MarketOrder for the contract. */
 	export let displayDenom: 'wrapped' | 'unwrapped' = 'wrapped';
 	export let wrapRatio: number = 1;
@@ -277,7 +278,7 @@
 	// Dynamic label for accumulation/divestment depending on order type
 	$: periodLabel = orderSide === 'Buy' ? 'Accumulation Period' : 'Divestment Period';
 
-	// Fetch oracle price on mount and when token changes
+	// Seed the initial ratio from the REST API's retained market midpoint.
 	let lastFetchedTokenAddress = '';
 
 	$: if (!selectedInitialRatio) {
@@ -285,11 +286,10 @@
 	}
 
 	$: {
-		if (selectedInputToken && !selectedInitialRatio && hasValidPriceFeedId(selectedInputToken)) {
+		if (selectedInputToken && !selectedInitialRatio) {
 			const address = selectedInputToken.address?.toLowerCase?.();
 			if (address && address !== lastFetchedTokenAddress) {
-				const oracleEntry = $oracleQuotes[address];
-				const price = oracleEntry?.price;
+				const price = getMidpointPrice($midpointPrices, address)?.price;
 				if (typeof price === 'number' && !Number.isNaN(price)) {
 					selectedInitialRatio = price.toFixed(2);
 					lastFetchedTokenAddress = address;

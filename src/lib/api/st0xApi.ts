@@ -330,6 +330,47 @@ export interface ApiWrapRatioHistoryResponse {
 }
 
 // ============================================================================
+// Market Price Types
+// ============================================================================
+
+export type ApiMarketPriceSource = 'live' | 'cached' | 'historical' | 'unavailable';
+
+export interface ApiMarketPrice {
+	chainId: number;
+	assetAddress: string;
+	symbol: string;
+	quoteAddress: string;
+	bestBid: string | null;
+	bestAsk: string | null;
+	midpoint: string | null;
+	source: ApiMarketPriceSource;
+	observedAt: number | null;
+	change24hPercent: string | null;
+}
+
+export interface ApiMarketPricesResponse {
+	data: ApiMarketPrice[];
+}
+
+export interface ApiMarketPriceHistoryPoint {
+	bestBid: string;
+	bestAsk: string;
+	midpoint: string;
+	observedAt: number;
+}
+
+export interface ApiMarketPriceHistoryResponse {
+	chainId: number;
+	assetAddress: string;
+	symbol: string;
+	quoteAddress: string;
+	startTime: number;
+	endTime: number;
+	interval: number;
+	points: ApiMarketPriceHistoryPoint[];
+}
+
+// ============================================================================
 // API Client
 // ============================================================================
 

@@ -1,7 +1,7 @@
 import { arbitrum, base } from '@wagmi/core/chains';
-import type { PythToken } from '$lib/types';
+import type { Token } from '$lib/types';
 
-export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
+export const PAYMENT_TOKENS_BY_NETWORK: Record<number, Token[]> = {
 	8453: [
 		{
 			chainId: 8453,
@@ -9,24 +9,23 @@ export const PAYMENT_TOKENS_BY_NETWORK: Record<number, PythToken[]> = {
 			symbol: 'USDC',
 			decimals: 6,
 			name: 'USD Coin',
-			logoUrl: '/images/USDC.png',
-			priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a'
-		} as PythToken
+			logoUrl: '/images/USDC.png'
+		}
 	]
 };
 
-export const DEFAULT_PAYMENT_TOKENS: Record<number, PythToken> = Object.fromEntries(
+export const DEFAULT_PAYMENT_TOKENS: Record<number, Token> = Object.fromEntries(
 	Object.entries(PAYMENT_TOKENS_BY_NETWORK).map(([chainId, tokens]) => [
 		Number(chainId),
-		tokens[0] as PythToken
+		tokens[0] as Token
 	])
 );
 
-export function getPaymentTokensForNetwork(chainId: number): PythToken[] {
+export function getPaymentTokensForNetwork(chainId: number): Token[] {
 	return PAYMENT_TOKENS_BY_NETWORK[chainId] ?? [];
 }
 
-export function getDefaultPaymentTokenForNetwork(chainId: number): PythToken | undefined {
+export function getDefaultPaymentTokenForNetwork(chainId: number): Token | undefined {
 	const [first] = getPaymentTokensForNetwork(chainId);
 	return first;
 }
@@ -38,9 +37,8 @@ export interface LimitOrder {
 	type: 'Buy' | 'Sell';
 }
 
-export interface CategorizedToken extends PythToken {
+export interface CategorizedToken extends Token {
 	category: TokenCategory;
-	logoUrl?: string;
 	tradingViewSymbol?: string;
 	tradingViewMarket?: string;
 	limitOrders?: LimitOrder[];
@@ -49,9 +47,6 @@ export interface CategorizedToken extends PythToken {
 	legacyAddress?: string; // Old token for migration (optional)
 	legacySymbol?: string; // Old symbol if different (e.g., tSPLG -> wtSPYM)
 	previousSymbols?: string[]; // Historical symbol names for blob storage lookups
-	// Temporary hardcoded price fallback for tokens whose Pyth feed is unavailable.
-	// Used by the snapshot pipeline when priceFeedId is empty. Remove once a real feed is wired up.
-	fallbackPrice?: number;
 }
 
 export const TOKENS: CategorizedToken[] = [
@@ -64,7 +59,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped NVIDIA Corporation ST0x',
 		logoUrl: '/images/NVDA.png',
-		priceFeedId: '0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:NVDA',
 		tradingViewMarket: 'america',
@@ -79,7 +73,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Amazon.com Inc ST0x',
 		logoUrl: '/images/AMZN.png',
-		priceFeedId: '0xb5d0e0fa58a1f8b81498ae670ce93c872d14434b72c364885d4fa1b257cbb07a',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:AMZN',
 		tradingViewMarket: 'america',
@@ -94,7 +87,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Tesla Inc ST0x',
 		logoUrl: '/images/TSLA.png',
-		priceFeedId: '0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:TSLA',
 		tradingViewMarket: 'america',
@@ -109,7 +101,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped MicroStrategy Incorporated ST0x',
 		logoUrl: '/images/MSTR.png',
-		priceFeedId: '0xe1e80251e5f5184f2195008382538e847fafc36f751896889dd3d1b1f6111f09',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:MSTR',
 		tradingViewMarket: 'america',
@@ -124,7 +115,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped iShares Gold Trust ST0x',
 		logoUrl: '/images/ishares.png',
-		priceFeedId: '0xf703fbded84f7da4bd9ff4661b5d1ffefa8a9c90b7fa12f247edc8251efac914',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:IAU',
 		tradingViewMarket: 'america',
@@ -139,7 +129,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Coinbase Global Inc ST0x',
 		logoUrl: '/images/COIN.png',
-		priceFeedId: '0xfee33f2a978bf32dd6b662b65ba8083c6773b494f8401194ec1870c640860245',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:COIN',
 		tradingViewMarket: 'america',
@@ -156,9 +145,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
 		logoUrl: '/images/state_street.png',
-		priceFeedId: '',
-		// priceFeedId removed — Pyth no longer supports this feed ID.
-		// Using a hardcoded fallback until a replacement feed is wired up.
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:SPYM',
 		tradingViewMarket: 'america',
@@ -175,7 +161,6 @@ export const TOKENS: CategorizedToken[] = [
 	// 	decimals: 18,
 	// 	name: 'Wrapped SPDR Portfolio S&P 500 ETF ST0x',
 	// 	logoUrl: '/images/state_street.png',
-	// 	priceFeedId: '0x54e2e127c93950de5a710100fd1cd387aba1ec8920850efdb05da5fee57d2e32',
 	// 	category: 'ST0x',
 	// 	tradingViewSymbol: 'AMEX:SPLG',
 	// 	tradingViewMarket: 'america',
@@ -190,7 +175,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped abrdn Physical Silver Shares ETF ST0x',
 		logoUrl: '/images/abrdn.png',
-		priceFeedId: '0x0a5ee42b0f7287a777926d08bc185a6a60f42f40a9b63d78d85d4a03ee2e3737',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:SIVR',
 		tradingViewMarket: 'america',
@@ -205,7 +189,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Circle Internet Group Inc ST0x',
 		logoUrl: '/images/CRCL.png',
-		priceFeedId: '0x92b8527aabe59ea2b12230f7b532769b133ffb118dfbd48ff676f14b273f1365',
 		category: 'ST0x',
 		tradingViewSymbol: 'NYSE:CRCL',
 		tradingViewMarket: 'america',
@@ -220,7 +203,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Bitmine Immersion Technologies, Inc ST0x',
 		logoUrl: '/images/BMNR.png',
-		priceFeedId: '0x54e2e127c93950de5a710100fd1cd387aba1ec8920850efdb05da5fee57d2e32',
 		category: 'ST0x',
 		tradingViewSymbol: 'NYSE:BMNR',
 		tradingViewMarket: 'america',
@@ -235,7 +217,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped abrdn Physical Platinum Shares ETF ST0x',
 		logoUrl: '/images/abrdn.png',
-		priceFeedId: '0x782410278b6c8aa2d437812281526012808404aa14c243f73fb9939eeb88d430',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:PPLT',
 		tradingViewMarket: 'america',
@@ -249,7 +230,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Invesco NASDAQ 100 ETF ST0x',
 		logoUrl: '/images/invesco.png',
-		priceFeedId: '0x433b196b3b026f46f76b5e901c84c575a7280dcba0f4272edefe0529b599ad64',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:QQQM',
 		tradingViewMarket: 'america',
@@ -263,7 +243,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Vanguard Emerging Markets Stock Index Fund ST0x',
 		logoUrl: '/images/vanguard.png',
-		priceFeedId: '0x2f91d775954c0c828d4563448d253cf09df218b620825242775d878d1d5956c7',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:VWO',
 		tradingViewMarket: 'america',
@@ -277,7 +256,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped ARK Innovation ETF ST0x',
 		logoUrl: '/images/ARKK.png',
-		priceFeedId: '0xb2fe0af6c828efefda3ffda664f919825a535aa28a0f19fc238945c7aff540b1',
 		category: 'ST0x',
 		tradingViewSymbol: 'AMEX:ARKK',
 		tradingViewMarket: 'america',
@@ -287,8 +265,7 @@ export const TOKENS: CategorizedToken[] = [
 		// wtSGOV — iShares 0-3 Month Treasury Bond ETF. Added via st0x.registry
 		// PR #22 (ST0x-Technology/st0x.registry). This is the first ST0x wrapper
 		// expected to develop a non-1:1 wrap ratio over time (T-bill yield
-		// accrues into the vault, increasing assetsPerShare). Pyth feed wiring
-		// is upstream in rain.pyth PR #20.
+		// accrues into the vault, increasing assetsPerShare).
 		chainId: base.id,
 		address: '0x78c31580c97101694C70022c83D570150c11e935',
 		unwrappedAddress: '0xc941C1506B7555Ba8C506Fb6c9b9CC259902d612',
@@ -296,7 +273,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped iShares 0-3 Month Treasury Bond ETF ST0x',
 		logoUrl: '/images/ishares.png',
-		priceFeedId: '0x8d6a29bb5ed522931d711bb12c4bbf92af986936e52af582032913b5ffcbf4d5',
 		category: 'ST0x',
 		tradingViewSymbol: 'NYSE:SGOV',
 		tradingViewMarket: 'america',
@@ -305,8 +281,7 @@ export const TOKENS: CategorizedToken[] = [
 	{
 		// wtSPCX — Space Exploration Technologies Corp (SpaceX). Deployed on Base
 		// 2026-06-10 ahead of the 2026-06-12 Nasdaq IPO (ticker SPCX, ISIN
-		// US84615Q1031). Pyth has no feed yet, so use TradingView's latest close
-		// observed on 2026-07-13 until a real feed is wired up.
+		// US84615Q1031).
 		chainId: base.id,
 		address: '0x19F89aaEf8a93f38A974beca9776f09aB844887F',
 		unwrappedAddress: '0xc585AeB8B76c5F5e4215470A7625258e86ED7746',
@@ -314,7 +289,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Space Exploration Technologies Corp. ST0x',
 		logoUrl: '/images/SPCX.svg',
-		priceFeedId: '',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:SPCX',
 		tradingViewMarket: 'america',
@@ -328,7 +302,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Constellation Energy Corporation ST0x',
 		logoUrl: '/images/CEG.png',
-		priceFeedId: '0xa541bc5c4b69961442e45e9198c7cce151ff9c2a1003f620c6d4a9785c77a4d9',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:CEG',
 		tradingViewMarket: 'america',
@@ -342,7 +315,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Roundhill Memory ETF ST0x',
 		logoUrl: '/images/roundhill.png',
-		priceFeedId: '',
 		category: 'ST0x',
 		tradingViewSymbol: 'CBOE:DRAM',
 		tradingViewMarket: 'america',
@@ -356,7 +328,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Taiwan Semiconductor Manufacturing Company ST0x',
 		logoUrl: '/images/TSM.png',
-		priceFeedId: '0xe722560a66e4ab00522ef20a38fa2ba5d1b41f1c5404723ed895d202a7af7cc4',
 		category: 'ST0x',
 		tradingViewSymbol: 'NYSE:TSM',
 		tradingViewMarket: 'america',
@@ -370,7 +341,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped ASML Holding N.V. ST0x',
 		logoUrl: '/images/ASML.png',
-		priceFeedId: '0x1a6e324589a0e355919fb1c0389edc3fdf4c46034626bd82aad4e47714cfa94f',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:ASML',
 		tradingViewMarket: 'america',
@@ -384,7 +354,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped SK hynix Inc. ADR ST0x',
 		logoUrl: '/images/SKHY.png',
-		priceFeedId: '',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:SKHY',
 		tradingViewMarket: 'america',
@@ -398,7 +367,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Micron Technology, Inc. ST0x',
 		logoUrl: '/images/MU.png',
-		priceFeedId: '0x152244dc24665ca7dd3f257b8f442dc449b6346f48235b7b229268cb770dda2d',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:MU',
 		tradingViewMarket: 'america',
@@ -412,7 +380,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Advanced Micro Devices, Inc. ST0x',
 		logoUrl: '/images/AMD.png',
-		priceFeedId: '0x3622e381dbca2efd1859253763b1adc63f7f9abb8e76da1aa8e638a57ccde93e',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:AMD',
 		tradingViewMarket: 'america',
@@ -426,7 +393,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Broadcom Inc. ST0x',
 		logoUrl: '/images/AVGO.png',
-		priceFeedId: '0xd0c9aef79b28308b256db7742a0a9b08aaa5009db67a52ea7fa30ed6853f243b',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:AVGO',
 		tradingViewMarket: 'america',
@@ -440,7 +406,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Applied Materials, Inc. ST0x',
 		logoUrl: '/images/AMAT.png',
-		priceFeedId: '0xb9bc74cc1243b706efacf664ed206d08ab1dda79e8b87752c7c44b3bdf1b9e08',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:AMAT',
 		tradingViewMarket: 'america',
@@ -454,7 +419,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Lam Research Corporation ST0x',
 		logoUrl: '/images/LRCX.png',
-		priceFeedId: '0x01a67883f58bd0f0e9cf8f52f21d7cf78c144d7e7ae32ce9256420834b33fb75',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:LRCX',
 		tradingViewMarket: 'america',
@@ -468,7 +432,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Take-Two Interactive Software, Inc. ST0x',
 		logoUrl: '/images/TTWO.png',
-		priceFeedId: '0x782a6a261306f01ab2ad004062a2832107360eefdcf8c83223e0ff7ca7ebde8d',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:TTWO',
 		tradingViewMarket: 'america',
@@ -482,7 +445,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Alphabet Inc. Class A ST0x',
 		logoUrl: '/images/GOOGL.png',
-		priceFeedId: '0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:GOOGL',
 		tradingViewMarket: 'america',
@@ -496,7 +458,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Intel Corporation ST0x',
 		logoUrl: '/images/INTC.png',
-		priceFeedId: '0xc1751e085ee292b8b3b9dd122a135614485a201c35dfc653553f0e28c1baf3ff',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:INTC',
 		tradingViewMarket: 'america',
@@ -510,7 +471,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Apple Inc. ST0x',
 		logoUrl: '/images/AAPL.png',
-		priceFeedId: '0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:AAPL',
 		tradingViewMarket: 'america',
@@ -524,7 +484,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Microsoft Corporation ST0x',
 		logoUrl: '/images/MSFT.png',
-		priceFeedId: '0xd0ca23c1cc005e004ccf1db5bf76aeb6a49218f43dac3d4b275e92de12ded4d1',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:MSFT',
 		tradingViewMarket: 'america',
@@ -538,14 +497,12 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Eli Lilly and Company ST0x',
 		logoUrl: '/images/LLY.png',
-		priceFeedId: '0x70dcf5fd56553d0023693e4b590336a8c9bcfd0d98dd9f093b1f697820d98325',
 		category: 'ST0x',
 		tradingViewSymbol: 'NYSE:LLY',
 		tradingViewMarket: 'america',
 		limitOrders: []
 	},
 	{
-		// Pyth does not currently publish a PTY feed.
 		chainId: base.id,
 		address: '0xb6D779A79E7493ed821a65D52bA419F0F6D5dD0a',
 		unwrappedAddress: '0xb6021810971714cD48572af527307Acc324ecF61',
@@ -553,7 +510,6 @@ export const TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped PIMCO Corporate & Income Opportunity Fund ST0x',
 		logoUrl: '/images/PTY.png',
-		priceFeedId: '',
 		category: 'ST0x',
 		tradingViewSymbol: 'NYSE:PTY',
 		tradingViewMarket: 'america',
@@ -568,7 +524,6 @@ export const TOKENS: CategorizedToken[] = [
 	// 	decimals: 18,
 	// 	name: 'Wrapped Rocket Lab USA Inc ST0x',
 	// 	logoUrl: '/images/RKLB.png',
-	// 	priceFeedId: '0x40589e289317e4fbd997b1a267606e20a1cc7c3e4689f9e5a5992957917816c8',
 	// 	category: 'ST0x',
 	// 	tradingViewSymbol: 'NASDAQ:RKLB',
 	// 	tradingViewMarket: 'america',
@@ -584,7 +539,6 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped BTC',
 		logoUrl: '/images/BTC.svg',
-		priceFeedId: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
 		category: 'CRYPTO',
 		tradingViewSymbol: 'BINANCE:BTCUSDT',
 		tradingViewMarket: 'crypto'
@@ -596,7 +550,6 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Wrapped Ether',
 		logoUrl: '/images/ETH.svg',
-		priceFeedId: '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace',
 		category: 'CRYPTO',
 		tradingViewSymbol: 'BINANCE:ETHUSDT',
 		tradingViewMarket: 'crypto'
@@ -608,7 +561,6 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		decimals: 18,
 		name: 'Arbitrum (ARB)',
 		logoUrl: '/images/ARB.svg',
-		priceFeedId: '0x3fa4252848f9f0a1480be62745a4629d9eb1322aebab8a791e344b3b9c1adcf5',
 		category: 'CRYPTO',
 		tradingViewSymbol: 'BINANCE:ARBUSDT',
 		tradingViewMarket: 'crypto'
@@ -620,7 +572,6 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		decimals: 6,
 		name: 'USD Coin',
 		logoUrl: '/images/USDC.png',
-		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
 		category: 'CRYPTO',
 		tradingViewSymbol: 'KRAKEN:USDCUSD',
 		tradingViewMarket: 'crypto'
@@ -632,7 +583,6 @@ export const CRYPTO_TOKENS: CategorizedToken[] = [
 		decimals: 6,
 		name: 'USD Coin',
 		logoUrl: '/images/USDC.png',
-		priceFeedId: '0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a',
 		category: 'CRYPTO',
 		tradingViewSymbol: 'KRAKEN:USDCUSD',
 		tradingViewMarket: 'crypto'

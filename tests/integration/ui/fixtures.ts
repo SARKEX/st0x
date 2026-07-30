@@ -4,10 +4,10 @@
 // - tokens: USDC + wtCOIN + wtNVDA + wtAMZN
 // - page: extended with EIP-1193 stub injected via addInitScript before any goto()
 //
-// Design note — NO default stubs for Hermes, ST0x REST orders API, or Goldsky subgraph.
+// Design note — NO default stubs for the ST0x REST API or Goldsky subgraph.
 // globalSetup picks a recent NYSE-market-hours block so LIVE data sources
-// (Pyth Hermes price, ST0x REST quotes, Goldsky subgraph order list) are
-// effectively at the same chain head the fork is at, and the SDK's on-chain
+// (ST0x REST quotes and Goldsky subgraph order list) are effectively at the
+// same chain head the fork is at, and the SDK's on-chain
 // preflight against the fork sees the same orders the UI displays. The only
 // production interception is the RPC redirect (so the SDK's on-chain calls
 // hit anvil) and the wallet-registration check stub (so the trade panel opens
@@ -94,11 +94,9 @@ const ORDERBOOK_DONOR = ORDERBOOK_ADDRESS;
 
 // Token table — wrapped addresses sourced from src/lib/config/tokens.ts.
 //
-// Primary test token is wtCOIN (Coinbase Global, NASDAQ:COIN, decimals 18,
-// Pyth price feed). Active orderbook + no st0x off-chain oracle dependency
-// (the st0x oracle is only used for the SPYM ETF feed; wtCOIN reads the
-// regular on-chain Pyth Network feed which is reliably fresh during NYSE
-// hours).
+// Primary test token is wtCOIN (Coinbase Global, NASDAQ:COIN, decimals 18).
+// It has an active orderbook and uses an on-chain oracle that is reliably fresh
+// during NYSE hours.
 //
 // Funding strategy per token:
 //   - USDC: setStorageAt at balanceSlot 9 (Circle proxy pattern).
@@ -134,7 +132,7 @@ export const TOKENS = {
 		donor: ORDERBOOK_DONOR,
 		id: '0x997baE3EC193a249596d3708C3fAB7C501Bb8a53'
 	},
-	// wtSPYM: S&P500 ETF, uses the off-chain st0x oracle (not Pyth). The
+	// wtSPYM: S&P500 ETF, uses the off-chain st0x oracle. The
 	// off-chain oracle is unreachable from the fork, so every wtSPYM order's
 	// quote() reverts during cache build — used by marketFailures to produce
 	// an empty orderbook for the "no_liquidity" classifier path.
@@ -145,8 +143,8 @@ export const TOKENS = {
 		id: '0x31C2C14134e6E3B7ef9478297F199331133Fc2d8'
 	},
 	// wtSGOV: tokenized iShares 0-3M Treasury ETF.
-	// Reads a regular on-chain Pyth feed (priceFeedId in src/lib/config/tokens.ts),
-	// NOT the off-chain st0x oracle, so it behaves like wtCOIN under the fork.
+	// Reads an on-chain oracle feed rather than the off-chain st0x oracle, so it
+	// behaves like wtCOIN under the fork.
 	// Funded by impersonating the Rain Orderbook donor (same strategy as the
 	// other ST0x wrappers); if the donor holds no wtSGOV at the chosen fork
 	// block, swap `donor` for a known wtSGOV holder.
@@ -225,7 +223,7 @@ export const test = base.extend<UiFixtures>({
 		//   - marketHours.isOutsideMarketHours() (reads `new Date()` — Sunday-runs
 		//     would otherwise gate the form to `market_closed` even when the
 		//     fork-block is a NYSE Friday afternoon).
-		//   - Pyth freshness windows (offchain publishTime compared to Date.now()).
+		//   - on-chain oracle freshness windows compared to Date.now().
 		// Tests that DELIBERATELY drive Date.now elsewhere (marketFailures'
 		// stale_oracle / market_closed forcing paths) can re-patch via their own
 		// page.addInitScript AFTER fixture setup — last-write-wins for initScripts.

@@ -12,8 +12,6 @@ export type QueryFailureKind =
 	| 'subgraph_page_failed'
 	| 'subgraph_page_retry'
 	| 'subgraph_pagination_interrupted'
-	| 'pyth_hermes_retry'
-	| 'pyth_hermes_failed'
 	| 'public_endpoint_network_failed';
 
 export interface QueryFailureEvent {

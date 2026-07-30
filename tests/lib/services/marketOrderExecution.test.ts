@@ -59,7 +59,7 @@ vi.mock('$lib/services/observability/tradeId', () => ({
 import {
 	buildMarketSwapQuoteRequest,
 	executeMarketOrder,
-	oracleReferenceIoRatio
+	toReferenceIoRatio
 } from '$lib/services/marketOrderExecution';
 import { HttpError } from '$lib/clients/http';
 import { TAKE_ORDERS_4_ABI } from '$lib/services/takeOrders4Abi';
@@ -171,10 +171,10 @@ function indexedTradeResponse(request: ApiSwapCalldataV2Request) {
 }
 
 describe('executeMarketOrder REST calldata execution', () => {
-	it('maps oracle prices into input-per-output ratios for both sides', () => {
-		expect(oracleReferenceIoRatio('Buy', 2500)).toBe('2500');
-		expect(oracleReferenceIoRatio('Sell', 2500)).toBe('0.0004');
-		expect(oracleReferenceIoRatio('Buy', 0)).toBeUndefined();
+	it('maps reference prices into input-per-output ratios for both sides', () => {
+		expect(toReferenceIoRatio('Buy', 2500)).toBe('2500');
+		expect(toReferenceIoRatio('Sell', 2500)).toBe('0.0004');
+		expect(toReferenceIoRatio('Buy', 0)).toBeUndefined();
 	});
 
 	it.each([

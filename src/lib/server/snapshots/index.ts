@@ -4,5 +4,4 @@
 export * from './types';
 export * from './scraper';
 export * from './processor';
-export * from './pyth';
 export * from './vaults';

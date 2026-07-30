@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import { currentNetwork, oracleQuotes, tradePanelOpen } from '$lib/stores';
+	import { currentNetwork, tradePanelOpen } from '$lib/stores';
 	import { setSheetOpen } from '$lib/stores/uiStore';
 	import { formatUnits } from 'viem';
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
@@ -57,14 +57,12 @@
 		toBigInt,
 		getRaindexVaultUrl
 	} from '$lib/utils/tokenMath';
-	import type { OracleQuote } from '$lib/queries/oracleQuotes';
 	import {
 		getMakerInputTokenAddress,
 		getMakerOutputTokenAddress
 	} from '$lib/types/orderPerspective';
 	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
-	type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 	import {
 		createTokenOrderbookQuotesQuery,
 		refreshLegacyTokenQuotes,
@@ -76,7 +74,6 @@
 		createTakerTradesQuery,
 		createBatchTradesQuery
 	} from '$lib/queries/tradeActivity';
-	import { createOracleQuotesQuery } from '$lib/queries/oracleQuotes';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { wagmiConfig } from 'svelte-wagmi';
@@ -122,7 +119,6 @@
 		$currentNetwork,
 		currentToken?.address ?? null
 	);
-	let oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 	let midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 	const exchangeRatesQuery = createExchangeRatesQuery();
 	$: {
@@ -131,7 +127,6 @@
 			currentToken?.address ?? null
 		);
 		tokenTradeQuery = createTokenTradeActivityQuery($currentNetwork, currentToken?.address ?? null);
-		oracleQuotesQuery = createOracleQuotesQuery($currentNetwork);
 		midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
 	}
 
@@ -140,7 +135,7 @@
 	// callouts hide themselves.
 	$: currentRatio = resolveRatio(
 		$exchangeRatesQuery.data ?? null,
-		currentPythToken?.address ?? currentToken?.address ?? null
+		currentApiToken?.address ?? currentToken?.address ?? null
 	);
 	// Sticky `hasRatio`: once we've ever resolved a non-1 ratio for the current
 	// token, keep the chip + Ratio History tab visible even if a later refetch
@@ -151,7 +146,7 @@
 	// resolved token address so navigating between tokens correctly resets.
 	let hasEverHadRatioForToken: { address: string; value: boolean } | null = null;
 	$: {
-		const addr = (currentPythToken?.address ?? currentToken?.address ?? '').toLowerCase();
+		const addr = (currentApiToken?.address ?? currentToken?.address ?? '').toLowerCase();
 		const isNonOne = Number.isFinite(currentRatio) && currentRatio !== 1;
 		if (!hasEverHadRatioForToken || hasEverHadRatioForToken.address !== addr) {
 			hasEverHadRatioForToken = { address: addr, value: isNonOne };
@@ -361,13 +356,13 @@
 	});
 	// Use tokenId from URL params to find the token config (supports wrapped, legacy, or unwrapped address)
 	// Note: currentToken.address from subgraph may differ from the wrapped token address
-	$: currentPythToken = (() => {
+	$: currentApiToken = (() => {
 		if (!tokenId || !$currentNetwork?.chainId) return undefined;
 		const match = findApiTokenByAnyAddress(apiTokens, tokenId);
 		return match?.chainId === $currentNetwork.chainId ? match : undefined;
 	})();
 	$: baseSymbol = extractBaseSymbol(currentToken?.symbol);
-	$: tradingViewSymbol = currentPythToken?.tradingViewSymbol ?? baseSymbol;
+	$: tradingViewSymbol = currentApiToken?.tradingViewSymbol ?? baseSymbol;
 	const ASSET_TABS = [
 		{ id: 'company', label: 'Company Info' },
 		{ id: 'fundamentals', label: 'Fundamentals' },
@@ -530,15 +525,6 @@
 	let orderbookDepth: DepthSeries = { bids: [], asks: [] };
 	let chartsLoading = false;
 	let tradeQueryError: string | null = null;
-	let oracleResource: {
-		status: ResourceStatus;
-		data: Record<string, OracleQuote> | null;
-		updatedAt: number | null;
-		error: unknown | null;
-	} | null = null;
-	let oracleEntry: OracleQuote | undefined;
-	let oraclePriceData: { price: number | null; confidence: number | null } | null = null;
-	let oracleError: string | null = null;
 	let buyPrice: number | null = null;
 	let sellPrice: number | null = null;
 	type OrderbookQuoteUiState = {
@@ -585,78 +571,40 @@
 		}
 		return fallback;
 	}
-	$: oracleResource = (() => {
-		const q = $oracleQuotesQuery;
-		const status: ResourceStatus =
-			q?.status === 'success' ? 'ready' : q?.status === 'error' ? 'error' : 'loading';
-		return {
-			status,
-			data: q?.data ?? null,
-			updatedAt: q?.dataUpdatedAt ?? null,
-			error: q?.error ?? null,
-			refreshInterval: 15_000,
-			timerId: null,
-			subscribers: 0
-		};
-	})();
-	$: currentTokenAddress = currentPythToken?.address?.toLowerCase?.() ?? null;
 	// Include legacy address so bid/ask and depth match quotes for tokens like tSTOX/wtSTOX
 	$: assetAddressSet = (() => {
 		const set = new Set<string>();
-		if (currentPythToken?.address) set.add(currentPythToken.address.toLowerCase());
-		if (currentPythToken?.legacyAddress) set.add(currentPythToken.legacyAddress.toLowerCase());
+		if (currentApiToken?.address) set.add(currentApiToken.address.toLowerCase());
+		if (currentApiToken?.legacyAddress) set.add(currentApiToken.legacyAddress.toLowerCase());
 		// Also add currentToken.address in case subgraph uses a different id
 		if (currentToken?.address) set.add(currentToken.address.toLowerCase());
 		return set;
 	})();
-	$: oracleEntry = currentTokenAddress ? $oracleQuotes[currentTokenAddress] : undefined;
-	$: oraclePriceData = oracleEntry
-		? {
-				price: oracleEntry.price ?? null,
-				confidence: oracleEntry.confidence ?? null
-			}
-		: null;
-	// Displayed "mid" price = midpoint of best bid/ask. Prefer the live two-sided book so it
-	// matches Bid/Offer exactly; fall back to the shared prices endpoint's cached last-known
-	// midpoint when the market is closed / one-sided, else N/A. Never a one-sided value.
+	// Display pricing is REST-authoritative. The local orderbook quote remains available for
+	// execution and liquidity validation, but it must not override the sampled platform price.
 	$: midpointEntry = getMidpointPrice(
 		$midpointPricesQuery?.data,
-		currentPythToken?.address ?? currentToken?.address
+		currentApiToken?.address ?? currentToken?.address
 	);
-	$: liveMid =
-		buyPrice != null && buyPrice > 0 && sellPrice != null && sellPrice > 0
-			? (buyPrice + sellPrice) / 2
-			: null;
-	$: midPrice = liveMid ?? midpointEntry?.price ?? null;
-	$: midIsCached = liveMid == null && midPrice != null && midpointEntry?.source === 'cached';
-	$: midSpread =
-		buyPrice != null && buyPrice > 0 && sellPrice != null && sellPrice > 0
-			? sellPrice - buyPrice
-			: midpointEntry?.bid != null && midpointEntry?.ask != null
-				? midpointEntry.ask - midpointEntry.bid
-				: null;
-	$: oracleError = (() => {
-		if (!currentFeedId) return null;
-		if (oracleResource?.status === 'error') {
-			return 'Failed to fetch oracle data';
-		}
-		if (oracleResource?.status === 'ready' && !oracleEntry) {
-			return 'Oracle data unavailable';
-		}
-		return null;
-	})();
+	$: midpointPriceLoading =
+		$midpointPricesQuery?.fetchStatus === 'fetching' && midpointEntry === undefined;
+	$: midPrice = midpointEntry?.price ?? null;
+	$: midpointBid = midpointEntry?.bid ?? null;
+	$: midpointAsk = midpointEntry?.ask ?? null;
+	$: midIsCached = midPrice != null && midpointEntry?.source === 'cached';
+	$: midSpread = midpointBid != null && midpointAsk != null ? midpointAsk - midpointBid : null;
 	let cleanupScrollTracking: (() => void) | null = null;
 	let lastTrackedTokenId: string | null = null;
 
 	// Track page view reactively when token data is available
 	// Uses lastTrackedTokenId to ensure tracking fires for each new token during client-side navigation
-	$: if (currentPythToken?.symbol && $page.params.id !== lastTrackedTokenId) {
+	$: if (currentApiToken?.symbol && $page.params.id !== lastTrackedTokenId) {
 		lastTrackedTokenId = $page.params.id;
 		// OBS-08 (Plan 02-03 Task 2c, checker fix #7): emit `page_viewed` with
 		// `page: 'trade'` so the funnel filter (`page === 'trade'`) works at the
 		// intent step. Was previously `'trade_page'` which the funnel cannot match.
 		trackPageView('trade', {
-			token_symbol: currentPythToken.symbol,
+			token_symbol: currentApiToken.symbol,
 			token_id: $page.params.id
 		});
 	}
@@ -677,7 +625,6 @@
 			activeAssetTab = nextId as AssetTabId;
 		}
 	};
-	$: currentFeedId = browser ? currentPythToken?.priceFeedId ?? null : null;
 	function handleTokenTabChange(event: CustomEvent<{ id: string }>) {
 		const nextId = event.detail.id;
 		if (TOKEN_TABS.some((tab) => tab.id === nextId)) {
@@ -785,10 +732,10 @@
 		if (!browser || !currentToken || !$currentNetwork) return [];
 		const settlementToken = $currentNetwork.defaultPaymentToken;
 		if (!settlementToken) return [];
-		const assetAddress = (currentPythToken?.address ?? currentToken.address)?.toLowerCase();
+		const assetAddress = (currentApiToken?.address ?? currentToken.address)?.toLowerCase();
 		const quoteAddress = settlementToken.address?.toLowerCase();
 		if (!assetAddress || !quoteAddress) return [];
-		const _assetDecimals = Number(currentPythToken?.decimals ?? 18);
+		const _assetDecimals = Number(currentApiToken?.decimals ?? 18);
 		const _quoteDecimals = Number(settlementToken.decimals ?? 6);
 		const range = $tokenTradeQuery?.data?.range ?? null;
 		const now = Date.now();
@@ -963,7 +910,7 @@
 	// `panelDenom` store toggles which one we show in the panel's verb line,
 	// input field, balance row, summary, etc. — see `panelDenomStore.ts`.
 	$: panelWrappedSymbol =
-		currentPythToken?.symbol ?? currentToken?.symbol ?? tokenDisplaySymbol ?? tokenDisplayName;
+		currentApiToken?.symbol ?? currentToken?.symbol ?? tokenDisplaySymbol ?? tokenDisplayName;
 	$: panelAssetSymbol = panelWrappedSymbol.replace(/^wt/, 't');
 	$: panelTokenLabel = $panelDenom === 'unwrapped' ? panelAssetSymbol : panelWrappedSymbol;
 	$: panelSummaryVerb = panelOrderSide === 'Buy' ? 'Buying' : 'Selling';
@@ -1008,7 +955,7 @@
 						class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-text-2 sm:text-sm"
 					>
 						<span class="font-mono tabular-nums"
-							>{currentPythToken?.symbol ?? currentToken.symbol}</span
+							>{currentApiToken?.symbol ?? currentToken.symbol}</span
 						>
 						<span class="text-text-muted">·</span>
 						<span>Wrapped tStock on {$currentNetwork.displayName}</span>
@@ -1016,8 +963,8 @@
 				</div>
 				<WrapRatioChip
 					ratio={currentRatio}
-					wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
-					assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+					wrappedSymbol={currentApiToken?.symbol ?? currentToken.symbol}
+					assetSymbol={(currentApiToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
 					onLearnMore={openWrapExplainer}
 				/>
 			</div>
@@ -1084,15 +1031,15 @@
 									class="mt-0.5 font-mono tabular-nums text-text sm:mt-1"
 									title={midIsCached ? 'Last known midpoint (market closed or one-sided book)' : ''}
 								>
-									{#if orderbookQuoteUiState.loadingWithoutData && midPrice === null}
+									{#if midpointPriceLoading}
 										Loading...
 									{:else if midPrice !== null}
 										{#if hasRatio && currentRatio > 0}
-											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+											{@const assetSym = (currentApiToken?.symbol ?? currentToken.symbol).replace(
 												/^wt/,
 												't'
 											)}
-											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+											{@const wrappedSym = currentApiToken?.symbol ?? currentToken.symbol}
 											<div class="leading-tight">
 												<div>
 													${formatNumeric(midPrice / currentRatio)}
@@ -1127,27 +1074,27 @@
 									Bid Price
 								</dt>
 								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
-									{#if orderbookQuoteUiState.loadingWithoutData}
+									{#if midpointPriceLoading}
 										Loading...
-									{:else if buyPrice !== null}
+									{:else if midpointBid !== null}
 										{#if hasRatio && currentRatio > 0}
-											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+											{@const assetSym = (currentApiToken?.symbol ?? currentToken.symbol).replace(
 												/^wt/,
 												't'
 											)}
-											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+											{@const wrappedSym = currentApiToken?.symbol ?? currentToken.symbol}
 											<div class="leading-tight">
 												<div>
-													${formatNumeric(buyPrice / currentRatio)}
+													${formatNumeric(midpointBid / currentRatio)}
 													<span class="text-[10px] font-normal text-text-3">/ {assetSym}</span>
 												</div>
 												<div class="mt-0.5 text-[11px] font-normal text-text-2 sm:text-xs">
-													${formatNumeric(buyPrice)}
+													${formatNumeric(midpointBid)}
 													<span class="text-[10px] text-text-3">/ {wrappedSym}</span>
 												</div>
 											</div>
 										{:else}
-											${formatNumeric(buyPrice)}
+											${formatNumeric(midpointBid)}
 										{/if}
 									{:else}
 										—
@@ -1159,27 +1106,27 @@
 									Offer Price
 								</dt>
 								<dd class="mt-0.5 font-mono tabular-nums text-text sm:mt-1">
-									{#if orderbookQuoteUiState.loadingWithoutData}
+									{#if midpointPriceLoading}
 										Loading...
-									{:else if sellPrice !== null}
+									{:else if midpointAsk !== null}
 										{#if hasRatio && currentRatio > 0}
-											{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+											{@const assetSym = (currentApiToken?.symbol ?? currentToken.symbol).replace(
 												/^wt/,
 												't'
 											)}
-											{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+											{@const wrappedSym = currentApiToken?.symbol ?? currentToken.symbol}
 											<div class="leading-tight">
 												<div>
-													${formatNumeric(sellPrice / currentRatio)}
+													${formatNumeric(midpointAsk / currentRatio)}
 													<span class="text-[10px] font-normal text-text-3">/ {assetSym}</span>
 												</div>
 												<div class="mt-0.5 text-[11px] font-normal text-text-2 sm:text-xs">
-													${formatNumeric(sellPrice)}
+													${formatNumeric(midpointAsk)}
 													<span class="text-[10px] text-text-3">/ {wrappedSym}</span>
 												</div>
 											</div>
 										{:else}
-											${formatNumeric(sellPrice)}
+											${formatNumeric(midpointAsk)}
 										{/if}
 									{:else}
 										—
@@ -1191,11 +1138,11 @@
 							<!-- Wrap-ratio callout — mirrors the chip pattern. The "What's this?"
 								 button reuses the WrapExplainerStore so the same modal opens
 								 from every entry point. -->
-							{@const assetSym = (currentPythToken?.symbol ?? currentToken.symbol).replace(
+							{@const assetSym = (currentApiToken?.symbol ?? currentToken.symbol).replace(
 								/^wt/,
 								't'
 							)}
-							{@const wrappedSym = currentPythToken?.symbol ?? currentToken.symbol}
+							{@const wrappedSym = currentApiToken?.symbol ?? currentToken.symbol}
 							<div
 								class="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-2 text-[11px] text-text-2 sm:text-xs"
 							>
@@ -1216,9 +1163,6 @@
 									What's this?
 								</button>
 							</div>
-						{/if}
-						{#if oracleError}
-							<p class="mt-2 text-xs text-red-400 sm:mt-4">{oracleError}</p>
 						{/if}
 					</div>
 					<div class="grid grid-cols-2 gap-2 sm:gap-3" data-tutorial="buy-sell-buttons">
@@ -1313,11 +1257,8 @@
 							{#if hasRatio}
 								<DenomToggle
 									value={tableDenom}
-									wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
-									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(
-										/^wt/,
-										't'
-									)}
+									wrappedSymbol={currentApiToken?.symbol ?? currentToken.symbol}
+									assetSymbol={(currentApiToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
 									on:change={handleDenomChange}
 								/>
 							{/if}
@@ -1329,7 +1270,7 @@
 											address: currentToken.address,
 											symbol: currentToken.symbol,
 											decimals: 18,
-											image: currentPythToken?.logoUrl
+											image: currentApiToken?.logoUrl
 										})}
 									class="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-xs font-medium text-text-2 transition hover:border-blue-400/50 hover:bg-blue-500/10 hover:text-blue-700 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm dark:hover:text-blue-300"
 								>
@@ -1379,9 +1320,9 @@
 							<div class="mt-2 hidden text-xs text-text-2 sm:block">
 								All times are displayed in your local timezone{#if hasRatio}
 									· prices in USD per {tableDenom === 'unwrapped'
-										? (currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't') +
+										? (currentApiToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't') +
 											' (share)'
-										: currentPythToken?.symbol ?? currentToken.symbol + ' (wrapped)'}{/if}
+										: currentApiToken?.symbol ?? currentToken.symbol + ' (wrapped)'}{/if}
 							</div>
 						{:catch _err}
 							<div class="min-h-[320px] p-4 text-sm text-red-400 sm:min-h-[440px]">
@@ -1438,7 +1379,7 @@
 								{@const walletBalance = $walletBalanceQuery.data ?? 0n}
 								{@const totalBalance = totalVaultBalance + walletBalance}
 								{@const tokenDecimals =
-									vaults[0]?.token?.decimals ?? currentPythToken?.decimals ?? 18}
+									vaults[0]?.token?.decimals ?? currentApiToken?.decimals ?? 18}
 
 								{#if vaults.length === 0 && walletBalance === 0n}
 									<div class="py-8 text-center text-sm text-text-2">
@@ -1600,11 +1541,8 @@
 							{#if hasRatio}
 								<WrapRatioCard
 									ratio={currentRatio}
-									wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
-									assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(
-										/^wt/,
-										't'
-									)}
+									wrappedSymbol={currentApiToken?.symbol ?? currentToken.symbol}
+									assetSymbol={(currentApiToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
 									onLearnMore={openWrapExplainer}
 									onViewHistory={() => (activeTokenTab = 'ratio')}
 								/>
@@ -1616,39 +1554,39 @@
 									<div>
 										<div class="sm:hidden">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
+												href="{$currentNetwork.blockExplorer}/token/{currentApiToken?.address ??
 													tokenId}"
-												label={currentPythToken?.address ?? tokenId}
+												label={currentApiToken?.address ?? tokenId}
 												truncate={{ start: 0, end: 6 }}
 												className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 											/>
 										</div>
 										<div class="hidden sm:block">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentPythToken?.address ??
+												href="{$currentNetwork.blockExplorer}/token/{currentApiToken?.address ??
 													tokenId}"
-												label={truncateAddress(currentPythToken?.address ?? tokenId)}
+												label={truncateAddress(currentApiToken?.address ?? tokenId)}
 												className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 											/>
 										</div>
 									</div>
 								</div>
-								{#if currentPythToken?.unwrappedAddress}
+								{#if currentApiToken?.unwrappedAddress}
 									<div class="flex items-center justify-between gap-2 py-2.5">
 										<span class="text-text-2">Underlying Token</span>
 										<div>
 											<div class="sm:hidden">
 												<ExternalLink
-													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
-													label={currentPythToken.unwrappedAddress}
+													href="{$currentNetwork.blockExplorer}/token/{currentApiToken.unwrappedAddress}"
+													label={currentApiToken.unwrappedAddress}
 													truncate={{ start: 0, end: 6 }}
 													className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 												/>
 											</div>
 											<div class="hidden sm:block">
 												<ExternalLink
-													href="{$currentNetwork.blockExplorer}/token/{currentPythToken.unwrappedAddress}"
-													label={truncateAddress(currentPythToken.unwrappedAddress)}
+													href="{$currentNetwork.blockExplorer}/token/{currentApiToken.unwrappedAddress}"
+													label={truncateAddress(currentApiToken.unwrappedAddress)}
 													className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 												/>
 											</div>
@@ -1661,7 +1599,7 @@
 								</div>
 								<div class="flex justify-between py-2.5">
 									<span class="text-text-2">Symbol</span>
-									<span>{currentPythToken?.symbol ?? currentToken.symbol}</span>
+									<span>{currentApiToken?.symbol ?? currentToken.symbol}</span>
 								</div>
 								<div class="flex justify-between py-2.5">
 									<span class="text-text-2">Decimals</span>
@@ -1671,14 +1609,14 @@
 									<div class="flex justify-between py-2.5">
 										<span class="text-text-2">Wrap ratio</span>
 										<span class="font-mono tabular-nums"
-											>1 {currentPythToken?.symbol ?? currentToken.symbol} ↔ {Number.isInteger(
+											>1 {currentApiToken?.symbol ?? currentToken.symbol} ↔ {Number.isInteger(
 												currentRatio
 											)
 												? currentRatio
 												: currentRatio.toLocaleString('en-US', {
 														maximumFractionDigits: 4
 													})}
-											{(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}</span
+											{(currentApiToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}</span
 										>
 									</div>
 								{/if}
@@ -1695,9 +1633,9 @@
 						</div>
 					{:else if activeTokenTab === 'ratio' && hasRatio}
 						<RatioHistoryTab
-							wrappedTokenAddress={currentPythToken?.address ?? currentToken.address}
-							wrappedSymbol={currentPythToken?.symbol ?? currentToken.symbol}
-							assetSymbol={(currentPythToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
+							wrappedTokenAddress={currentApiToken?.address ?? currentToken.address}
+							wrappedSymbol={currentApiToken?.symbol ?? currentToken.symbol}
+							assetSymbol={(currentApiToken?.symbol ?? currentToken.symbol).replace(/^wt/, 't')}
 							{currentRatio}
 							onLearnMore={openWrapExplainer}
 						/>
@@ -1938,9 +1876,9 @@
 						class="flex items-start justify-between border-b border-line px-4 py-4 sm:px-6 sm:py-5"
 					>
 						<div class="flex items-start gap-2 sm:gap-3">
-							{#if currentPythToken?.logoUrl}
+							{#if currentApiToken?.logoUrl}
 								<img
-									src={currentPythToken.logoUrl}
+									src={currentApiToken.logoUrl}
 									alt={tokenDisplaySymbol || tokenDisplayName}
 									class="h-8 w-8 rounded-full border border-line object-cover sm:h-10 sm:w-10"
 								/>
@@ -2126,10 +2064,10 @@
 										<svelte:component
 											this={Mod.default}
 											orderSide={panelOrderSide}
-											assetToken={currentPythToken}
+											assetToken={currentApiToken}
 											currentPrice={panelOrderSide === 'Buy'
-												? (sellPrice ?? oraclePriceData?.price)?.toFixed(4)
-												: (buyPrice ?? oraclePriceData?.price)?.toFixed(4)}
+												? (midpointAsk ?? midPrice)?.toFixed(4)
+												: (midpointBid ?? midPrice)?.toFixed(4)}
 											{buyPrice}
 											{sellPrice}
 											displayDenom={$panelDenom}
@@ -2143,7 +2081,7 @@
 								{:else if panelStrategy === 'market'}
 									<MarketOrder
 										orderSide={panelOrderSide}
-										assetToken={currentPythToken}
+										assetToken={currentApiToken}
 										{orderbookQuotesQuery}
 										{buyPrice}
 										{sellPrice}
@@ -2159,7 +2097,7 @@
 										<svelte:component
 											this={Mod.default}
 											orderSide={panelOrderSide}
-											assetToken={currentPythToken}
+											assetToken={currentApiToken}
 											displayDenom={$panelDenom}
 											wrapRatio={currentRatio}
 										/>
@@ -2361,8 +2299,8 @@
 <WrapExplainerModal
 	show={$wrapExplainerOpen}
 	ratio={currentRatio}
-	wrappedSymbol={currentPythToken?.symbol ?? currentToken?.symbol ?? ''}
-	assetSymbol={(currentPythToken?.symbol ?? currentToken?.symbol ?? '').replace(/^wt/, 't')}
+	wrappedSymbol={currentApiToken?.symbol ?? currentToken?.symbol ?? ''}
+	assetSymbol={(currentApiToken?.symbol ?? currentToken?.symbol ?? '').replace(/^wt/, 't')}
 	equityName={currentToken?.name ?? currentToken?.symbol ?? ''}
 	onClose={closeWrapExplainer}
 />

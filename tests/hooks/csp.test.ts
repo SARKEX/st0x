@@ -75,9 +75,11 @@ describe('hooks.server CSP', () => {
 		expect(csp).toMatch(/object-src 'none'/);
 	});
 
-	it('connect-src includes Pyth Hermes endpoint (price-feed dependency)', async () => {
+	it('connect-src excludes retired display-price feeds but preserves order execution', async () => {
 		const csp = await getCspForPath('/trade');
-		expect(csp).toContain('hermes.pyth.network');
+		expect(csp).not.toContain('hermes.pyth.network');
+		expect(csp).toContain('st0x-oracle-server.fly.dev');
+		expect(csp).toContain('rain-oracle-server.fly.dev');
 	});
 
 	it('X-Frame-Options DENY is set (defense-in-depth alongside frame-ancestors)', async () => {
