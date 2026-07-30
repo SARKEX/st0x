@@ -5,7 +5,7 @@
  * the focused module directly:
  *   - transactionShared (types + leaf store + status helpers)
  *   - deployTransactionStore (deploy / wrap / withdraw / remove-order methods)
- *   - marketTakeStore (5 take-order orchestration methods)
+ *   - marketTakeStore (4 take-order orchestration methods)
  *   - approvalStore (ensureAllowance utility)
  *   - partialFillDetection (detectPartialFill helper)
  *

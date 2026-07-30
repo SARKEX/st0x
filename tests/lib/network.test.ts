@@ -76,7 +76,6 @@ describe('network', () => {
 			const token = getDefaultPaymentTokenForNetwork(8453);
 			expect(token?.address).toBeDefined();
 			expect(token?.name).toBeDefined();
-			expect(token?.priceFeedId).toBeDefined();
 		});
 	});
 
@@ -189,7 +188,6 @@ describe('network', () => {
 				expect(token.symbol).toBeDefined();
 				expect(token.decimals).toBeDefined();
 				expect(token.chainId).toBeDefined();
-				expect(token.priceFeedId).toBeDefined();
 				expect(token.category).toBe('ST0x');
 			});
 		});
@@ -207,15 +205,6 @@ describe('network', () => {
 				expect(token.decimals).toBeGreaterThanOrEqual(0);
 				expect(token.decimals).toBeLessThanOrEqual(30);
 			});
-		});
-
-		it('should have valid price feed IDs', () => {
-			const allTokens = [...TOKENS, ...CRYPTO_TOKENS];
-			allTokens
-				.filter((token) => token.priceFeedId !== '')
-				.forEach((token) => {
-					expect(token.priceFeedId).toMatch(/^0x[a-fA-F0-9]{64}$/);
-				});
 		});
 	});
 

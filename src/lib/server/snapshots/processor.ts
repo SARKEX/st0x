@@ -160,7 +160,6 @@ function toSnapshotPrice(tokenPrice: ApiMarketPrice | undefined): SnapshotPrice 
 	return {
 		price: Number(tokenPrice.midpoint),
 		confidence: null,
-		priceFeedId: '',
 		pricePublishTime: tokenPrice.observedAt
 	};
 }

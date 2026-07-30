@@ -9,7 +9,7 @@
 	import transactionStore from '$lib/stores/transaction';
 	import { currentNetwork, reviewStrategyOnDeploy } from '$lib/stores';
 	import { priceToIoratioString } from '$lib/utils/derivations';
-	import type { PythToken } from '$lib/types';
+	import type { Token } from '$lib/types';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isAuthenticated } from '$lib/stores/authStore';
@@ -67,7 +67,7 @@
 	/**
 	 * assetToken: The non-settlement token being traded (from prop)
 	 */
-	export let assetToken: PythToken | undefined;
+	export let assetToken: Token | undefined;
 	export let currentPrice: string | undefined = undefined; // Current market price
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 	export let buyPrice: number | null = null; // Best bid price (what you get when selling)

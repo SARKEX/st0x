@@ -48,7 +48,7 @@ export default defineConfig({
 		reuseExistingServer: !process.env.CI,
 		env: {
 			// E2E=1 — relaxes connect-src in src/lib/server/csp.ts so the preview
-			// build's CSP allows anvil RPC + Goldsky + Pyth.
+			// build's CSP allows anvil RPC + Goldsky.
 			E2E: '1',
 			// auth.ts (and other server modules) throw at load-time when this
 			// secret is unset. Synthetic value — the E2E suite never authenticates

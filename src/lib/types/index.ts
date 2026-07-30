@@ -4,17 +4,13 @@ export interface Token {
 	decimals: number;
 	symbol: string;
 	name: string;
+	logoUrl?: string;
 }
 
 export interface Sft {
 	name: string;
 	symbol: string;
 	address: string;
-}
-
-export interface PythToken extends Token {
-	priceFeedId: string;
-	logoUrl?: string;
 }
 
 export enum FetchStatus {

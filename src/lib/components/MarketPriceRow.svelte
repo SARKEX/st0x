@@ -1,16 +1,12 @@
 <script lang="ts">
 	import { currentNetwork } from '$lib/stores';
-	import type { PythToken } from '$lib/types';
+	import type { CategorizedToken } from '$lib/config/tokens';
 	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 
-	type CommonToken = Partial<PythToken> & {
-		symbol?: string;
-		address: string;
-		tradingViewSymbol?: string;
-	};
+	type CommonToken = Partial<CategorizedToken> & { address: string };
 	export let token: CommonToken;
 	export let tokenQuotes: TradingViewQuote[] = [];
 

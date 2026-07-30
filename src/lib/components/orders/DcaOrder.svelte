@@ -3,7 +3,7 @@
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import type { CategorizedToken } from '$lib/config/network';
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
-	import type { PythToken } from '$lib/types';
+	import type { Token } from '$lib/types';
 	import { validateBaseline, validatePeriod, validateSelectedAmount } from '$lib/utils/validation';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { formatUnits } from 'viem';
@@ -37,7 +37,7 @@
 			? 'bg-green-500 hover:bg-green-600 text-text'
 			: 'bg-red-500 hover:bg-red-600 text-text';
 
-	export let assetToken: PythToken | undefined; // The token we're accumulating
+	export let assetToken: Token | undefined; // The token we're accumulating
 	/** Share-denominated display toggle — see MarketOrder for the contract. */
 	export let displayDenom: 'wrapped' | 'unwrapped' = 'wrapped';
 	export let wrapRatio: number = 1;

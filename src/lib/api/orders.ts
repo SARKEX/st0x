@@ -12,7 +12,7 @@ import {
 	getDefaultPaymentTokenForNetwork
 } from '$lib/config/network';
 import { describeQuote, normalizeAddress } from '$lib/utils/tokenMath';
-import type { PythToken } from '$lib/types';
+import type { Token } from '$lib/types';
 import { Float } from '@rainlanguage/float';
 import type { OrderV4, SgOrder } from '@rainlanguage/raindex';
 import { AbiCoder } from 'ethers';
@@ -89,7 +89,7 @@ async function runWithConcurrency<T>(
 	return results;
 }
 
-function getTokenMetadata(address: string, tokens: PythToken[]) {
+function getTokenMetadata(address: string, tokens: Token[]) {
 	const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
 	return {
 		symbol: token?.symbol ?? 'UNKNOWN',
@@ -105,9 +105,9 @@ function getTokenMetadata(address: string, tokens: PythToken[]) {
  * and computeEmergencyRatioHex which expect hex Float format.
  *
  * Orders with no live quote (`ioRatio === '-'`, i.e. the API's on-chain `quote()`
- * call reverted — typically Pyth-oracle orders quoted without a signed context) are
- * dropped entirely. They cannot be honoured at any displayable price, so showing them
- * in the depth chart would advertise liquidity that doesn't actually execute.
+ * call reverted) are dropped entirely. They cannot be honoured at any displayable
+ * price, so showing them in the depth chart would advertise liquidity that doesn't
+ * actually execute.
  *
  * The sgOrder is created as a minimal stub with just orderHash — marketOrderExecution.ts
  * hydrates the full order from Raindex before executing.
@@ -115,7 +115,7 @@ function getTokenMetadata(address: string, tokens: PythToken[]) {
 function convertApiOrderToProcessedQuote(
 	order: ApiOrderSummary,
 	quoteTokenAddress: string,
-	allTokens: PythToken[],
+	allTokens: Token[],
 	_networkId: number
 ): ProcessedQuote | null {
 	// Skip orders with zero balance
@@ -132,8 +132,7 @@ function convertApiOrderToProcessedQuote(
 	}
 
 	if (!order.ioRatio || order.ioRatio === '-') {
-		// On-chain quote() failed (e.g. Pyth-oracle order quoted without signed context).
-		// Drop the order — it cannot be honoured at the price the chart would show.
+		// The on-chain quote failed, so the order cannot be honoured at the displayed price.
 		return null;
 	}
 	// Convert ioRatio decimal to hex Float for consumers expecting hex (e.g. computeEmergencyRatioHex)
@@ -216,8 +215,8 @@ function convertApiOrderToProcessedQuote(
 
 function resolveNetworkTokens(
 	networkId: number,
-	overridePaymentToken?: PythToken
-): { paymentToken: PythToken; stockTokens: PythToken[]; allTokens: PythToken[] } {
+	overridePaymentToken?: Token
+): { paymentToken: Token; stockTokens: Token[]; allTokens: Token[] } {
 	if (!networks.some((n) => n.id === networkId)) {
 		throw new Error(`Network with id ${networkId} not found`);
 	}
@@ -243,7 +242,7 @@ function resolveNetworkTokens(
  */
 export async function fetchAndQuotePaymentTokenOrders(
 	networkId: number = 8453,
-	overridePaymentToken?: PythToken,
+	overridePaymentToken?: Token,
 	fetchOrders: OrdersByTokenFetcher = apiGetOrdersByToken
 ) {
 	const { paymentToken, stockTokens, allTokens } = resolveNetworkTokens(
@@ -302,7 +301,7 @@ export async function fetchAndQuotePaymentTokenOrders(
 export async function fetchAndQuoteOwnerOrders(
 	networkId: number,
 	ownerAddress: string,
-	overridePaymentToken?: PythToken
+	overridePaymentToken?: Token
 ): Promise<ProcessedQuote[]> {
 	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
 	const chainId = networks.find((n) => n.id === networkId)?.chainId;
@@ -344,7 +343,7 @@ export async function fetchAndQuoteOwnerOrders(
 export async function fetchAndQuoteTokenOrders(
 	networkId: number,
 	tokenAddress: string,
-	overridePaymentToken?: PythToken
+	overridePaymentToken?: Token
 ) {
 	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
 

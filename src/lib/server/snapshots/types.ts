@@ -22,8 +22,6 @@ export interface SnapshotPrice {
 	price: number | null; // USD price at snapshot time
 	/** Retained for backward compatibility with existing snapshot blobs. */
 	confidence: number | null;
-	/** Empty for REST midpoint snapshots; retained for old blob compatibility. */
-	priceFeedId: string;
 	pricePublishTime: number | null; // REST observation timestamp
 }
 

@@ -15,14 +15,14 @@
 //
 // FORK_BLOCK selection
 // --------------------
-// The Rain SDK, Goldsky subgraph, ST0x REST API, and Pyth Hermes are all LIVE
-// data sources — they reflect "now", not the fork. If the fork is pinned days
+// The Rain SDK, Goldsky subgraph, and ST0x REST API are all LIVE data sources —
+// they reflect "now", not the fork. If the fork is pinned days
 // in the past, every UI-driven query sees one reality and the on-chain SDK
 // simulation sees another, and the test has to manually stub each divergence.
 // To keep the fixture honest, we instead pin the fork as close to "now" as the
 // archive RPC allows: latest block minus a small safety margin, REQUIRING that
 // the chosen block falls inside NYSE market hours so the orders' Rainlang
-// market-hours gate and on-chain Pyth freshness both hold.
+// market-hours gate and on-chain oracle freshness both hold.
 //
 // Override path: set FORK_BLOCK env var to a specific number to bypass
 // dynamic selection (useful for reproducing a specific past failure).
@@ -133,7 +133,7 @@ export default async function globalSetup(): Promise<void> {
 	process.env.FORK_BLOCK = String(forkBlock);
 	// Block timestamp (UNIX seconds) — consumed by the per-page Date.now() init
 	// script in fixtures.ts so the browser's wall-clock-driven gates
-	// (marketHours.isOutsideMarketHours, Pyth freshness) agree with the fork
+	// (marketHours.isOutsideMarketHours and on-chain oracle freshness) agree with the fork
 	// instead of with the host's real-world clock (which may be a weekend).
 	process.env.FORK_BLOCK_TS = String(forkBlockTs);
 }

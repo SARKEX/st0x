@@ -17,7 +17,7 @@
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
 		MAX_SLIPPAGE_BPS,
 		executeMarketOrder,
-		oracleReferenceIoRatio
+		toReferenceIoRatio
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
@@ -366,7 +366,7 @@
 	$: quoteReferencePrice = assetToken
 		? getMidpointPrice($midpointPricesQuery?.data, assetToken.address)?.price
 		: undefined;
-	$: quoteReferenceIoRatio = oracleReferenceIoRatio(orderSide, quoteReferencePrice);
+	$: quoteReferenceIoRatio = toReferenceIoRatio(orderSide, quoteReferencePrice);
 	$: marketQuoteRequest =
 		selectedAmount > 0n && assetToken && paymentToken && $currentNetwork
 			? buildMarketSwapQuoteRequest(
@@ -620,7 +620,7 @@
 					$midpointPricesQuery?.data,
 					assetToken.address
 				)?.price;
-				const referenceIoRatio = oracleReferenceIoRatio(orderSide, referencePrice);
+				const referenceIoRatio = toReferenceIoRatio(orderSide, referencePrice);
 				activeStage = 'calldata';
 				const result = await executeMarketOrder({
 					orderSide,

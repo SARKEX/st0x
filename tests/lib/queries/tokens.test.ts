@@ -72,7 +72,6 @@ describe('normalizeApiTokensForNetwork', () => {
 		expect(tokens).toHaveLength(1);
 		expect(tokens[0].symbol).toBe('wtCOIN');
 		expect(tokens[0].logoUrl).toBe('https://st0x.io/images/COIN-from-api.png');
-		expect(tokens[0].priceFeedId).toBe('');
 		expect(tokens[0].legacyAddress).toBeUndefined();
 	});
 

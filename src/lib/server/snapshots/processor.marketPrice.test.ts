@@ -30,7 +30,6 @@ describe('snapshot REST market prices', () => {
 		expect(snapshot.price).toEqual({
 			price: 100,
 			confidence: null,
-			priceFeedId: '',
 			pricePublishTime: 1_784_799_940
 		});
 		expect(snapshot.priceTimestamp).toBe(1_784_799_940);
