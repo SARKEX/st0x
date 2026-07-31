@@ -111,7 +111,7 @@
 
 	{#if (desktop && !collapsed) || (!desktop && visible)}
 		<!-- Assets List (scrollable) -->
-		<div class="flex-1 overflow-y-auto p-3">
+		<div class="asset-scrollbar flex-1 overflow-y-auto p-3">
 			<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-text-muted">
 				Assets
 			</div>
@@ -161,3 +161,25 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* Keep the long asset list scrollable without the browser's thick default
+	   thumb reading as a detached vertical UI bar beside the content. */
+	.asset-scrollbar {
+		scrollbar-color: var(--line-strong) transparent;
+		scrollbar-width: thin;
+	}
+
+	.asset-scrollbar::-webkit-scrollbar {
+		width: 4px;
+	}
+
+	.asset-scrollbar::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.asset-scrollbar::-webkit-scrollbar-thumb {
+		border-radius: var(--pill);
+		background: var(--line-strong);
+	}
+</style>

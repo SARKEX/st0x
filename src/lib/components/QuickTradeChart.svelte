@@ -26,13 +26,15 @@
 	// the data in it, so anything calmer than MIN_RANGE_PCT reads as flat.
 	const MIN_RANGE_PCT = 0.06;
 
-	// Deterministic decorative wave for the no-history fallback (no Math.random, so
-	// SSR and client render identically).
-	const FALLBACK_SERIES: number[] = (() => {
-		const a: number[] = [];
-		for (let i = 0; i <= 36; i++) a.push(Math.sin(i / 2.4) * 5 + Math.sin(i / 6) * 3);
-		return a;
-	})();
+	// Deterministic, restrained market silhouette for the no-history fallback
+	// (no Math.random, so SSR and client render identically). Keep the movement
+	// modest: the old overlapping sine waves stretched into oversized peaks and
+	// read as broken chart geometry.
+	const FALLBACK_SERIES = [
+		100, 100.4, 100.8, 100.5, 101.1, 101.6, 101.4, 102, 102.5, 102.2, 102.8, 103.1, 102.9, 103.5,
+		104, 103.7, 104.3, 104.8, 104.6, 105.1, 105.5, 105.2, 105.8, 106.3, 106, 106.6, 107, 106.8,
+		107.4, 107.8, 107.5, 108
+	];
 
 	$: paymentToken = $currentNetwork?.defaultPaymentToken ?? null;
 	$: tradeQuery = createTokenTradeActivityQuery($currentNetwork, token?.address ?? null);
@@ -106,8 +108,8 @@
 		const floorSpan = mid > 0 ? mid * MIN_RANGE_PCT : dataSpan;
 		const span = hasRealData ? Math.max(dataSpan, floorSpan) : dataSpan;
 		const base = mid - span / 2;
-		const top = H * 0.22;
-		const band = H * 0.56;
+		const top = H * (hasRealData ? 0.22 : 0.36);
+		const band = H * (hasRealData ? 0.56 : 0.24);
 		const xy = series.map((v, i) => {
 			const x = series.length > 1 ? (i / (series.length - 1)) * W : 0;
 			const norm = span ? (v - base) / span : 0.5;
@@ -136,7 +138,7 @@
 	>
 		<defs>
 			<linearGradient id="qtchart" x1="0" y1="0" x2="0" y2="1">
-				<stop offset="0%" stop-color="#2de3a6" stop-opacity={hasRealData ? 0.22 : 0.08} />
+				<stop offset="0%" stop-color="#2de3a6" stop-opacity={hasRealData ? 0.22 : 0.06} />
 				<stop offset="100%" stop-color="#2de3a6" stop-opacity="0" />
 			</linearGradient>
 		</defs>
@@ -147,19 +149,13 @@
 			pathLength="1"
 			fill="none"
 			stroke="#2de3a6"
-			stroke-opacity={hasRealData ? 1 : 0.35}
+			stroke-opacity={hasRealData ? 1 : 0.5}
 			stroke-width="2"
 			stroke-linejoin="round"
 			stroke-linecap="round"
 			vector-effect="non-scaling-stroke"
 		/>
 	</svg>
-
-	{#if !hasRealData}
-		<!-- Placeholder/loading affordance: a soft emerald shimmer sweep so the
-		     decorative no-history chart reads as a live placeholder, not flat data. -->
-		<div class="qt-shimmer pointer-events-none absolute inset-0" aria-hidden="true"></div>
-	{/if}
 
 	{#if token}
 		<div class="absolute left-5 top-5 flex max-w-[55%] items-center gap-2.5">
@@ -222,29 +218,8 @@
 		}
 	}
 
-	/* Soft emerald highlight sweeping across the panel — the universal "loading" cue. */
-	.qt-shimmer {
-		background: linear-gradient(
-			100deg,
-			transparent 35%,
-			rgba(45, 227, 166, 0.12) 50%,
-			transparent 65%
-		);
-		background-size: 220% 100%;
-		animation: qt-shimmer 2.4s linear infinite;
-	}
-	@keyframes qt-shimmer {
-		0% {
-			background-position: 160% 0;
-		}
-		100% {
-			background-position: -160% 0;
-		}
-	}
-
 	@media (prefers-reduced-motion: reduce) {
-		.qt-draw,
-		.qt-shimmer {
+		.qt-draw {
 			animation: none;
 		}
 		.qt-draw {
