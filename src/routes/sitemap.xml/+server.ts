@@ -1,6 +1,5 @@
 import type { RequestHandler } from './$types';
 import { getSeoAssets } from '$lib/seo/assets';
-import { getPublishedDocSlugs } from '$lib/docs/processDocs';
 
 // Served dynamically (NOT prerendered): prerendering forces the server bundle
 // to initialize, and $lib/server/auth reads SESSION_SECRET from
@@ -18,13 +17,12 @@ const LASTMOD = '2026-07-15';
 // Public, indexable routes. App/auth-gated routes (/dashboard, /trade,
 // /strategies, /platform-metrics) are intentionally excluded. Per-asset
 // landing pages are enumerated from the token registry so new listings appear
-// automatically.
+// automatically. Product docs (/docs) are temporarily offline.
 const staticRoutes = ['/', '/faqs', '/terms', '/privacy-policy', '/markets'];
 
 export const GET: RequestHandler = () => {
 	const marketRoutes = getSeoAssets().map((a) => `/markets/${a.slug}`);
-	const docRoutes = getPublishedDocSlugs().map((slug) => `/docs/${slug}`);
-	const routes = [...staticRoutes, ...docRoutes, ...marketRoutes];
+	const routes = [...staticRoutes, ...marketRoutes];
 
 	const urls = routes
 		.map((path) => `	<url>\n		<loc>${SITE}${path}</loc>\n		<lastmod>${LASTMOD}</lastmod>\n	</url>`)

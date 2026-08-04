@@ -2123,7 +2123,6 @@
 			>
 				<a href="/terms" class="transition-colors hover:text-accent">Terms</a>
 				<a href="/privacy-policy" class="transition-colors hover:text-accent">Privacy</a>
-				<a href="/docs" class="transition-colors hover:text-accent">Docs</a>
 				<a href="/faqs" class="hidden transition-colors hover:text-accent sm:inline">FAQs</a>
 			</div>
 

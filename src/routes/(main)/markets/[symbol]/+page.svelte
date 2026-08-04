@@ -111,8 +111,7 @@
 					<h2 class="mb-2 text-xl font-semibold text-white">Ready to trade {asset.ticker}?</h2>
 					<p class="mb-4 leading-relaxed text-gray-400">
 						Connect a wallet and start trading tokenized {asset.companyName} on ST0x. New to tokenized
-						assets? Read the <a href="/docs" class="text-yellow-500 hover:underline">docs</a>
-						or the <a href="/faqs" class="text-yellow-500 hover:underline">FAQs</a>.
+						assets? Read the <a href="/faqs" class="text-yellow-500 hover:underline">FAQs</a>.
 					</p>
 					<a
 						href={tradeHref}

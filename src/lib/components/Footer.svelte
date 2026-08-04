@@ -6,7 +6,6 @@
 			class="mb-6 flex flex-wrap items-center justify-center gap-4 text-xs text-text-2 sm:gap-6 sm:text-sm"
 		>
 			<a href="/markets" class="transition-colors hover:text-accent">Markets</a>
-			<a href="/docs" class="transition-colors hover:text-accent">Docs</a>
 			<a href="/faqs" class="transition-colors hover:text-accent">FAQs</a>
 			<a href="/terms" class="transition-colors hover:text-accent">Terms</a>
 			<a href="/privacy-policy" class="transition-colors hover:text-accent">Privacy</a>

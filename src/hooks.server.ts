@@ -206,9 +206,6 @@ function isPublicPath(path: string): boolean {
 	if (path.startsWith('/api/auth/dynamic/')) return true;
 	if (path.startsWith('/auth/dynamic/')) return true;
 
-	// Docs are public
-	if (path.startsWith('/docs')) return true;
-
 	// Public API endpoints (rate-limited but no auth)
 	if (path.startsWith('/api/public/')) return true;
 	if (path === '/api/auth/csrf') return true;
