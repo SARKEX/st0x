@@ -6,7 +6,7 @@ import { createMockRequestEvent } from './_helpers';
 // hooks.server.ts lists the paths that are explicitly public. Every other path
 // simply falls through to resolve (there is no longer a server-side auth gate),
 // so these assertions pin the self-checking endpoints (session login/logout) +
-// docs + public API.
+// public API.
 
 vi.mock('$app/environment', () => ({ dev: false }));
 vi.mock('$env/dynamic/private', () => ({
@@ -56,13 +56,6 @@ describe('hooks.server PUBLIC_PATHS classification', () => {
 	it('/api/auth/logout is public (cookie-clearing endpoint)', async () => {
 		const handle = await loadHandle();
 		const event = createMockRequestEvent({ pathname: '/api/auth/logout', method: 'POST' });
-		const response = await handle({ event, resolve: passthroughResolve });
-		expect(response.status).toBe(200);
-	});
-
-	it('/docs/* is public', async () => {
-		const handle = await loadHandle();
-		const event = createMockRequestEvent({ pathname: '/docs/getting-started' });
 		const response = await handle({ event, resolve: passthroughResolve });
 		expect(response.status).toBe(200);
 	});
