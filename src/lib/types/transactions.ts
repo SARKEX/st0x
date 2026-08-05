@@ -68,4 +68,7 @@ export interface TakeOrdersParams {
 	 * When set, multi-leg flows can approve once instead of per `getTakeCalldata` leg.
 	 */
 	requiredPayerAllowance?: bigint;
+
+	/** Skip aggregated getTakeOrdersCalldata (e.g. dedicated single-order migration swaps). */
+	skipAggregatedTake?: boolean;
 }
