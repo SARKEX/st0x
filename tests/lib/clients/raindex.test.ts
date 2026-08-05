@@ -4,7 +4,7 @@ import { parseDocument } from 'yaml';
 vi.mock('$env/dynamic/public', () => ({ env: {} }));
 
 import { createRaindexClient } from '$lib/clients/raindex';
-import { prepareBrowserRaindexSettings } from '$lib/clients/raindexSettings';
+import { getRaindexRpcUrls, prepareBrowserRaindexSettings } from '$lib/clients/raindexSettings';
 
 const SETTINGS_URL = 'https://registry.example/settings.yaml';
 const SUBGRAPH_URL =
@@ -14,6 +14,8 @@ networks:
   base:
     rpcs:
       - https://mainnet.base.org
+      - https://base.drpc.org
+      - https://base-rpc.publicnode.com
     chain-id: 8453
     network-id: 8453
     currency: ETH
@@ -48,6 +50,7 @@ local-db-sync:
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	vi.useRealTimers();
 });
 
 describe('Raindex client configuration', () => {
@@ -64,6 +67,46 @@ describe('Raindex client configuration', () => {
 		expect(prepared.getIn(['subgraphs', 'base'])).toBe(SUBGRAPH_URL);
 	});
 
+	it('reads the ordered RPC list for a chain', () => {
+		expect(getRaindexRpcUrls(SETTINGS_YAML, 8453)).toEqual([
+			'https://mainnet.base.org',
+			'https://base.drpc.org',
+			'https://base-rpc.publicnode.com'
+		]);
+	});
+
+	it('rejects missing and invalid RPC lists', () => {
+		expect(() => getRaindexRpcUrls(SETTINGS_YAML, 1)).toThrow(
+			'Registry settings do not contain chain 1'
+		);
+		expect(() =>
+			getRaindexRpcUrls(
+				SETTINGS_YAML.replace('https://mainnet.base.org', 'ws://mainnet.base.org'),
+				8453
+			)
+		).toThrow('Registry settings contain an unsupported RPC URL for chain 8453');
+	});
+
+	it('aborts a stalled registry request so wallet initialization can fall back', async () => {
+		vi.useFakeTimers();
+		const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+			return new Promise<Response>((_resolve, reject) => {
+				init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), {
+					once: true
+				});
+			});
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const clientPromise = createRaindexClient();
+		const rejection = expect(clientPromise).rejects.toThrow('Timed out loading registry manifest');
+		await vi.advanceTimersByTimeAsync(5000);
+
+		await rejection;
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+	});
+
 	it('initializes from the canonical registry settings', async () => {
 		const fetchMock = vi
 			.fn()
@@ -77,8 +120,13 @@ describe('Raindex client configuration', () => {
 		expect(client).toBeDefined();
 		expect(snapshot.error).toBeUndefined();
 		expect(snapshot.value?.configured).toBe(false);
-		expect(fetchMock).toHaveBeenNthCalledWith(1, `${window.location.origin}/registry/manifest`);
-		expect(fetchMock).toHaveBeenNthCalledWith(2, SETTINGS_URL);
+		expect(fetchMock).toHaveBeenNthCalledWith(1, `${window.location.origin}/registry/manifest`, {
+			cache: 'no-store',
+			signal: expect.any(AbortSignal)
+		});
+		expect(fetchMock).toHaveBeenNthCalledWith(2, SETTINGS_URL, {
+			signal: expect.any(AbortSignal)
+		});
 		client.free();
 	});
 });

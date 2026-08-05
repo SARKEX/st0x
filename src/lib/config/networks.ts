@@ -1,4 +1,3 @@
-import { env as publicEnv } from '$env/dynamic/public';
 import type { Token } from '$lib/types';
 import {
 	DEFAULT_PAYMENT_TOKENS,
@@ -35,12 +34,6 @@ export interface Network {
 const basePaymentTokens = PAYMENT_TOKENS_BY_NETWORK[8453] ?? [];
 const baseDefaultPaymentToken = DEFAULT_PAYMENT_TOKENS[8453];
 
-// SEC-01 / Phase 3 D-02: PUBLIC_BASE_RPC_URL is the Alchemy app URL exposed to the
-// client bundle (single-key both-sides per D-02). Dev fallback keeps `npm run dev`
-// working for contributors who haven't provisioned their own Alchemy app. REL-02
-// (Wave 5) wraps server-side reads of this URL list in viem's fallback transport.
-const PRIMARY_RPC = publicEnv.PUBLIC_BASE_RPC_URL || 'https://base-rpc.publicnode.com';
-
 export const networks: Network[] = [
 	{
 		id: 8453,
@@ -52,10 +45,9 @@ export const networks: Network[] = [
 		blockExplorer: 'https://basescan.org',
 		sftExplorer: 'https://stox2.h20.market',
 		blockExplorerIcon: 'etherscan',
-		rpcUrl: PRIMARY_RPC,
+		rpcUrl: 'https://base-rpc.publicnode.com',
 		fallbackRpcUrls: [
 			'https://base-rpc.publicnode.com',
-			PRIMARY_RPC,
 			'https://base.llamarpc.com',
 			'https://base.meowrpc.com',
 			'https://base-mainnet.public.blastapi.io',

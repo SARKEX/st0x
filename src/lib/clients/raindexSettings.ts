@@ -1,8 +1,9 @@
 import { browser } from '$app/environment';
 import { env as publicEnv } from '$env/dynamic/public';
-import { isMap, parseDocument } from 'yaml';
+import { isMap, isScalar, isSeq, parseDocument } from 'yaml';
 
 const REGISTRY_MANIFEST_URL = publicEnv.PUBLIC_REGISTRY_URL || '/registry/manifest';
+const REGISTRY_REQUEST_TIMEOUT_MS = 5000;
 
 function appOrigin(): string {
 	if (browser && typeof window !== 'undefined' && window.location?.origin) {
@@ -68,17 +69,37 @@ export function prepareBrowserRaindexSettings(settingsYaml: string): string {
 	return document.toString();
 }
 
-async function fetchText(url: string, label: string): Promise<string> {
-	const response = await fetch(url);
-	if (!response.ok) {
-		throw new Error(`Failed to load ${label} (${response.status})`);
+async function fetchText(url: string, label: string, init?: RequestInit): Promise<string> {
+	const controller = new AbortController();
+	const externalSignal = init?.signal;
+	const abortFromExternalSignal = () => controller.abort(externalSignal?.reason);
+	if (externalSignal?.aborted) {
+		abortFromExternalSignal();
+	} else {
+		externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true });
 	}
-	return response.text();
+	const timeout = setTimeout(
+		() => controller.abort(new Error(`Timed out loading ${label}`)),
+		REGISTRY_REQUEST_TIMEOUT_MS
+	);
+
+	try {
+		const response = await fetch(url, { ...init, signal: controller.signal });
+		if (!response.ok) {
+			throw new Error(`Failed to load ${label} (${response.status})`);
+		}
+		return response.text();
+	} finally {
+		clearTimeout(timeout);
+		externalSignal?.removeEventListener('abort', abortFromExternalSignal);
+	}
 }
 
 async function fetchBrowserRaindexSettings(): Promise<string> {
 	const manifestUrl = resolveRegistryManifestUrl();
-	const manifest = await fetchText(manifestUrl, 'registry manifest');
+	// The manifest follows the REST API's active registry commit. Bypass the
+	// browser cache so an operator RPC rotation is picked up on the next reload.
+	const manifest = await fetchText(manifestUrl, 'registry manifest', { cache: 'no-store' });
 	const settingsUrl = settingsUrlFromManifest(manifest, manifestUrl);
 	const settings = await fetchText(settingsUrl, 'registry settings');
 	return prepareBrowserRaindexSettings(settings);
@@ -95,4 +116,57 @@ export function getBrowserRaindexSettings(): Promise<string> {
 		});
 	}
 	return settingsPromise;
+}
+
+/**
+ * Read the ordered RPC list for a chain from canonical Raindex settings.
+ *
+ * The order is operational configuration: viem tries the first URL first and
+ * falls through to the remaining URLs when a request fails.
+ */
+export function getRaindexRpcUrls(settingsYaml: string, chainId: number): string[] {
+	const document = parseDocument(settingsYaml, { schema: 'failsafe' });
+	if (document.errors.length > 0) {
+		throw new Error(`Registry settings YAML is invalid: ${document.errors[0].message}`);
+	}
+
+	const networks = document.get('networks', true);
+	if (!isMap(networks)) {
+		throw new Error('Registry settings do not contain a networks map');
+	}
+
+	const network = networks.items
+		.map((pair) => pair.value)
+		.find((value) => isMap(value) && String(value.get('chain-id')).trim() === String(chainId));
+	if (!isMap(network)) {
+		throw new Error(`Registry settings do not contain chain ${chainId}`);
+	}
+
+	const rpcs = network.get('rpcs', true);
+	if (!isSeq(rpcs) || rpcs.items.length === 0) {
+		throw new Error(`Registry settings do not contain RPC URLs for chain ${chainId}`);
+	}
+
+	return rpcs.items.map((item) => {
+		if (!isScalar(item) || typeof item.value !== 'string') {
+			throw new Error(`Registry settings contain a non-string RPC URL for chain ${chainId}`);
+		}
+
+		const value = item.value.trim();
+		let url: URL;
+		try {
+			url = new URL(value);
+		} catch {
+			throw new Error(`Registry settings contain an invalid RPC URL for chain ${chainId}`);
+		}
+		if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+			throw new Error(`Registry settings contain an unsupported RPC URL for chain ${chainId}`);
+		}
+		return value;
+	});
+}
+
+/** Load the active registry once and return its ordered RPC list for a chain. */
+export async function getBrowserRaindexRpcUrls(chainId: number): Promise<string[]> {
+	return getRaindexRpcUrls(await getBrowserRaindexSettings(), chainId);
 }
