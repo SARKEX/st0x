@@ -574,7 +574,7 @@ export const TOKENS: CategorizedToken[] = [
 		symbol: 'wtTQQQ',
 		decimals: 18,
 		name: 'Wrapped ProShares UltraPro QQQ ST0x',
-		logoUrl: '/images/TQQQ.svg',
+		logoUrl: '/images/TQQQ.png',
 		category: 'ST0x',
 		tradingViewSymbol: 'NASDAQ:TQQQ',
 		tradingViewMarket: 'america',
