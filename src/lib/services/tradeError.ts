@@ -276,6 +276,12 @@ export function toUserFacingTradeError(
 ): UserFacingTradeError {
 	if (isUserFacingTradeError(error)) return error;
 	if (isHttpError(error)) {
+		if (error.status === 429) {
+			return createTradeError('UPSTREAM_UNAVAILABLE', {
+				stage,
+				requestId: error.requestId
+			});
+		}
 		return createTradeError(error.code, { stage, requestId: error.requestId });
 	}
 
@@ -299,7 +305,10 @@ export function toUserFacingTradeError(
 	if (message.includes('market') && message.includes('closed')) {
 		return createTradeError('TRADE_MARKET_CLOSED', { stage });
 	}
-	if (/rpc|network|timed? ?out|timeout|connection/.test(message)) {
+	if (
+		candidate?.code === -32016 ||
+		/rpc|network|timed? ?out|timeout|connection|rate.?limit|too many requests|\b429\b/.test(message)
+	) {
 		return createTradeError('UPSTREAM_UNAVAILABLE', { stage });
 	}
 

@@ -100,11 +100,29 @@
 	}
 
 	const initWallet = async () => {
-		const [{ defaultConfig }, { base }, { injected, walletConnect }] = await Promise.all([
+		// svelte-wagmi's defaultConfig uses bare `http()` → public Base RPCs that
+		// rate-limit under load. Build the same stores/modal setup with an explicit
+		// fallback transport using the active registry's ordered Base RPC list.
+		const [
+			{ wagmiConfig, web3Modal, wagmiLoaded, configuredConnectors, init },
+			{ base },
+			{ injected, walletConnect },
+			{ createConfig, reconnect },
+			{ createWeb3Modal },
+			{ createClientRpcTransport },
+			{ getBrowserRaindexRpcUrls },
+			{ networks }
+		] = await Promise.all([
 			import('svelte-wagmi'),
 			import('@wagmi/core/chains'),
-			import('@wagmi/connectors')
+			import('@wagmi/connectors'),
+			import('@wagmi/core'),
+			import('@web3modal/wagmi'),
+			import('$lib/config/clientRpc'),
+			import('$lib/clients/raindexSettings'),
+			import('$lib/config/networks')
 		]);
+
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
 		const connectorsList = [injected()];
 		if (projectId && projectId.trim().length > 0) {
@@ -112,16 +130,44 @@
 			connectorsList.push(walletConnect({ projectId }));
 		}
 
-		const cfgOptions = {
-			autoConnect: true,
-			appName: 'st0x-liquidity',
-			chains: [base] as [typeof base],
-			connectors: connectorsList,
-			walletConnectProjectId: projectId || 'dummy-project-id'
-		};
+		configuredConnectors.set(connectorsList);
 
-		const erckit = defaultConfig(cfgOptions);
-		await erckit.init();
+		const configuredBaseNetwork = networks.find((network) => network.chainId === base.id);
+		const configuredBaseRpcUrls = configuredBaseNetwork
+			? [configuredBaseNetwork.rpcUrl, ...configuredBaseNetwork.fallbackRpcUrls]
+			: base.rpcUrls.default.http;
+		let rpcUrls: readonly string[];
+		try {
+			rpcUrls = await getBrowserRaindexRpcUrls(base.id);
+		} catch (error) {
+			// Wallet connectivity should survive a temporary registry outage.
+			// The statically configured list is an emergency fallback only; successful
+			// registry loads always use the complete operator-controlled list.
+			console.warn('[wallet] Failed to load registry RPCs; using configured Base RPCs:', error);
+			rpcUrls = configuredBaseRpcUrls;
+		}
+
+		const config = createConfig({
+			chains: [base],
+			connectors: connectorsList,
+			transports: {
+				[base.id]: createClientRpcTransport(rpcUrls)
+			}
+		});
+
+		wagmiConfig.set(config);
+		reconnect(config);
+
+		web3Modal.set(
+			createWeb3Modal({
+				wagmiConfig: config,
+				projectId: projectId || 'dummy-project-id',
+				enableAnalytics: true,
+				enableOnramp: true
+			})
+		);
+		wagmiLoaded.set(true);
+		await init();
 	};
 
 	// SEC-03 (Plan 03-08b atomic flip): the 'wallet-address' cookie is a

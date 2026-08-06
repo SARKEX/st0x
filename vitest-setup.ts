@@ -6,13 +6,9 @@ import { mockCurrentNetwork } from './tests/mocks/mockCurrentNetwork';
 const { mockWagmiConfigStore, mockSignerAddressStore, mockChainIdStore, mockConnectedStore, mockWrongNetworkStore } =
 	await vi.hoisted(() => import('./tests/mocks/mockStores'));
 
-// Plan 03-01 (SEC-01) added `import { env as publicEnv } from '$env/dynamic/public'` to
-// `src/lib/config/networks.ts`. SvelteKit's vitest resolver produces a virtual module
-// for `$env/dynamic/public` whose `env` is undefined in the test environment, so any
-// suite that transitively imports `networks.ts` (via stores, services, etc.) crashes
-// at import time with `Cannot read properties of undefined (reading 'env')`. Provide a
-// default empty `env` so the optional-chained `publicEnv.PUBLIC_BASE_RPC_URL` falls back
-// to the public RPC URL. Test files that need specific values can re-mock per-test.
+// SvelteKit's vitest resolver produces a virtual module for `$env/dynamic/public`
+// whose `env` is undefined in the test environment. Provide a default empty `env`;
+// test files that need specific values can re-mock per-test.
 vi.mock('$env/dynamic/public', () => ({ env: {} }));
 
 vi.mock('svelte-wagmi', async () => {

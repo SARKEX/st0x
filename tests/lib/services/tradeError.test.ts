@@ -50,6 +50,42 @@ describe('tradeError', () => {
 		});
 	});
 
+	it('maps RPC rate-limit failures to UPSTREAM_UNAVAILABLE instead of stage fallback', () => {
+		expect(toUserFacingTradeError(new Error('over rate limit'), 'approval')).toMatchObject({
+			code: 'UPSTREAM_UNAVAILABLE',
+			stage: 'approval',
+			errorClass: 'rpc_error'
+		});
+		expect(
+			toUserFacingTradeError({ code: -32016, message: 'over rate limit' }, 'approval')
+		).toMatchObject({
+			code: 'UPSTREAM_UNAVAILABLE'
+		});
+		expect(
+			toUserFacingTradeError(new Error('429 Too Many Requests'), 'confirmation')
+		).toMatchObject({
+			code: 'UPSTREAM_UNAVAILABLE',
+			stage: 'confirmation'
+		});
+	});
+
+	it('maps typed HTTP 429 errors while preserving their request ID', () => {
+		const error = new HttpError({
+			status: 429,
+			code: 'HTTP_429',
+			requestId: 'request-rate-limit',
+			publicMessage: 'over rate limit',
+			retryAfter: '1'
+		});
+
+		expect(toUserFacingTradeError(error, 'approval')).toMatchObject({
+			code: 'UPSTREAM_UNAVAILABLE',
+			requestId: 'request-rate-limit',
+			stage: 'approval',
+			errorClass: 'rpc_error'
+		});
+	});
+
 	it('rejects unsafe codes before they reach support details or telemetry', () => {
 		const result = createTradeError('bad code\nsecret', { stage: 'submission' });
 		expect(result.code).toBe('TRADE_UNKNOWN');

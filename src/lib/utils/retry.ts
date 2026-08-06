@@ -1,7 +1,17 @@
 /**
  * Retry wrapper for RPC calls that fail with transient errors.
- * Handles "header not found" and "block not found" errors from load-balanced RPC providers.
+ * Handles load-balanced "header/block not found" flake.
+ *
+ * Rate-limit retries are intentionally owned by the wagmi fallback transport.
+ * Retrying them here as well would replay the entire provider fallback chain.
  */
+function isTransientRpcError(error: unknown): boolean {
+	const errorMessage = String(
+		(error as { message?: unknown } | null)?.message ?? error ?? ''
+	).toLowerCase();
+	return errorMessage.includes('header not found') || errorMessage.includes('block not found');
+}
+
 export async function withRetry<T>(
 	fn: () => Promise<T>,
 	maxRetries = 3,
@@ -17,18 +27,9 @@ export async function withRetry<T>(
 			return await fn();
 		} catch (error) {
 			lastError = error;
-			const errorMessage = String(error);
-			// Retry on "header not found" or "block not found" RPC errors
-			if (
-				errorMessage.includes('header not found') ||
-				errorMessage.includes('block not found') ||
-				(error as { code?: number })?.code === -32000
-			) {
-				if (attempt < maxRetries - 1) {
-					// Exponential backoff
-					await new Promise((resolve) => setTimeout(resolve, delayMs * Math.pow(2, attempt)));
-					continue;
-				}
+			if (isTransientRpcError(error) && attempt < maxRetries - 1) {
+				await new Promise((resolve) => setTimeout(resolve, delayMs * Math.pow(2, attempt)));
+				continue;
 			}
 			throw error;
 		}

@@ -397,20 +397,11 @@ export const test = base.extend<UiFixtures>({
 				})
 			});
 		});
-		// Redirect Base mainnet RPC traffic to anvil. TWO separate clients hit
-		// these hosts:
-		//   1. svelte-wagmi's defaultConfig builds its HTTP transport from
-		//      chain.rpcUrls.default (https://mainnet.base.org for Base) for
-		//      balance reads, contract reads, etc.
-		//   2. The Rain SDK (@rainlanguage/raindex) has its OWN RPC client
-		//      configured via src/lib/clients/raindex.ts:SETTINGS_YAML. Its
-		//      URL is `PUBLIC_BASE_RPC_URL || 'https://base-rpc.publicnode.com'`.
-		//      In E2E we don't set PUBLIC_BASE_RPC_URL on the preview server,
-		//      so the SDK falls back to publicnode.com and its eth_call
-		//      simulation for getTakeOrdersCalldata MUST be forwarded to anvil
-		//      — otherwise the SDK simulates against LIVE Base mainnet, sees
-		//      zero USDC balance / zero allowance for the test wallet (we
-		//      only funded anvil), and returns isReady=false with no calldata.
+		// Redirect Base mainnet RPC traffic to anvil. Both wagmi/viem and the
+		// Rain SDK use the active registry's ordered RPC list. Their eth_call
+		// simulations MUST be forwarded to anvil — otherwise they run against
+		// live Base, where the locally funded test wallet has no balance or
+		// allowance.
 		await page.route(
 			/https:\/\/(mainnet\.base\.org|base-rpc\.publicnode\.com|.*\.g\.alchemy\.com|base\.llamarpc\.com|base\.meowrpc\.com|base-mainnet\.public\.blastapi\.io|gateway\.tenderly\.co|base\.drpc\.org|.*\.drpc\.live).*/,
 			async (route) => {
