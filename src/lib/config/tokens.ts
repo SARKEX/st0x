@@ -514,6 +514,71 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NYSE:PTY',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0xd50f561322fe3235DBc9Ec8b3aB7693383d8A425',
+		unwrappedAddress: '0x5cEfd886dD05001c2Fc32c313E05360D07f37d8f',
+		symbol: 'wtHOOD',
+		decimals: 18,
+		name: 'Wrapped Robinhood Markets, Inc. ST0x',
+		logoUrl: '/images/HOOD.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:HOOD',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0xCB9571aB96aA47374eF30D8E9ACCC1cD51064726',
+		unwrappedAddress: '0x57573351f3fdD20a57dEE4a7f836de1cE9900d4B',
+		symbol: 'wtORCL',
+		decimals: 18,
+		name: 'Wrapped Oracle Corporation ST0x',
+		logoUrl: '/images/ORCL.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:ORCL',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0xA759FAbbD866e6DB8bF76613C35825dC2e380bf0',
+		unwrappedAddress: '0x8518931497d2A8f07Bc607D1D3295b398D065A65',
+		symbol: 'wtSMCI',
+		decimals: 18,
+		name: 'Wrapped Super Micro Computer, Inc. ST0x',
+		logoUrl: '/images/SMCI.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:SMCI',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x7e5cc7eAe0455A07Ab4abf354E0f5657BA2888BD',
+		unwrappedAddress: '0x6B8fa7288dBEc7C1c62BfE59Cbd7Bec7EBF846C5',
+		symbol: 'wtBABA',
+		decimals: 18,
+		name: 'Wrapped Alibaba Group Holding Limited ADR ST0x',
+		logoUrl: '/images/BABA.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:BABA',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x295e9eCAb319006900a53b3f8D6Fcb0C131F4ada',
+		unwrappedAddress: '0xcA1A378F9a250131A2fE51c10f120FeF7EDCa56E',
+		symbol: 'wtTQQQ',
+		decimals: 18,
+		name: 'Wrapped ProShares UltraPro QQQ ST0x',
+		logoUrl: '/images/TQQQ.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:TQQQ',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
