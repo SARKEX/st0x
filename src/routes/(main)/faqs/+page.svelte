@@ -1,41 +1,72 @@
 <script lang="ts">
 	import Footer from '$lib/components/Footer.svelte';
 
-	// FAQPage structured data. Answers mirror the visible copy below (Google
-	// requires FAQ rich-result content to be present on the page) so this earns
-	// expandable Q&A snippets in search results.
-	const faqs = [
+	// Single source of truth for the FAQ. The visible page and the FAQPage
+	// structured data both render from this array, so a copy edit can never leave
+	// superseded wording circulating in search snippets and AI Overviews while the
+	// visible page reads correctly. Answers are paragraph arrays; the JSON-LD
+	// flattens them.
+	const faqs: { q: string; a: string[] }[] = [
 		{
 			q: 'What is ST0x?',
-			a: 'ST0x is a decentralized exchange (DEX) enabling 24/7 trading of tokenized real-world equities such as Nvidia, Tesla, and ETFs on-chain. It bridges traditional finance and DeFi.'
+			a: [
+				'ST0x is infrastructure for trading tokenised securities on a public blockchain. Tokens issued by S01 Issuer GmbH can be held in a self-custodied wallet and traded through public smart contracts on Base, at any hour.'
+			]
 		},
 		{
-			q: 'How does ST0x work?',
-			a: 'ST0x operates using a dual-entity structure: S1 Issuer GmbH issues tokenized equities, and SarkX BVI Ltd manages the decentralized matching and execution engine. Users place intent-based orders on-chain, executed via solvers when matched with liquidity.'
+			q: 'Who issues the tokenised securities?',
+			a: [
+				'S01 Issuer GmbH, registered in Berlin under HRB 270925 B, issues them under a base prospectus approved by the Financial Market Authority Liechtenstein.'
+			]
+		},
+		{
+			q: 'Who operates the trading contracts?',
+			a: [
+				'The contracts are deployed on Base, a public blockchain, and execute autonomously. No group entity or affiliate operates order matching, controls execution, or exercises discretion over access to those contracts. This website is one of several possible interfaces to the same public contracts.'
+			]
 		},
 		{
 			q: 'What assets can I trade on ST0x?',
-			a: 'Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). The underlying issued asset tokens represent corresponding assets held with a regulated broker such as Charles Schwab. ST0x markets trade wrapped vault shares whose exchange rate to the issued token can change over time.'
+			a: [
+				'Tokenised exposure to U.S.-listed stocks, exchange-traded funds and commodity trusts. ST0x markets trade wrapped vault shares whose exchange rate to the issued token can change over time.'
+			]
+		},
+		{
+			q: 'What do I own when I hold a token?',
+			a: [
+				'A token is a claim against S01 Issuer GmbH on the terms set out in the base prospectus. Holders are unsecured contractual creditors of the Issuer.',
+				'The Issuer holds a corresponding position in the underlying security with a regulated U.S. broker-dealer, for its own account, as a hedge against its obligations. That position is held for the Issuer, not on trust for holders. It is not pledged or charged in favour of holders and it is not segregated from the Issuer’s estate. If the Issuer became insolvent, holders would rank alongside its other unsecured creditors.'
+			]
 		},
 		{
 			q: 'How is liquidity handled?',
-			a: 'Liquidity is demand-driven. Arbitrageurs create or redeem tokens via the Core Bridge, aligning prices between off-chain markets and on-chain tokens.'
+			a: [
+				'Liquidity is demand-driven. Arbitrageurs create or redeem tokens via the Core Bridge, aligning prices between off-chain markets and on-chain tokens.'
+			]
 		},
 		{
 			q: 'Is ST0x custodial?',
-			a: 'No. ST0x is non-custodial. Users maintain control of their assets in smart contract vaults. Custody of underlying equities is separately managed by S1 via a regulated broker.'
+			a: [
+				'No. ST0x is non-custodial. Users maintain control of their assets in smart contract vaults.'
+			]
 		},
 		{
 			q: 'How do I access ST0x?',
-			a: 'Connect your DeFi wallet (e.g., MetaMask, WalletConnect). Regional restrictions apply at token issuance.'
+			a: [
+				'Connect your DeFi wallet (e.g., MetaMask, WalletConnect). Access requirements and eligibility restrictions apply. See the Base Prospectus and Final Terms for the jurisdictions and investor categories in which the tokens may be offered.'
+			]
 		},
 		{
 			q: 'Are there trading fees?',
-			a: 'Yes. Fees include trading fees, gas costs, and potential withdrawal fees, structured transparently.'
+			a: [
+				'Yes. Fees include trading fees, gas costs, and potential withdrawal fees, structured transparently.'
+			]
 		},
 		{
 			q: "What happens if I lose my wallet's private key?",
-			a: 'ST0x is non-custodial. Users are solely responsible for safeguarding their private keys.'
+			a: [
+				'ST0x is non-custodial. Users are solely responsible for safeguarding their private keys.'
+			]
 		}
 	];
 
@@ -45,7 +76,7 @@
 		mainEntity: faqs.map(({ q, a }) => ({
 			'@type': 'Question',
 			name: q,
-			acceptedAnswer: { '@type': 'Answer', text: a }
+			acceptedAnswer: { '@type': 'Answer', text: a.join('\n\n') }
 		}))
 	});
 </script>
@@ -61,91 +92,14 @@
 			<h1 class="mb-12 text-4xl font-bold tracking-tight text-text sm:text-5xl">FAQs</h1>
 
 			<div class="space-y-8">
-				<div class="border-b border-line pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">What is ST0x?</h3>
-					<p class="leading-relaxed text-text-2">
-						ST0x is a decentralized exchange (DEX) enabling 24/7 trading of tokenized real-world
-						equities such as Nvidia, Tesla, and ETFs on-chain. It bridges traditional finance and
-						DeFi.
-					</p>
-				</div>
-
-				<div class="border-b border-line pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">How does ST0x work?</h3>
-					<p class="leading-relaxed text-text-2">ST0x operates using a dual-entity structure:</p>
-					<ul class="ml-6 mt-3 list-disc space-y-2 text-text-2">
-						<li>S1 Issuer GmbH issues tokenized equities.</li>
-						<li>SarkX BVI Ltd manages the decentralized matching and execution engine.</li>
-					</ul>
-					<p class="mt-3 leading-relaxed text-text-2">
-						Users place intent-based orders on-chain, executed via solvers when matched with
-						liquidity.
-					</p>
-				</div>
-
-				<div class="border-b border-line pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">What assets can I trade on ST0x?</h3>
-					<p class="leading-relaxed text-text-2">
-						Tokenized public equities, ETFs, and potentially other real-world assets (RWAs). The
-						underlying issued asset tokens represent corresponding assets held with a regulated
-						broker such as Charles Schwab. ST0x markets trade wrapped vault shares whose exchange
-						rate to the issued token can change over time.
-					</p>
-				</div>
-
-				<div class="border-b border-line pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">How is liquidity handled?</h3>
-					<p class="leading-relaxed text-text-2">
-						Liquidity is demand-driven. Arbitrageurs create or redeem tokens via the Core Bridge,
-						aligning prices between off-chain markets and on-chain tokens.
-					</p>
-				</div>
-
-				<div class="border-b border-line pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">Is ST0x custodial?</h3>
-					<p class="leading-relaxed text-text-2">
-						No. ST0x is non-custodial. Users maintain control of their assets in smart contract
-						vaults. Custody of underlying equities is separately managed by S1 via a regulated
-						broker.
-					</p>
-				</div>
-
-				<!-- <div class="border-b border-line pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">Is ST0x regulated?</h3>
-					<p class="leading-relaxed text-text-2">
-						ST0x is structured to avoid exchange or brokerage licensing by:
-					</p>
-					<ul class="ml-6 mt-3 list-disc space-y-2 text-text-2">
-						<li>Keeping matching logic decentralized.</li>
-						<li>Utilizing separate regulated issuers.</li>
-						<li>Requiring KYC/KYB only during token issuance, not secondary trading.</li>
-					</ul>
-				</div> -->
-
-				<div class="border-b border-line pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">How do I access ST0x?</h3>
-					<p class="leading-relaxed text-text-2">
-						Connect your DeFi wallet (e.g., MetaMask, WalletConnect). Regional restrictions apply at
-						token issuance.
-					</p>
-				</div>
-
-				<div class="border-b border-line pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">Are there trading fees?</h3>
-					<p class="leading-relaxed text-text-2">
-						Yes. Fees include trading fees, gas costs, and potential withdrawal fees, structured
-						transparently.
-					</p>
-				</div>
-
-				<div class="pb-8">
-					<h3 class="mb-3 text-xl font-semibold text-text">
-						What happens if I lose my wallet's private key?
-					</h3>
-					<p class="leading-relaxed text-text-2">
-						ST0x is non-custodial. Users are solely responsible for safeguarding their private keys.
-					</p>
-				</div>
+				{#each faqs as faq, i (faq.q)}
+					<div class={i === faqs.length - 1 ? 'pb-8' : 'border-b border-line pb-8'}>
+						<h3 class="mb-3 text-xl font-semibold text-text">{faq.q}</h3>
+						{#each faq.a as paragraph, j (j)}
+							<p class="leading-relaxed text-text-2 {j > 0 ? 'mt-3' : ''}">{paragraph}</p>
+						{/each}
+					</div>
+				{/each}
 			</div>
 		</div>
 	</section>
