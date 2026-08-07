@@ -41,13 +41,13 @@
 		welcome: {
 			title: 'Welcome to ST0x',
 			description:
-				'U.S. equities on-chain. Fully decentralised. Fully backed by real equities. 24/7 trading.',
+				'Tokenised exposure to U.S.-listed assets, on-chain, at any hour. Each issued token carries a contractual Right of Exchange for the underlying.',
 			buttonText: 'Next',
 			isModal: true
 		},
 		'token-list': {
-			title: 'Tradeable Equities',
-			description: 'Currently tradeable equities. More coming soon.',
+			title: 'Tradeable assets',
+			description: 'Currently tradeable assets. More coming soon.',
 			targetSelector: '[data-tutorial="token-list"]',
 			buttonText: 'Next'
 		},
@@ -60,25 +60,25 @@
 		'buy-sell-panel': {
 			title: 'Place Orders',
 			description:
-				'Click Buy or Sell to open the order panel. Choose between market orders, limit orders, and DCAs. All orders are against USDC on Base.',
+				'This interface lets you submit orders to the on-chain contracts. Choose market, limit or DCA. All orders are against USDC on Base.',
 			targetSelector: ['[data-tutorial="buy-sell-buttons"]', '[data-tutorial="trade-panel"]'],
 			buttonText: 'Next'
 		},
 		tradingview: {
 			title: 'Live Market Data',
-			description: 'Live US exchange data on the underlying equity.',
+			description: 'Live US exchange data on the underlying instrument.',
 			targetSelector: ['[data-tutorial="symbol-overview"]', '[data-tutorial="tradingview"]'],
 			buttonText: 'Next'
 		},
 		'dex-activity': {
 			title: 'On-chain Market',
-			description: 'On-chain orderbook and transaction data, including your orders and holdings.',
+			description: 'On-chain order and transaction data, including your orders and holdings.',
 			targetSelector: '[data-tutorial="dex-activity"]',
 			buttonText: 'Next'
 		},
 		fundamentals: {
 			title: 'Learn More',
-			description: 'Explore the underlying equity details or token fundamentals.',
+			description: 'Explore the underlying instrument details or token fundamentals.',
 			targetSelector: '[data-tutorial="fundamentals"]',
 			buttonText: 'Finish'
 		},

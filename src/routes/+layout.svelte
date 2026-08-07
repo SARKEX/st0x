@@ -12,9 +12,12 @@
 	// load function. Without these, crawlers fall back to scraping visible body text
 	// (e.g. the footer risk warning).
 	const SITE_URL = 'https://www.st0x.io';
-	const DEFAULT_TITLE = 'ST0x — Trade & Earn on DeFi-Native Tokenized Assets';
+	// Metadata travels on every shared link and every search result, so it must not
+	// promise earning or yield: there is no yield product, no terms and no risk
+	// framing behind such a claim, and the audience is ungated.
+	const DEFAULT_TITLE = 'ST0x — Tokenised U.S.-Listed Assets, On-Chain';
 	const DEFAULT_DESCRIPTION =
-		'ST0x brings real-world assets on-chain as DeFi-first tokens. Trade tokenized stocks, ETFs & commodities 24/7, then earn yield with fully composable, on-chain assets.';
+		'Tokenised exposure to U.S.-listed stocks, ETFs and commodity trusts. On-chain, self-custodied, at any hour. Each issued token carries a contractual Right of Exchange.';
 	const OG_IMAGE = `${SITE_URL}/og-image.png`;
 
 	$: metaTitle = ($page.data?.title as string | undefined) ?? DEFAULT_TITLE;

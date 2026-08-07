@@ -214,7 +214,7 @@
 			<div class="mt-16 sm:mt-24 lg:mt-28">
 				<p class="text-accent/70 text-xs font-semibold uppercase tracking-[0.2em]">Why st0x</p>
 				<h2 class="mt-3 text-2xl font-bold tracking-tight text-text sm:text-[32px]">
-					Tokenised equities &amp; yield, done properly.
+					Tokenised stocks, ETFs &amp; commodity trusts, done properly.
 				</h2>
 				<div class="mt-10 grid gap-8 sm:grid-cols-3">
 					<!-- Decentralised -->
