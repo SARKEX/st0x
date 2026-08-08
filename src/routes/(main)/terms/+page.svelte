@@ -7,10 +7,10 @@
 	<section class="px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 		<div class="mx-auto max-w-3xl">
 			<h1 class="mb-6 text-4xl font-bold tracking-tight text-text sm:text-5xl">
-				DEX Website Terms of Use
+				Website Terms of Use
 			</h1>
 
-			<p class="mb-8 text-text-3"><em>Last Updated: 30 June 2025</em></p>
+			<p class="mb-8 text-text-3"><em>Last Updated: 7 August 2026</em></p>
 
 			<div class="mb-10 rounded-xl border border-amber-500/40 bg-amber-500/10 p-5">
 				<p class="font-semibold text-amber-300">
@@ -52,20 +52,14 @@
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">1. About the Website</h2>
 			<ol class="space-y-4 text-text-2">
 				<li>
-					The Website acts as an interface with the decentralised exchange known as ST0x 'order
-					book' ("<strong class="text-text">DEX</strong>"). The DEX is decentralised, meaning that
-					it has no single controller or owner. Specifically, Provider does not own, operate or
-					control the DEX.
+					The Website is an interface to public smart contracts deployed on the Base blockchain (the
+					"<strong class="text-text">Contracts</strong>"). The Contracts execute autonomously.
+					Neither the Provider nor any affiliate operates order matching, controls execution, or
+					exercises discretion over access to the Contracts.
 				</li>
 				<li>
-					The Website is provided to enable you to access the DEX but does not in any way perform
-					any of the functions of the DEX, which are handled exclusively by smart contracts
-					operating on a public blockchain.
-				</li>
-				<li>
-					The Website is merely one of a number of ways of accessing such smart contracts. Users can
-					interact with the same smart contracts otherwise directly, including to develop and build
-					their own user interfaces on top of such smart contracts.
+					The Website is one of several possible interfaces to the Contracts. Users may interact
+					with the same Contracts directly or through interfaces built by others.
 				</li>
 				<li>
 					We reserve the right in our sole discretion to modify or discontinue any parts of the
@@ -132,37 +126,25 @@
 					It is a condition of your use of the Website that all the information you provide on the
 					Website is correct, current, and complete.
 				</li>
-				<li>
-					No personal information is retained or processed in any way by Provider or on Provider's
-					behalf.
-				</li>
+				<li>Personal information is processed only as described in our Privacy Policy.</li>
 			</ol>
 
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">5. Intellectual Property Rights</h2>
 			<ol class="space-y-4 text-text-2">
 				<li>
-					Unless otherwise indicated, the Website is our exclusive property and all:
-					<ol type="a" class="ml-6 mt-2 space-y-2">
-						<li>
-							source code, databases, functionality, software, website designs, information, audio,
-							video, text, photographs, and graphics on the Website (collectively, the "<strong
-								class="text-text">Content</strong
-							>"), and
-						</li>
-						<li>
-							the trademarks, service marks, and logos contained therein (collectively, the "<strong
-								class="text-text">Marks</strong
-							>"),
-						</li>
-						<li>
-							are owned or controlled by us, and are protected by copyright, trademark and other
-							intellectual property laws and international conventions.
-						</li>
-					</ol>
+					Unless otherwise indicated, the source code, databases, functionality, software, designs,
+					information, audio, video, text, photographs and graphics on the Website (the "<strong
+						class="text-text">Content</strong
+					>") are owned or controlled by us.
 				</li>
 				<li>
-					You are not permitted to use the Marks without our prior written consent or, where we are
-					not the owner of the relevant Mark, of the owner of that Mark.
+					The Website displays trademarks, service marks and logos belonging to third parties. Those
+					marks remain the property of their respective owners. Their display does not indicate any
+					relationship with, sponsorship by or endorsement from their owners.
+				</li>
+				<li>
+					You may not use any mark displayed on the Website without the prior written consent of its
+					owner.
 				</li>
 				<li>
 					Except as expressly provided herein, Provider and its licensors do not and shall not be
@@ -182,7 +164,7 @@
 				</li>
 				<li>
 					You may not modify or alter the Content in any way. We reserve all rights not expressly
-					granted to you in and to the Website, the Content and the Marks.
+					granted to you in and to the Website and the Content.
 				</li>
 			</ol>
 
@@ -282,8 +264,8 @@
 				</li>
 				<li>
 					Where any descriptions of functionality are posted these are for informational and
-					demonstrationl purposes only and are not in any way intended to represent an endorsement
-					of any particular token or asset that may be referenced therein, in any manner.
+					demonstration purposes only and are not in any way intended to represent an endorsement of
+					any particular token or asset that may be referenced therein, in any manner.
 				</li>
 				<li>
 					The Website may include content provided by third parties, including materials provided by
@@ -372,7 +354,7 @@
 					You understand that we cannot and do not guarantee or warrant that files available for
 					downloading from the internet or the Website will be free of viruses or other destructive
 					code, nor that any in-browser data processing performed on the Website in connection with
-					placing orders on the DEX will be complete, accurate, or free from error.
+					placing orders through the Contracts will be complete, accurate, or free from error.
 				</li>
 				<li>
 					You are solely responsible for implementing sufficient procedures and checkpoints to
@@ -493,9 +475,9 @@
 				</li>
 				<li>
 					Any breach by you of these Terms of Use could cause Provider irreparable harm for which it
-					has no adequate remedies at law. Accordingly, Provider on is entitled to seek the remedies
-					of specific performance or injunctive relief for any such breach and nothing herein shall
-					be construed as preventing Provider from seeking such relief.
+					has no adequate remedies at law. Accordingly, Provider is entitled to seek the remedies of
+					specific performance or injunctive relief for any such breach and nothing herein shall be
+					construed as preventing Provider from seeking such relief.
 				</li>
 			</ol>
 
