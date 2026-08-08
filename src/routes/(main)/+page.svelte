@@ -23,7 +23,7 @@
 	}
 
 	// Typewriter animation for hero text
-	const typewriterWords = ['Global', 'Collateralised', 'DeFi-Ready', 'Transferable', 'Redeemable'];
+	const typewriterWords = ['Global', 'DeFi-Ready', 'Transferable', 'Right of Exchange'];
 	let currentWordIndex = 0;
 	let displayedText = '';
 	let isDeleting = false;
@@ -247,7 +247,7 @@
 						</p>
 					</div>
 
-					<!-- 1:1 Collateralised -->
+					<!-- Right of Exchange -->
 					<div class="icon-trigger flex flex-col items-center text-center">
 						<div class="pillar-float" style="animation-delay: -4.6s">
 							<div
@@ -256,9 +256,10 @@
 								<Icon name="shield" className="h-7 w-7" />
 							</div>
 						</div>
-						<h3 class="mt-4 text-base font-semibold text-text">1:1 Collateralised</h3>
+						<h3 class="mt-4 text-base font-semibold text-text">Right of Exchange</h3>
 						<p class="mt-2 max-w-[17rem] text-[13.5px] leading-relaxed text-text-2">
-							Every token fully collateralised with a legal right of exchange.
+							Every issued token carries a contractual right to delivery of the corresponding
+							security, on the terms set out in the Base Prospectus and Final Terms.
 						</p>
 					</div>
 				</div>

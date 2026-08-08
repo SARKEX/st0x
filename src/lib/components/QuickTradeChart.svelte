@@ -7,6 +7,7 @@
 	import { browser } from '$app/environment';
 	import { currentNetwork } from '$lib/stores';
 	import type { CategorizedToken } from '$lib/config/network';
+	import { getTokensByNetwork } from '$lib/config/tokens';
 	import { createTokenTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { apiTradesToHistoryPoints } from '$lib/utils/ohlc';
 
@@ -35,6 +36,11 @@
 	})();
 
 	$: paymentToken = $currentNetwork?.defaultPaymentToken ?? null;
+
+	// Market count is derived from the live token config rather than hardcoded — the
+	// programme is not equities-only (it holds ETFs, commodity trusts and a closed-end
+	// fund), so the label says "markets" and the number tracks what is actually listed.
+	$: marketCount = $currentNetwork ? getTokensByNetwork($currentNetwork.chainId).length : 0;
 	$: tradeQuery = createTokenTradeActivityQuery($currentNetwork, token?.address ?? null);
 
 	$: assetAddresses = (() => {
@@ -196,7 +202,9 @@
 			></span>
 			<span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
 		</span>
-		{hasRealData ? 'Live on-chain price' : 'Live market · 50+ equities'}
+		{hasRealData
+			? 'Live on-chain price'
+			: `Live market · ${marketCount} market${marketCount === 1 ? '' : 's'}`}
 	</div>
 </div>
 
