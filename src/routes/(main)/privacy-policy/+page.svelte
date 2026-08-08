@@ -20,8 +20,6 @@
 			</p>
 			<div class="mb-6 text-text-2">
 				<p class="font-semibold text-text">SARK X (BVI) Ltd</p>
-				<p>represented by the managing directors</p>
-				<p>Toby Meller and Nicholas Magliocchetti</p>
 				<p>Craigmuir Chambers, Road Town, Tortola</p>
 				<p>VG 1110, British Virgin Islands</p>
 				<p>
@@ -85,7 +83,7 @@
 			<p class="mb-4 text-text-2">
 				The legal bases for the setting of cookies are legitimate interests under Art. 6 (1) (f)
 				GDPR and, if applicable, your consent in accordance with Art. 6 (1) (a) GDPR in conjunction
-				with. &sect; 25 TTDSG. In the case of the initiation of a contract or an ongoing contractual
+				with. &sect; 25 TDDDG. In the case of the initiation of a contract or an ongoing contractual
 				relationship, the legal basis also follows from Art. 6 (1) (b) GDPR.
 			</p>
 			<p class="mb-4 text-text-2">
@@ -211,7 +209,7 @@
 				with immediate effect in accordance with Art. 7 (3) sentence 1 GDPR. Please note that data
 				processing that took place before the revocation is not affected by the revocation and is
 				therefore lawful despite the revocation. If you would like to make use of your right of
-				revocation, a simple notification to the person listed under no. 1.
+				revocation, a simple notification to the controller listed under no. 1 is sufficient.
 			</p>
 
 			<h3 class="mb-3 mt-6 text-xl font-semibold text-text">
@@ -246,9 +244,9 @@
 
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">5. Data integrity</h2>
 			<p class="mb-4 text-text-2">
-				To ensure data security on our website, we encrypt it using the SSL method in accordance
-				with the current state of the art. We use appropriate technical and organizational measures
-				to prevent accidental or intentional manipulation, partial or total loss, destruction or
+				To ensure data security on our website, we encrypt it using TLS in accordance with the
+				current state of the art. We use appropriate technical and organizational measures to
+				prevent accidental or intentional manipulation, partial or total loss, destruction or
 				unauthorized access to your data by third parties. Our security measures are continuously
 				improved in line with technological developments. Furthermore, all service providers
 				commissioned by us are obliged by means of appropriate contractual agreements to take
