@@ -51,7 +51,7 @@
 						Trade tokenized {asset.companyName}
 					</h1>
 					<p class="mt-2 text-lg text-gray-400">
-						{asset.ticker} · {asset.exchange} · {asset.tokenSymbol} on Base
+						{asset.ticker} · {asset.tokenSymbol} on Base
 					</p>
 				</div>
 			</div>
@@ -78,8 +78,9 @@
 					</h2>
 					<p class="leading-relaxed">
 						Tokenized {asset.companyName} ({asset.ticker}) provides on-chain exposure to the
-						underlying {asset.exchange}-listed security. The issued asset token represents shares
-						held with a regulated broker. On ST0x it trades as
+						underlying listed {asset.instrumentLabel}. The issued asset token is a claim against S01
+						Issuer GmbH on the terms set out in its base prospectus; holders are unsecured
+						contractual creditors of the Issuer. On ST0x it trades as
 						<span class="font-mono text-gray-200">{asset.tokenSymbol}</span>, a vault wrapper on
 						Base whose exchange rate to the issued token can change over time.
 					</p>
@@ -107,6 +108,13 @@
 					</ul>
 				</div>
 
+				{#if asset.riskDisclosure}
+					<div class="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-6">
+						<h2 class="mb-2 text-xl font-semibold text-amber-200">Product risk</h2>
+						<p class="leading-relaxed text-amber-100/90">{asset.riskDisclosure}</p>
+					</div>
+				{/if}
+
 				<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
 					<h2 class="mb-2 text-xl font-semibold text-white">Ready to trade {asset.ticker}?</h2>
 					<p class="mb-4 leading-relaxed text-gray-400">
@@ -123,7 +131,9 @@
 
 				<p class="text-xs leading-relaxed text-gray-600">
 					Trading tokenized assets involves substantial risk. Past performance does not guarantee
-					future results. Regional restrictions may apply at token issuance.
+					future results. Access requirements and eligibility restrictions apply. See the Base
+					Prospectus and Final Terms for the jurisdictions and investor categories in which the
+					tokens may be offered.
 				</p>
 			</div>
 		</div>

@@ -1,4 +1,10 @@
 import { TOKENS } from '$lib/config/tokens';
+import {
+	getInstrumentLabel,
+	getInstrumentRiskDisclosure,
+	getInstrumentType,
+	type InstrumentType
+} from '$lib/config/instruments';
 
 /**
  * SEO metadata for a single tokenized asset, derived from the token registry in
@@ -9,8 +15,12 @@ export interface SeoAsset {
 	slug: string;
 	/** Underlying ticker, uppercased. e.g. 'NVDA' */
 	ticker: string;
-	/** Listing venue of the underlying. e.g. 'NASDAQ' */
-	exchange: string;
+	/** What kind of instrument the underlying is. e.g. 'commodity-trust' */
+	instrumentType: InstrumentType;
+	/** Human-readable instrument category. e.g. 'commodity grantor trust' */
+	instrumentLabel: string;
+	/** Risk disclosure for complex instruments, or null where none is required. */
+	riskDisclosure: string | null;
 	/** Human-friendly underlying name. e.g. 'NVIDIA Corporation' */
 	companyName: string;
 	/** On-chain token symbol. e.g. 'wtNVDA' */
@@ -25,9 +35,16 @@ function toSeoAsset(token: (typeof TOKENS)[number]): SeoAsset | null {
 	const tv = token.tradingViewSymbol;
 	if (!tv) return null;
 
-	const [exchange, rawTicker] = tv.includes(':') ? tv.split(':') : ['', tv];
+	// Only the ticker is taken from the TradingView symbol. The prefix before the
+	// colon is TradingView's own namespace, not a listing venue — it renders
+	// "AMEX" for NYSE Arca-listed funds, for example — so it must not be
+	// published as the underlying's exchange. Listing venues are omitted from the
+	// pages until they are sourced and audited separately.
+	const rawTicker = tv.includes(':') ? tv.split(':')[1] : tv;
 	const ticker = rawTicker?.trim();
 	if (!ticker) return null;
+
+	const instrumentType = getInstrumentType(ticker);
 
 	const companyName = token.name
 		.replace(/^Wrapped\s+/i, '')
@@ -37,7 +54,9 @@ function toSeoAsset(token: (typeof TOKENS)[number]): SeoAsset | null {
 	return {
 		slug: ticker.toLowerCase(),
 		ticker,
-		exchange: exchange ?? '',
+		instrumentType,
+		instrumentLabel: getInstrumentLabel(instrumentType),
+		riskDisclosure: getInstrumentRiskDisclosure(instrumentType),
 		companyName,
 		tokenSymbol: token.symbol,
 		logoUrl: token.logoUrl,
