@@ -138,6 +138,19 @@ export interface ApiOrdersListResponse {
 	pagination: ApiOrdersPagination;
 }
 
+export interface ApiOrdersQueryRequest {
+	chainId: number;
+	tokenAddresses: string[];
+	ownerAddresses?: string[];
+	raindexAddresses?: string[];
+	orderHash?: string;
+	state?: 'active' | 'inactive' | 'all';
+	side?: 'input' | 'output';
+	page?: number;
+	pageSize?: number;
+	denomination?: 'wrapped' | 'unwrapped';
+}
+
 // ============================================================================
 // Trade Types
 // ============================================================================
@@ -416,6 +429,22 @@ export async function apiGetOrdersByToken(
 		state: options?.state
 	});
 	return fetchJson<ApiOrdersListResponse>(url);
+}
+
+/**
+ * Fetch a bounded page of orders matching a token set.
+ */
+export async function apiQueryOrders(
+	request: ApiOrdersQueryRequest,
+	signal?: AbortSignal
+): Promise<ApiOrdersListResponse> {
+	assertBrowser('apiQueryOrders');
+	return fetchJson<ApiOrdersListResponse>(apiUrl('/v1/orders/query'), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(request),
+		signal
+	});
 }
 
 /**

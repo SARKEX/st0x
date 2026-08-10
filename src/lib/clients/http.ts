@@ -62,8 +62,31 @@ export function isRateLimitError(error: unknown): boolean {
 	);
 }
 
-async function delay(ms: number) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
+function abortError(): Error {
+	const error = new Error('The operation was aborted');
+	error.name = 'AbortError';
+	return error;
+}
+
+async function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
+	if (!signal) {
+		await new Promise((resolve) => setTimeout(resolve, ms));
+		return;
+	}
+	if (signal.aborted) throw abortError();
+
+	await new Promise<void>((resolve, reject) => {
+		const onAbort = () => {
+			clearTimeout(timeout);
+			signal.removeEventListener('abort', onAbort);
+			reject(abortError());
+		};
+		const timeout = setTimeout(() => {
+			signal.removeEventListener('abort', onAbort);
+			resolve();
+		}, ms);
+		signal.addEventListener('abort', onAbort, { once: true });
+	});
 }
 
 function parseErrorEnvelope(text: string): ErrorEnvelope | null {
@@ -123,6 +146,7 @@ async function fetchWithRetry<T>(
 	let lastError: unknown;
 
 	while (attempt <= retries) {
+		if (requestInit.signal?.aborted) throw abortError();
 		try {
 			const response = await fetchFn(url, requestInit);
 			const text = await response.text();
@@ -131,7 +155,10 @@ async function fetchWithRetry<T>(
 				// Only retry on selected status codes
 				if (defaultRetryableStatuses.has(response.status) && attempt < retries) {
 					attempt += 1;
-					await delay(retryDelayFor(httpError, retryDelayMs * Math.pow(2, attempt - 1)));
+					await delay(
+						retryDelayFor(httpError, retryDelayMs * Math.pow(2, attempt - 1)),
+						requestInit.signal
+					);
 					continue;
 				}
 				throw httpError;
@@ -143,6 +170,9 @@ async function fetchWithRetry<T>(
 			);
 		} catch (error) {
 			lastError = error;
+			if (requestInit.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+				throw error;
+			}
 			if (isHttpError(error)) {
 				break;
 			}
@@ -150,7 +180,7 @@ async function fetchWithRetry<T>(
 				break;
 			}
 			attempt += 1;
-			await delay(retryDelayMs * Math.pow(2, attempt - 1));
+			await delay(retryDelayMs * Math.pow(2, attempt - 1), requestInit.signal);
 		}
 	}
 

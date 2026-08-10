@@ -87,6 +87,45 @@ describe('/api/st0x proxy', () => {
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
+	it('allows POST /v1/orders/query without unsafe URI-only shared caching', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					orders: [],
+					pagination: {
+						page: 1,
+						pageSize: 50,
+						totalOrders: 0,
+						totalPages: 0,
+						hasMore: false
+					}
+				}),
+				{
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				}
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const body = JSON.stringify({
+			chainId: 8453,
+			tokenAddresses: ['0xToken'],
+			page: 1,
+			pageSize: 50
+		});
+
+		const response = await POST(proxyEvent('POST', 'v1/orders/query', body));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://api.example.test/v1/orders/query?page=1',
+			expect.objectContaining({ method: 'POST' })
+		);
+		const init = fetchMock.mock.calls[0][1] as RequestInit;
+		expect(await new Response(init.body).text()).toBe(body);
+	});
+
 	it('allows POST /v1/swap/calldata without caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ to: '0xOrderbook', data: '0x', value: '0', approvals: [] }), {
