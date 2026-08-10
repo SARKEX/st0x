@@ -6,20 +6,29 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { rateLimiters, getClientIp } from '$lib/server/rateLimit';
-import { PUBLIC_PRICES_CACHE_CONTROL } from '$lib/config/publicPrices';
-import { getCachedPublicPrices } from '$lib/server/publicPricesCache';
+import { PUBLIC_PRICES_FAILURE_RETRY_SECONDS } from '$lib/config/publicPrices';
+import {
+	getCachedPublicPrices,
+	publicPricesCacheControl,
+	type PublicPricesSnapshot
+} from '$lib/server/publicPricesCache';
 import { networks } from '$lib/config/network';
-import { fetchMarketPrices, toWebsiteMarketPrices } from '$lib/server/marketPrices';
+import {
+	fetchMarketPrices,
+	St0xMarketPricesRateLimitError,
+	toWebsiteMarketPrices
+} from '$lib/server/marketPrices';
 import type { MidpointPrice } from '$lib/utils/midpointPrice';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
 
-export interface PublicPricesResponse {
-	success: boolean;
-	/** networkId (stringified) -> lowercased canonical token address -> price. */
-	prices: Record<string, Record<string, MidpointPrice>>;
-}
+export type PublicPricesResponse =
+	| PublicPricesSnapshot
+	| {
+			success: false;
+			prices: Record<string, Record<string, MidpointPrice>>;
+	  };
 
-async function computePrices(): Promise<PublicPricesResponse> {
+async function computePrices(): Promise<PublicPricesSnapshot> {
 	const entries = await Promise.all(
 		networks.map(async (network) => {
 			try {
@@ -59,17 +68,27 @@ export const GET: RequestHandler = async ({ request }) => {
 	}
 
 	try {
-		const data = await getCachedPublicPrices<PublicPricesResponse>(
-			computePrices,
-			(result) => result.success
-		);
+		const cached = await getCachedPublicPrices(computePrices);
 
-		return json(data, {
+		return json(cached.value, {
 			headers: {
-				'Cache-Control': PUBLIC_PRICES_CACHE_CONTROL
+				'Cache-Control': publicPricesCacheControl(cached)
 			}
 		});
 	} catch (error) {
+		if (error instanceof St0xMarketPricesRateLimitError) {
+			const retryAfterSeconds = Math.max(
+				1,
+				Math.ceil((error.retryAfterMs ?? PUBLIC_PRICES_FAILURE_RETRY_SECONDS * 1_000) / 1_000)
+			);
+			return json({ success: false, prices: {} } satisfies PublicPricesResponse, {
+				status: 429,
+				headers: {
+					'Retry-After': String(retryAfterSeconds),
+					'Cache-Control': 'no-store'
+				}
+			});
+		}
 		console.error('[Public Prices] Error:', error);
 		return json({ success: false, prices: {} } satisfies PublicPricesResponse, { status: 500 });
 	}

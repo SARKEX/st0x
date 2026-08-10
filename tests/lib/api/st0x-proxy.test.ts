@@ -35,7 +35,7 @@ describe('/api/st0x proxy', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('allows GET /v1/tokens without adding a proxy cache header', async () => {
+	it('edge-caches the stable GET /v1/tokens metadata response', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify([{ address: '0xToken', symbol: 'TOK', decimals: 18 }]), {
 				status: 200,
@@ -47,7 +47,9 @@ describe('/api/st0x proxy', () => {
 		const response = await GET(proxyEvent('GET', 'v1/tokens'));
 
 		expect(response.status).toBe(200);
-		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(response.headers.get('Cache-Control')).toBe(
+			'public, s-maxage=300, stale-while-revalidate=3600'
+		);
 		expect(fetchMock).toHaveBeenCalledWith(
 			'https://api.example.test/v1/tokens?page=1',
 			expect.objectContaining({
@@ -59,6 +61,21 @@ describe('/api/st0x proxy', () => {
 		expect((init.headers as Headers).get('Authorization')).toBe(
 			'Basic dGVzdC1rZXk6dGVzdC1zZWNyZXQ='
 		);
+	});
+
+	it('does not edge-cache a malformed successful token list', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify([{ address: '0xToken', decimals: 18 }]), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(proxyEvent('GET', 'v1/tokens'));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBeNull();
 	});
 
 	it('allows POST /v1/swap/quote and forwards the JSON body without caching', async () => {
@@ -400,7 +417,7 @@ describe('/api/st0x proxy', () => {
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(await response.text()).toBe('not json');
 		expect(warn).toHaveBeenCalledWith(
-			'[st0x-proxy] Skipping token details cache for unreadable response:',
+			'[st0x-proxy] Skipping token metadata cache for unreadable response:',
 			expect.any(String)
 		);
 	});

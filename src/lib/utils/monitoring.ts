@@ -19,6 +19,7 @@ export interface QueryFailureEvent {
 	endpoint?: string;
 	itemsKey?: string;
 	network?: string;
+	credentialLabel?: St0xCredentialLabel;
 	attempt?: number;
 	maxAttempts?: number;
 	skip?: number;
@@ -48,3 +49,4 @@ export function logQueryFailure(event: QueryFailureEvent): void {
 export function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
+import type { St0xCredentialLabel } from '$lib/types/st0x';

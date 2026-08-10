@@ -8,9 +8,11 @@
 
 import { env } from '$env/dynamic/private';
 import { getLogger, getRequestContext, requestIdOrUuid } from '$lib/server/logger';
+import { logSt0xRequestBudget } from '$lib/server/st0xBudgetTelemetry';
 import type { RequestEvent, RequestHandler } from './$types';
 
 const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
+const TOKEN_LIST_PATH = 'v1/tokens';
 
 function errorResponse(requestId: string, status: number, code: string, message: string): Response {
 	return new Response(
@@ -49,7 +51,11 @@ function getAuthHeader(): string {
 
 const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
 	{ method: 'GET', pattern: /^health$/ },
-	{ method: 'GET', pattern: /^v1\/tokens$/ },
+	{
+		method: 'GET',
+		pattern: /^v1\/tokens$/,
+		cache: 'public, s-maxage=300, stale-while-revalidate=3600'
+	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/details$/,
@@ -112,14 +118,35 @@ function matchProxyRoute(method: string, pathSuffix: string): { cache?: string }
 async function shouldCacheResponse(pathSuffix: string, response: Response): Promise<boolean> {
 	if (!response.ok) return false;
 
-	if (pathSuffix !== TOKEN_DETAILS_LIST_PATH) return true;
+	if (pathSuffix !== TOKEN_DETAILS_LIST_PATH && pathSuffix !== TOKEN_LIST_PATH) return true;
 
 	try {
-		const body = (await response.clone().json()) as { errors?: unknown };
-		return !Array.isArray(body.errors) || body.errors.length === 0;
+		const body = (await response.clone().json()) as unknown;
+		if (pathSuffix === TOKEN_LIST_PATH) {
+			return (
+				Array.isArray(body) &&
+				body.length > 0 &&
+				body.every((token) => {
+					if (!token || typeof token !== 'object' || Array.isArray(token)) return false;
+					const item = token as Record<string, unknown>;
+					return (
+						typeof item.address === 'string' &&
+						item.address.length > 0 &&
+						typeof item.symbol === 'string' &&
+						item.symbol.length > 0 &&
+						typeof item.decimals === 'number' &&
+						Number.isInteger(item.decimals) &&
+						item.decimals >= 0
+					);
+				})
+			);
+		}
+
+		const details = body as { errors?: unknown };
+		return !Array.isArray(details.errors) || details.errors.length === 0;
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Unknown parse error';
-		console.warn('[st0x-proxy] Skipping token details cache for unreadable response:', msg);
+		console.warn('[st0x-proxy] Skipping token metadata cache for unreadable response:', msg);
 		return false;
 	}
 }
@@ -166,6 +193,7 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	let response: Response;
 	try {
 		response = await fetch(targetUrl, init);
+		logSt0xRequestBudget(pathSuffix, 'general', response);
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Unknown upstream error';
 		getLogger().error(
