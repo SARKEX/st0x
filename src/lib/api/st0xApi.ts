@@ -222,6 +222,32 @@ export interface ApiTradesBatchResponse {
 	totalCount: number;
 }
 
+export interface ApiTradesOrderHashesQueryRequest {
+	orderHashes: string[];
+	tokenAddresses?: string[];
+	chainId?: number;
+	startTime?: number;
+	endTime?: number;
+	denomination?: 'wrapped' | 'unwrapped';
+	page?: never;
+	pageSize?: never;
+}
+
+export interface ApiTradesTokensQueryRequest {
+	orderHashes?: never;
+	tokenAddresses: string[];
+	chainId: number;
+	startTime: number;
+	endTime: number;
+	page?: number;
+	pageSize?: number;
+	denomination?: 'wrapped' | 'unwrapped';
+}
+
+export type ApiTradesQueryRequest = ApiTradesOrderHashesQueryRequest | ApiTradesTokensQueryRequest;
+
+export type ApiTradesQueryResponse = ApiTradesBatchResponse | ApiTradesByAddressResponse;
+
 // ============================================================================
 // Token Proof Types
 // ============================================================================
@@ -629,16 +655,40 @@ export async function apiGetOrdersByOwner(
 }
 
 /**
+ * Fetch trades through the REST batch query. The overloads preserve the legacy
+ * grouped order-hash response while exposing the paginated token-set mode.
+ */
+export function apiQueryTrades(
+	request: ApiTradesOrderHashesQueryRequest,
+	signal?: AbortSignal
+): Promise<ApiTradesBatchResponse>;
+export function apiQueryTrades(
+	request: ApiTradesTokensQueryRequest,
+	signal?: AbortSignal
+): Promise<ApiTradesByAddressResponse>;
+export function apiQueryTrades(
+	request: ApiTradesQueryRequest,
+	signal?: AbortSignal
+): Promise<ApiTradesQueryResponse>;
+export async function apiQueryTrades(
+	request: ApiTradesQueryRequest,
+	signal?: AbortSignal
+): Promise<ApiTradesQueryResponse> {
+	assertBrowser('apiQueryTrades');
+	return fetchJson<ApiTradesQueryResponse>(apiUrl('/v1/trades/query'), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(request),
+		signal
+	});
+}
+
+/**
  * Fetch trades for multiple orders in a single query request.
  * Used to compute filled amounts for a user's deployed orders.
  */
 export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTradesBatchResponse> {
-	assertBrowser('apiGetTradesBatch');
-	return fetchJson<ApiTradesBatchResponse>(apiUrl('/v1/trades/query'), {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ orderHashes })
-	});
+	return apiQueryTrades({ orderHashes });
 }
 
 /**
