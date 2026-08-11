@@ -78,6 +78,7 @@ describe('st0x API client', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const result = await apiGetSwapCalldataV2({
+			chainId: 8453,
 			taker: '0x0000000000000000000000000000000000000002',
 			inputToken: '0x0000000000000000000000000000000000000003',
 			outputToken: '0x0000000000000000000000000000000000000004',
@@ -92,6 +93,7 @@ describe('st0x API client', () => {
 			expect.objectContaining({
 				method: 'POST',
 				body: JSON.stringify({
+					chainId: 8453,
 					taker: '0x0000000000000000000000000000000000000002',
 					inputToken: '0x0000000000000000000000000000000000000003',
 					outputToken: '0x0000000000000000000000000000000000000004',
@@ -125,6 +127,7 @@ describe('st0x API client', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const request = {
+			chainId: 8453,
 			taker: '0x0000000000000000000000000000000000000002',
 			inputToken: responseBody.inputToken,
 			outputToken: responseBody.outputToken,
@@ -177,7 +180,7 @@ describe('st0x API client', () => {
 
 		await expect(apiQueryOrders(request, signal)).resolves.toEqual(response);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'/api/st0x/v1/orders/query',
+			'/api/st0x/v2/orders/query',
 			expect.objectContaining({
 				method: 'POST',
 				body: JSON.stringify(request),
@@ -217,7 +220,7 @@ describe('st0x API client', () => {
 
 		await expect(apiQueryTrades(request, signal)).resolves.toEqual(response);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'/api/st0x/v1/trades/query',
+			'/api/st0x/v2/trades/query',
 			expect.objectContaining({
 				method: 'POST',
 				body: JSON.stringify(request),
@@ -239,12 +242,12 @@ describe('st0x API client', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		await expect(apiGetTradesBatch(['0xhash'])).resolves.toEqual(response);
+		await expect(apiGetTradesBatch(['0xhash'], 8453)).resolves.toEqual(response);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'/api/st0x/v1/trades/query',
+			'/api/st0x/v2/trades/query',
 			expect.objectContaining({
 				method: 'POST',
-				body: JSON.stringify({ orderHashes: ['0xhash'] })
+				body: JSON.stringify({ orderHashes: ['0xhash'], chainId: 8453 })
 			})
 		);
 	});

@@ -10,6 +10,7 @@ import {
 import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
 import { readSession } from '$lib/server/walletSession';
+import { getServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 export const GET: RequestHandler = async ({ url, request, cookies }) => {
 	// SEC-06 + SEC-03 (Plan 03-08b atomic flip): rate-limit BEFORE constructing
@@ -31,6 +32,7 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 	if (rateLimitResponse) return rateLimitResponse;
 
 	const blockParam = url.searchParams.get('block');
+	const chainParam = url.searchParams.get('chainId');
 
 	const stream = new ReadableStream({
 		async start(controller) {
@@ -41,11 +43,26 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 			};
 
 			try {
+				const { networkCatalog } = await getServerApplicationCatalog();
+				if (!chainParam && networkCatalog.length !== 1) {
+					sendEvent('error', { message: 'Missing chainId parameter' });
+					controller.close();
+					return;
+				}
+				const chainId = chainParam ? Number(chainParam) : networkCatalog[0]?.chainId;
+				const network = networkCatalog.find((candidate) => candidate.chainId === chainId);
+				if (!network) {
+					sendEvent('error', { message: 'Unsupported chainId parameter' });
+					controller.close();
+					return;
+				}
 				const overallStart = Date.now();
 
 				// Step 1: Get block number
 				sendEvent('progress', { step: 1, total: 5, message: 'Getting block number...' });
-				const targetBlock = blockParam ? parseInt(blockParam) : await getCurrentBlockNumber();
+				const targetBlock = blockParam
+					? parseInt(blockParam)
+					: await getCurrentBlockNumber(network);
 
 				if (isNaN(targetBlock) || targetBlock <= 0) {
 					sendEvent('error', { message: 'Invalid block number' });
@@ -66,7 +83,7 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 					total: 5,
 					message: 'Fetching transfers, prices, and vault holdings...'
 				});
-				const snapshots = await generateAllTokenSnapshots(targetBlock);
+				const snapshots = await generateAllTokenSnapshots(network, targetBlock);
 				sendEvent('progress', {
 					step: 2,
 					total: 5,
@@ -76,7 +93,7 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 
 				// Step 3: Get timestamp
 				sendEvent('progress', { step: 3, total: 5, message: 'Getting block timestamp...' });
-				const timestamp = await getBlockTimestamp(targetBlock);
+				const timestamp = await getBlockTimestamp(network, targetBlock);
 				const blockDate = new Date(timestamp * 1000).toISOString();
 				sendEvent('progress', {
 					step: 3,

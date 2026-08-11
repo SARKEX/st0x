@@ -14,6 +14,13 @@ import {
 	getWrappingMappingByWrappedAddress
 } from '$lib/config/tokenWrapping';
 import { sendTransaction } from '$lib/services/walletService';
+import { currentNetwork } from '$lib/stores';
+
+function selectedChainId(): number {
+	const chainId = get(currentNetwork)?.chainId;
+	if (!chainId) throw new Error('No network selected');
+	return chainId;
+}
 
 // ERC4626 Vault ABI (standard interface)
 const ERC4626_ABI = [
@@ -79,12 +86,14 @@ async function checkAllowance(
 ): Promise<boolean> {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not available');
+	const chainId = selectedChainId();
 
 	const allowance = await readContract(config, {
 		address: tokenAddress,
 		abi: erc20Abi,
 		functionName: 'allowance',
-		args: [ownerAddress, spenderAddress]
+		args: [ownerAddress, spenderAddress],
+		chainId
 	});
 
 	return allowance >= amount;
@@ -112,7 +121,7 @@ async function requestApproval(
 	// Wait for approval transaction to be confirmed
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not available');
-	await waitForTransactionReceipt(config, { hash });
+	await waitForTransactionReceipt(config, { hash, chainId: selectedChainId() });
 
 	return hash;
 }
@@ -124,17 +133,19 @@ export async function previewWrap(
 	unwrappedTokenAddress: Address,
 	assetAmount: bigint
 ): Promise<bigint> {
-	const mapping = getWrappingMappingByUnwrappedAddress(unwrappedTokenAddress);
+	const mapping = getWrappingMappingByUnwrappedAddress(unwrappedTokenAddress, selectedChainId());
 	if (!mapping) throw new Error('No wrapping mapping found for token');
 
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not available');
+	const chainId = selectedChainId();
 
 	return readContract(config, {
 		address: mapping.wrappedToken.address as Address,
 		abi: ERC4626_ABI,
 		functionName: 'previewDeposit',
-		args: [assetAmount]
+		args: [assetAmount],
+		chainId
 	});
 }
 
@@ -145,17 +156,19 @@ export async function previewUnwrap(
 	wrappedTokenAddress: Address,
 	shareAmount: bigint
 ): Promise<bigint> {
-	const mapping = getWrappingMappingByWrappedAddress(wrappedTokenAddress);
+	const mapping = getWrappingMappingByWrappedAddress(wrappedTokenAddress, selectedChainId());
 	if (!mapping) throw new Error('No wrapping mapping found for token');
 
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not available');
+	const chainId = selectedChainId();
 
 	return readContract(config, {
 		address: wrappedTokenAddress,
 		abi: ERC4626_ABI,
 		functionName: 'previewRedeem',
-		args: [shareAmount]
+		args: [shareAmount],
+		chainId
 	});
 }
 
@@ -172,7 +185,7 @@ export async function wrapToken(
 	amount: bigint,
 	receiver: Address
 ): Promise<`0x${string}`> {
-	const mapping = getWrappingMappingByUnwrappedAddress(unwrappedTokenAddress);
+	const mapping = getWrappingMappingByUnwrappedAddress(unwrappedTokenAddress, selectedChainId());
 	if (!mapping) throw new Error('No wrapping mapping found for token');
 
 	const vaultAddress = mapping.wrappedToken.address as Address;
@@ -213,7 +226,7 @@ export async function unwrapToken(
 	receiver: Address,
 	owner: Address
 ): Promise<`0x${string}`> {
-	const mapping = getWrappingMappingByWrappedAddress(wrappedTokenAddress);
+	const mapping = getWrappingMappingByWrappedAddress(wrappedTokenAddress, selectedChainId());
 	if (!mapping) throw new Error('No wrapping mapping found for token');
 
 	// No approval needed when redeeming own shares (receiver === owner)
@@ -237,12 +250,14 @@ export async function unwrapToken(
 export async function convertToShares(vaultAddress: Address, assetAmount: bigint): Promise<bigint> {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not available');
+	const chainId = selectedChainId();
 
 	return readContract(config, {
 		address: vaultAddress,
 		abi: ERC4626_ABI,
 		functionName: 'convertToShares',
-		args: [assetAmount]
+		args: [assetAmount],
+		chainId
 	});
 }
 
@@ -252,11 +267,13 @@ export async function convertToShares(vaultAddress: Address, assetAmount: bigint
 export async function convertToAssets(vaultAddress: Address, shareAmount: bigint): Promise<bigint> {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not available');
+	const chainId = selectedChainId();
 
 	return readContract(config, {
 		address: vaultAddress,
 		abi: ERC4626_ABI,
 		functionName: 'convertToAssets',
-		args: [shareAmount]
+		args: [shareAmount],
+		chainId
 	});
 }

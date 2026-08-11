@@ -77,6 +77,7 @@ const APPROVAL_HASH = `0x${'a'.repeat(64)}` as const;
 const TRADE_HASH = `0x${'b'.repeat(64)}` as const;
 const network = {
 	id: 8453,
+	chainId: 8453,
 	trustedOrderbooks: [ORDERBOOK]
 } as unknown as Parameters<typeof executeMarketOrder>[0]['network'];
 const tokens = {
@@ -121,6 +122,7 @@ function takeOrdersData(
 
 function readyResponse(
 	request: ApiSwapCalldataV2Request = {
+		chainId: 8453,
 		taker: TAKER,
 		inputToken: PAYMENT,
 		outputToken: ASSET,
@@ -148,12 +150,14 @@ function indexedTradeResponse(request: ApiSwapCalldataV2Request) {
 	const totalOutputAmount =
 		request.mode === 'buyUpTo' ? request.amount : inputIsPayment ? '1' : '100';
 	return {
+		chainId: request.chainId,
 		txHash: TRADE_HASH,
 		blockNumber: 123,
 		timestamp: 1_700_000_000,
 		sender: TAKER,
 		trades: [
 			{
+				chainId: request.chainId,
 				orderHash: ZERO_BYTES32,
 				orderOwner: TAKER,
 				request: {
@@ -248,6 +252,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 				})
 			).toEqual({
 				...expected,
+				chainId: 8453,
 				slippageBps: 75,
 				referenceIoRatio: '2.5',
 				denomination: 'wrapped'
@@ -286,6 +291,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 
 		expect(result).toEqual({ success: true });
 		expect(mocks.apiGetSwapCalldataV2).toHaveBeenCalledWith({
+			chainId: 8453,
 			taker: TAKER,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
@@ -300,7 +306,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 			data: expect.stringMatching(/^0x69c72856/),
 			value: 0n
 		});
-		expect(mocks.apiGetTradesByTx).toHaveBeenCalledWith(TRADE_HASH);
+		expect(mocks.apiGetTradesByTx).toHaveBeenCalledWith(TRADE_HASH, 8453);
 		expect(mocks.invalidateCostBasis).toHaveBeenCalledOnce();
 		expect(mocks.invalidateTakerTrades).toHaveBeenCalledOnce();
 		expect(mocks.transactionSuccess).toHaveBeenCalledWith(TRADE_HASH, 'Market order confirmed', {
@@ -316,6 +322,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 	it('reports a spend-anchored partial fill from indexed REST trade totals', async () => {
 		mocks.apiGetTradesByTx.mockResolvedValue({
 			...indexedTradeResponse({
+				chainId: 8453,
 				taker: TAKER,
 				inputToken: ASSET,
 				outputToken: PAYMENT,
@@ -357,6 +364,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 	it('keeps a confirmed transaction successful when indexed summary data is malformed', async () => {
 		mocks.apiGetTradesByTx.mockResolvedValue({
 			...indexedTradeResponse({
+				chainId: 8453,
 				taker: TAKER,
 				inputToken: PAYMENT,
 				outputToken: ASSET,
@@ -523,6 +531,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 			args: [ORDERBOOK, 100_000_000n]
 		});
 		const retryRequest = {
+			chainId: 8453,
 			taker: TAKER,
 			inputToken: PAYMENT,
 			outputToken: ASSET,

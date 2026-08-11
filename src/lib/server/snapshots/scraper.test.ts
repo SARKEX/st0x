@@ -26,6 +26,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
+const TEST_NETWORK = {
+	subgraph_url: 'https://subgraph.example/primary',
+	subgraph_urls_legacy: ['https://subgraph.example/legacy-1']
+} as never;
+
 // Provide a 2-subgraph network config (primary + 1 legacy) so the transient-failure
 // test can assert that a partial subgraph failure does not poison merged results.
 vi.mock('$lib/config/networks', () => ({
@@ -38,8 +43,11 @@ vi.mock('$lib/config/networks', () => ({
 }));
 
 vi.mock('$lib/config/tokens', () => ({
-	TOKENS: [{ address: '0xVAULT' }],
-	getAllTokenAddressesFlat: () => ['0xvault']
+	getTokenAddressVariants: (token: { address: string }) => [token.address.toLowerCase()],
+	onTokenCatalogChange: (listener: (tokens: { address: string }[]) => void) => {
+		listener([{ address: '0xVAULT' }]);
+		return () => undefined;
+	}
 }));
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
@@ -142,7 +150,7 @@ describe('scraper pagination boundary', () => {
 		});
 
 		const { fetchAllTransfers } = await import('./scraper');
-		const result = await fetchAllTransfers(99_999_999);
+		const result = await fetchAllTransfers(99_999_999, ['0xvault'], TEST_NETWORK);
 
 		// Primary subgraph: 2 shares fetches (full + short); 1 wrapped fetch (short terminates).
 		const primarySharesCalls = fetchMock.mock.calls.filter(
@@ -192,7 +200,7 @@ describe('scraper pagination boundary', () => {
 		});
 
 		const { fetchAllTransfers } = await import('./scraper');
-		const result = await fetchAllTransfers(99_999_999);
+		const result = await fetchAllTransfers(99_999_999, ['0xvault'], TEST_NETWORK);
 
 		const primarySharesCalls = fetchMock.mock.calls.filter(
 			(c: unknown[]) =>
@@ -233,7 +241,7 @@ describe('scraper pagination boundary', () => {
 		});
 
 		const { fetchAllTransfers } = await import('./scraper');
-		const result = await fetchAllTransfers(99_999_999);
+		const result = await fetchAllTransfers(99_999_999, ['0xvault'], TEST_NETWORK);
 
 		const wrappedCalls = fetchMock.mock.calls.filter(
 			(c: unknown[]) =>
@@ -282,7 +290,7 @@ describe('scraper legacy wrappedTokenTransfers fallback', () => {
 		});
 
 		const { fetchAllTransfers } = await import('./scraper');
-		const result = await fetchAllTransfers(99_999_999);
+		const result = await fetchAllTransfers(99_999_999, ['0xvault'], TEST_NETWORK);
 
 		// No throw escaped. sharesTransfers data is preserved.
 		expect(result.length).toBe(1);
@@ -332,7 +340,7 @@ describe('scraper transient subgraph failure', () => {
 		});
 
 		const { fetchAllTransfers } = await import('./scraper');
-		const result = await fetchAllTransfers(99_999_999);
+		const result = await fetchAllTransfers(99_999_999, ['0xvault'], TEST_NETWORK);
 
 		// Only the legacy subgraph's transfer survives.
 		expect(result.length).toBe(1);
@@ -369,7 +377,7 @@ describe('scraper transient subgraph failure', () => {
 		});
 
 		const { fetchAllTransfers } = await import('./scraper');
-		const result = await fetchAllTransfers(99_999_999);
+		const result = await fetchAllTransfers(99_999_999, ['0xvault'], TEST_NETWORK);
 
 		expect(result.length).toBe(1);
 		expect(warnSpy).toHaveBeenCalled();

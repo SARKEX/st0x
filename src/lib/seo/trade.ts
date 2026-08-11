@@ -14,7 +14,7 @@ export function buildTradeTitle(displayName: string): string {
 }
 
 export function buildTradeDescription(displayName: string): string {
-	return `Trade ${displayName} 24/7 on ST0x with on-chain execution and non-custodial settlement on Base.`;
+	return `Trade ${displayName} 24/7 on ST0x with on-chain execution and non-custodial settlement on supported networks.`;
 }
 
 export function getTradeSeoMetadata(pathname: string): TradeSeoMetadata | null {

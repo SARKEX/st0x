@@ -4,12 +4,13 @@
  * This file contains the mapping of old (legacy) tokens to their new wrapped equivalents.
  * The site now trades wrapped tStock tokens (wt[ticker]), so all tokens are named "Wrapped [tStock name]".
  *
- * NOTE: All address data is derived from TOKENS in tokens.ts (single source of truth)
+ * NOTE: All address data is derived from the API-backed runtime token catalog.
  */
 
-import { TOKENS, getTokenByLegacyAddress } from './tokens';
+import { getTokenByLegacyAddress, onTokenCatalogChange, type CategorizedToken } from './tokens';
 
 export interface TokenMigrationMapping {
+	chainId: number;
 	oldToken: {
 		address: string;
 		symbol: string;
@@ -22,37 +23,15 @@ export interface TokenMigrationMapping {
 		name: string;
 		decimals: number;
 	};
-	// Hardcoded swap order hash for checking liquidity and price
+	// Registry-provided migration order hash for checking liquidity and price.
 	swapOrderHash: string;
 }
-
-/**
- * Hardcoded swap order hashes for each token pair
- * These orders are specifically set up to handle the old -> new token migration
- * Keyed by legacy symbol (e.g., tNVDA, tSPLG)
- */
-export const SWAP_ORDER_HASHES: Record<string, string> = {
-	// Active legacy→wrapped migration orders owned by 0x10e4db39275C3b128C01bA1194D45D19aE1520d9
-	tNVDA: '0x400a1e7d871a47dbbe2e1427154cbb4a00ace1d2d6e29052d06bb85c4777fdc9',
-	tAMZN: '0x0feb963e1d811c953310af3749461c8ca64779e3a16df6a2e602ecb3a202d750',
-	tTSLA: '0x9f4026fd7d41ffe4eedc31bd93da18ab3d8126265b9e3ce88f28f96378a55b12',
-	tMSTR: '0x237d7971ea17f3bc5dcb9efbed858ed29da9535652ea9ff5a8a1f790f3a23eea',
-	tIAU: '0x36592e4b01266c9f203930e01ced4e56bec0822a863ba1752ec184043edb8ee6',
-	tCOIN: '0x80a44175546d7794f964270fddc3e58f977bf0100ffb805eab0dee9fe08b063b',
-	tSPYM: '0x9d98989eae42a9f1d961d235b39568b46e069d2e256fc69f0b1e2f92320405e4',
-	tSIVR: '0xb52152950ec6a7d7c9a2235cd9b0d5f0d7b527938eb650d41451c690fe1509f6',
-	tCRCL: '0x3f68b4599f4916022914db2328351581c74efc63ae7183ba9dd3aaef3e4864fd',
-	tBMNR: '0x93cd0d0b1572a9c84481b94754d35183e7aa646136b508c50b7e77d52d2e92d7',
-	tPPLT: '0x072fe37c0336f2a68581ac581d40fc195e5fbf95391ce94233609a7ff2b886c9'
-	// tSTOX temporarily disabled
-	// tSTOX: '0x9cb21c2dbdd39fbd45c863cead8bccd205014f57fbafafb2c93e519229a6ab48'
-};
 
 /**
  * Derive old/legacy symbol from token
  * Uses legacySymbol if explicitly set (e.g., tSPLG -> wtSPYM), otherwise derives from wrapped symbol
  */
-function getLegacySymbol(token: (typeof TOKENS)[0]): string {
+function getLegacySymbol(token: CategorizedToken): string {
 	if (token.legacySymbol) {
 		return token.legacySymbol;
 	}
@@ -74,111 +53,145 @@ function getLegacyName(wrappedName: string): string {
 }
 
 /**
- * Complete token migration mappings - derived from TOKENS (single source of truth)
+ * Complete token migration mappings, rebuilt when the remote catalog changes.
  */
-export const TOKEN_MIGRATION_MAPPINGS: TokenMigrationMapping[] = TOKENS.filter(
-	(t) => t.legacyAddress && t.category === 'ST0x'
-).map((t) => {
-	const legacySymbol = getLegacySymbol(t);
-	return {
-		oldToken: {
-			address: t.legacyAddress!,
-			symbol: legacySymbol,
-			name: getLegacyName(t.name),
-			decimals: t.decimals
-		},
-		newToken: {
-			address: t.address,
-			symbol: t.symbol,
-			name: t.name,
-			decimals: t.decimals
-		},
-		swapOrderHash: SWAP_ORDER_HASHES[legacySymbol] ?? ''
-	};
-});
+export const TOKEN_MIGRATION_MAPPINGS: TokenMigrationMapping[] = [];
 
 // Create lookup maps for efficient access
-const oldTokenAddressSet = new Set(
-	TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.address.toLowerCase())
-);
+const mappingByOldAddress = new Map<string, TokenMigrationMapping[]>();
+const mappingByOldSymbol = new Map<string, TokenMigrationMapping[]>();
+const mappingByNewAddress = new Map<string, TokenMigrationMapping[]>();
 
-const mappingByOldAddress = new Map(
-	TOKEN_MIGRATION_MAPPINGS.map((m) => [m.oldToken.address.toLowerCase(), m])
-);
+function addMapping(
+	lookup: Map<string, TokenMigrationMapping[]>,
+	key: string,
+	mapping: TokenMigrationMapping
+) {
+	lookup.set(key, [...(lookup.get(key) ?? []), mapping]);
+}
 
-const mappingByOldSymbol = new Map(TOKEN_MIGRATION_MAPPINGS.map((m) => [m.oldToken.symbol, m]));
+function resolveMapping(
+	lookup: Map<string, TokenMigrationMapping[]>,
+	key: string,
+	chainId?: number
+): TokenMigrationMapping | null {
+	const matches = lookup.get(key) ?? [];
+	if (chainId !== undefined) return matches.find((mapping) => mapping.chainId === chainId) ?? null;
+	return matches.length === 1 ? matches[0] : null;
+}
 
-const newTokenAddressSet = new Set(
-	TOKEN_MIGRATION_MAPPINGS.map((m) => m.newToken.address.toLowerCase())
-);
+onTokenCatalogChange((tokens) => {
+	const mappings = tokens
+		.filter((token) => token.legacyAddress && token.migrationOrderHash && token.category === 'ST0x')
+		.map((token) => {
+			const legacySymbol = getLegacySymbol(token);
+			return {
+				chainId: token.chainId,
+				oldToken: {
+					address: token.legacyAddress!,
+					symbol: legacySymbol,
+					name: getLegacyName(token.name),
+					decimals: token.decimals
+				},
+				newToken: {
+					address: token.address,
+					symbol: token.symbol,
+					name: token.name,
+					decimals: token.decimals
+				},
+				swapOrderHash: token.migrationOrderHash!
+			};
+		});
 
-const mappingByNewAddress = new Map(
-	TOKEN_MIGRATION_MAPPINGS.map((m) => [m.newToken.address.toLowerCase(), m])
-);
+	TOKEN_MIGRATION_MAPPINGS.splice(0, TOKEN_MIGRATION_MAPPINGS.length, ...mappings);
+	mappingByOldAddress.clear();
+	mappingByOldSymbol.clear();
+	mappingByNewAddress.clear();
+	for (const mapping of mappings) {
+		const oldAddress = mapping.oldToken.address.toLowerCase();
+		const newAddress = mapping.newToken.address.toLowerCase();
+		addMapping(mappingByOldAddress, oldAddress, mapping);
+		addMapping(mappingByOldSymbol, mapping.oldToken.symbol, mapping);
+		addMapping(mappingByNewAddress, newAddress, mapping);
+	}
+});
 
 /**
  * Check if an address is an old (legacy) token that needs migration
  */
-export function isOldToken(address: string): boolean {
-	return oldTokenAddressSet.has(address.toLowerCase());
+export function isOldToken(address: string, chainId?: number): boolean {
+	return getMigrationMappingByAddress(address, chainId) !== null;
 }
 
 /**
  * Check if an address is a new wrapped token
  */
-export function isWrappedToken(address: string): boolean {
-	return newTokenAddressSet.has(address.toLowerCase());
+export function isWrappedToken(address: string, chainId?: number): boolean {
+	return getMigrationMappingByNewAddress(address, chainId) !== null;
 }
 
 /**
  * Get the migration mapping for an old token by its address
  */
-export function getMigrationMappingByAddress(oldAddress: string): TokenMigrationMapping | null {
-	return mappingByOldAddress.get(oldAddress.toLowerCase()) ?? null;
+export function getMigrationMappingByAddress(
+	oldAddress: string,
+	chainId?: number
+): TokenMigrationMapping | null {
+	return resolveMapping(mappingByOldAddress, oldAddress.toLowerCase(), chainId);
 }
 
 /**
  * Get the migration mapping by new (wrapped) token address
  */
-export function getMigrationMappingByNewAddress(newAddress: string): TokenMigrationMapping | null {
-	return mappingByNewAddress.get(newAddress.toLowerCase()) ?? null;
+export function getMigrationMappingByNewAddress(
+	newAddress: string,
+	chainId?: number
+): TokenMigrationMapping | null {
+	return resolveMapping(mappingByNewAddress, newAddress.toLowerCase(), chainId);
 }
 
 /**
  * Get the migration mapping for an old token by its symbol
  */
-export function getMigrationMappingBySymbol(oldSymbol: string): TokenMigrationMapping | null {
-	return mappingByOldSymbol.get(oldSymbol) ?? null;
+export function getMigrationMappingBySymbol(
+	oldSymbol: string,
+	chainId?: number
+): TokenMigrationMapping | null {
+	return resolveMapping(mappingByOldSymbol, oldSymbol, chainId);
 }
 
 /**
  * Get the new wrapped token address for an old token
  */
-export function getWrappedTokenAddress(oldAddress: string): string | null {
-	const token = getTokenByLegacyAddress(oldAddress);
+export function getWrappedTokenAddress(oldAddress: string, chainId?: number): string | null {
+	const token = getTokenByLegacyAddress(oldAddress, chainId);
 	return token?.address ?? null;
 }
 
 /**
  * Get the swap order hash for migrating an old token
  */
-export function getSwapOrderHash(oldAddress: string): string | null {
-	const mapping = getMigrationMappingByAddress(oldAddress);
+export function getSwapOrderHash(oldAddress: string, chainId?: number): string | null {
+	const mapping = getMigrationMappingByAddress(oldAddress, chainId);
 	return mapping?.swapOrderHash ?? null;
 }
 
 /**
  * Get all old token addresses as an array
  */
-export function getAllOldTokenAddresses(): string[] {
-	return TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.address);
+export function getAllOldTokenAddresses(chainId?: number): string[] {
+	return TOKEN_MIGRATION_MAPPINGS.filter(
+		(mapping) => chainId === undefined || mapping.chainId === chainId
+	).map((mapping) => mapping.oldToken.address);
 }
 
 /**
  * Get all migration mappings
  */
-export function getAllMigrationMappings(): TokenMigrationMapping[] {
-	return TOKEN_MIGRATION_MAPPINGS;
+export function getAllMigrationMappings(chainId?: number): TokenMigrationMapping[] {
+	return TOKEN_MIGRATION_MAPPINGS.filter(
+		(mapping) => chainId === undefined || mapping.chainId === chainId
+	);
 }
 
 /**

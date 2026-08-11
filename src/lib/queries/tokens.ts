@@ -3,15 +3,21 @@ import { createQuery } from '@tanstack/svelte-query';
 import { apiGetTokens, type ApiToken } from '$lib/api/st0xApi';
 import { queryClient } from '$lib/clients/queryClient';
 import { isRateLimitError } from '$lib/clients/http';
-import type { CategorizedToken, TokenCategory } from '$lib/config/tokens';
+import {
+	CRYPTO_TOKENS,
+	TOKENS,
+	replaceTokenCatalog,
+	type CategorizedToken,
+	type TokenCategory
+} from '$lib/config/tokens';
 
 export const API_TOKENS_QUERY_KEY = ['st0xApiTokens'] as const;
 export const API_TOKENS_STALE_TIME_MS = Infinity;
 
-export function getCachedApiTokens(): Promise<ApiToken[]> {
+export function getCachedApiTokens(chainId: number): Promise<ApiToken[]> {
 	return queryClient.fetchQuery({
-		queryKey: API_TOKENS_QUERY_KEY,
-		queryFn: apiGetTokens,
+		queryKey: [...API_TOKENS_QUERY_KEY, 'api', chainId],
+		queryFn: () => apiGetTokens(chainId),
 		staleTime: API_TOKENS_STALE_TIME_MS,
 		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2
 	});
@@ -22,6 +28,12 @@ type ApiTokenExtensions = {
 	unwrappedAddress?: unknown;
 	legacyAddress?: unknown;
 	legacySymbol?: unknown;
+	previousSymbols?: unknown;
+	receiptAddress?: unknown;
+	priceFeedId?: unknown;
+	fallbackPrice?: unknown;
+	paymentToken?: unknown;
+	migrationOrderHash?: unknown;
 	tradingViewSymbol?: unknown;
 	tradingViewMarket?: unknown;
 };
@@ -32,6 +44,15 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asString(value: unknown): string | undefined {
 	return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+	return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function asStringArray(value: unknown): string[] | undefined {
+	if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) return undefined;
+	return value;
 }
 
 function getApiChainId(token: ApiToken): number | null {
@@ -52,6 +73,7 @@ function getApiCategory(token: ApiToken): TokenCategory | null {
 
 function normalizeApiToken(token: ApiToken): CategorizedToken | null {
 	const chainId = getApiChainId(token);
+	const network = asRecord(token.network);
 	const category = getApiCategory(token);
 	if (
 		!chainId ||
@@ -67,17 +89,31 @@ function normalizeApiToken(token: ApiToken): CategorizedToken | null {
 
 	return {
 		chainId,
+		network: {
+			chainId,
+			key: asString(network?.key),
+			label: asString(network?.label),
+			networkId: asNumber(network?.networkId),
+			currency: asString(network?.currency)
+		},
 		address: token.address,
 		symbol: token.symbol,
 		decimals: token.decimals,
 		name: token.name ?? token.label ?? token.symbol,
 		logoUrl: asString(token['logo-uri']),
+		priceFeedId: asString(extensions.priceFeedId) ?? '',
+		fallbackPrice: asNumber(extensions.fallbackPrice),
+		paymentToken: extensions.paymentToken === true,
+		migrationOrderHash: asString(extensions.migrationOrderHash),
 		category,
 		tradingViewSymbol: asString(extensions.tradingViewSymbol),
 		tradingViewMarket: asString(extensions.tradingViewMarket),
 		unwrappedAddress: asString(extensions.unwrappedAddress),
 		legacyAddress: asString(extensions.legacyAddress),
 		legacySymbol: asString(extensions.legacySymbol),
+		previousSymbols: asStringArray(extensions.previousSymbols),
+		receiptAddress: asString(extensions.receiptAddress),
+		isin: asString(token.isin) ?? asString(asRecord(token.extensions)?.isin),
 		limitOrders: []
 	};
 }
@@ -86,14 +122,18 @@ export function normalizeApiTokensForNetwork(
 	apiTokens: ApiToken[],
 	chainId: number
 ): CategorizedToken[] {
+	return normalizeApiTokens(apiTokens).filter((token) => token.chainId === chainId);
+}
+
+export function normalizeApiTokens(apiTokens: ApiToken[]): CategorizedToken[] {
 	const seen = new Set<string>();
 	const result: CategorizedToken[] = [];
 
 	for (const apiToken of apiTokens) {
 		const normalized = normalizeApiToken(apiToken);
-		if (!normalized || normalized.chainId !== chainId) continue;
+		if (!normalized) continue;
 
-		const addressKey = normalized.address.toLowerCase();
+		const addressKey = `${normalized.chainId}:${normalized.address.toLowerCase()}`;
 		if (seen.has(addressKey)) continue;
 		seen.add(addressKey);
 		result.push(normalized);
@@ -121,17 +161,24 @@ export function findApiTokenByAnyAddress(
 }
 
 export function createApiTokensQuery(chainId: number | null | undefined) {
-	return createQuery<ApiToken[], Error, CategorizedToken[]>({
-		queryKey: API_TOKENS_QUERY_KEY,
+	return createQuery<CategorizedToken[]>({
+		queryKey: [...API_TOKENS_QUERY_KEY, chainId],
 		enabled: Boolean(browser && chainId),
 		// The supported-token list is effectively static config; it does not need to be
 		// re-fetched on every mount/focus. Aggressive refetch here (staleTime:0 +
-		// refetchOnMount:'always' + refetchOnWindowFocus) fired /v1/tokens from ~9 mount
+		// refetchOnMount:'always' + refetchOnWindowFocus) fired /v2/tokens from ~9 mount
 		// sites and contributed to the upstream rate-limit storm.
 		staleTime: API_TOKENS_STALE_TIME_MS,
 		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
 		refetchOnWindowFocus: false,
-		queryFn: apiGetTokens,
-		select: (tokens) => normalizeApiTokensForNetwork(tokens, chainId as number)
+		queryFn: async () => {
+			if (!chainId) return [];
+			const catalog = normalizeApiTokens(await apiGetTokens(chainId));
+			const otherNetworks = [...TOKENS, ...CRYPTO_TOKENS].filter(
+				(token) => token.chainId !== chainId
+			);
+			replaceTokenCatalog([...otherNetworks, ...catalog]);
+			return catalog;
+		}
 	});
 }

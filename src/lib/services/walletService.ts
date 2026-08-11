@@ -11,6 +11,7 @@ import {
 import type { Hash, Hex } from 'viem';
 import { authMethod } from '$lib/stores/authStore';
 import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
+import { currentNetwork } from '$lib/stores';
 import { withRetry } from '$lib/utils/retry';
 
 // Store for Dynamic wallet provider (set by React component)
@@ -57,11 +58,14 @@ export async function sendTransaction(params: {
 			throw new Error('Dynamic wallet address not available');
 		}
 
-		// Ensure we're on Base network (chain ID 8453)
+		const network = get(currentNetwork);
+		if (!network) throw new Error('No network selected');
+
+		// Keep the embedded wallet on the registry-backed network selected in the UI.
 		try {
 			await dynamicWalletProvider!.request({
 				method: 'wallet_switchEthereumChain',
-				params: [{ chainId: '0x2105' }] // 8453 in hex
+				params: [{ chainId: `0x${network.chainId.toString(16)}` }]
 			});
 		} catch {
 			// Chain might already be correct, or not supported - continue anyway
@@ -103,12 +107,15 @@ export async function sendTransaction(params: {
 		if (!config) {
 			throw new Error('Wagmi config not available');
 		}
+		const network = get(currentNetwork);
+		if (!network) throw new Error('No network selected');
 
 		const hash = await withRetry(() =>
 			wagmiSendTransaction(config, {
 				to: params.to,
 				data: params.data,
-				value: params.value
+				value: params.value,
+				chainId: network.chainId
 			})
 		);
 
@@ -133,10 +140,13 @@ export async function waitForTransaction(
 	if (!config) {
 		throw new Error('Wagmi config not available');
 	}
+	const network = get(currentNetwork);
+	if (!network) throw new Error('No network selected');
 
 	await withRetry(() =>
 		wagmiWaitForTransactionReceipt(config, {
 			hash,
+			chainId: network.chainId,
 			...(options?.confirmations != null ? { confirmations: options.confirmations } : {})
 		})
 	);

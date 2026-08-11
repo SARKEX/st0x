@@ -20,6 +20,7 @@ import {
 } from '$lib/server/marketPrices';
 import type { MidpointPrice } from '$lib/utils/midpointPrice';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
+import { ensureServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 export type PublicPricesResponse =
 	| PublicPricesSnapshot
@@ -50,6 +51,7 @@ async function computePrices(): Promise<PublicPricesSnapshot> {
 }
 
 export const GET: RequestHandler = async ({ request }) => {
+	await ensureServerApplicationCatalog();
 	const clientIp = getClientIp(request);
 	const rateLimit = await rateLimiters.publicApi(`public-api:${clientIp}`);
 

@@ -53,11 +53,13 @@
 		}
 	}
 
-	// Per UI-SPEC §DepositModal: payment token displayed in body copy.
-	// Network's default payment token on Base is USDC.
-	$: paymentToken = 'USDC';
-	$: networkName = $currentNetwork?.displayName ?? 'Base';
-	$: basescanUrl = $walletAddress ? `https://basescan.org/address/${$walletAddress}` : '';
+	// Per UI-SPEC §DepositModal: registry-backed network and payment token in body copy.
+	$: paymentToken = $currentNetwork?.defaultPaymentToken?.symbol ?? 'payment token';
+	$: networkName = $currentNetwork?.displayName ?? 'the selected network';
+	$: explorerUrl =
+		$walletAddress && $currentNetwork
+			? `${$currentNetwork.blockExplorer}/address/${$walletAddress}`
+			: '';
 </script>
 
 <Modal show={$showDepositModal} title="Deposit" maxWidthClass="max-w-md" onClose={handleClose}>
@@ -109,7 +111,7 @@
 			</div>
 		</div>
 
-		<!-- Copy and Basescan buttons -->
+		<!-- Copy and network explorer buttons -->
 		<div class="flex gap-3">
 			<Button on:click={copyAddress} variant="secondary" fullWidth>
 				{#if copied}
@@ -143,7 +145,7 @@
 					</span>
 				{/if}
 			</Button>
-			<a href={basescanUrl} target="_blank" rel="noopener noreferrer" class="flex-1">
+			<a href={explorerUrl} target="_blank" rel="noopener noreferrer" class="flex-1">
 				<Button variant="ghost" fullWidth>
 					<span class="flex items-center justify-center gap-2">
 						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,7 +156,7 @@
 								d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
 							/>
 						</svg>
-						View on Basescan
+						View on block explorer
 					</span>
 				</Button>
 			</a>

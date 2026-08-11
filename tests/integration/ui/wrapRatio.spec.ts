@@ -28,7 +28,7 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (REST API)', () => {
 		await page.route(/\/api\/st0x\/v1\/tokens/, async (route) => {
 			const url = new URL(route.request().url());
 			const pathname = url.pathname.toLowerCase();
-			if (url.pathname === '/api/st0x/v1/tokens') {
+			if (url.pathname === '/api/st0x/v2/tokens') {
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',
@@ -48,7 +48,7 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (REST API)', () => {
 				});
 				return;
 			}
-			if (url.pathname === '/api/st0x/v1/tokens/details') {
+			if (url.pathname === '/api/st0x/v2/tokens/details') {
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',
@@ -74,7 +74,7 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (REST API)', () => {
 				});
 				return;
 			}
-			if (pathname === `/api/st0x/v1/tokens/${WT_SGOV_ADDRESS.toLowerCase()}/details`) {
+			if (pathname === `/api/st0x/v2/tokens/${WT_SGOV_ADDRESS.toLowerCase()}/details`) {
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',
@@ -103,7 +103,7 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (REST API)', () => {
 				});
 				return;
 			}
-			if (pathname === `/api/st0x/v1/tokens/wrap-ratio/${WT_SGOV_ADDRESS.toLowerCase()}/history`) {
+			if (pathname === `/api/st0x/v2/tokens/wrap-ratio/${WT_SGOV_ADDRESS.toLowerCase()}/history`) {
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',
@@ -137,7 +137,7 @@ test.describe('Wrap ratio UX — non-1:1 wtSGOV (REST API)', () => {
 				});
 				return;
 			}
-			if (url.pathname === '/api/st0x/v1/tokens/wrap-ratio') {
+			if (url.pathname === '/api/st0x/v2/tokens/wrap-ratio') {
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',

@@ -11,12 +11,13 @@
 	let dismissed = false;
 	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
 	$: paymentTokens = ($apiTokensQuery.data ?? []).filter((token) => token.category === 'CRYPTO');
+	$: primaryPaymentToken = $currentNetwork?.defaultPaymentToken;
 
 	// Share the same query key as dashboard to avoid duplicate RPC calls
 	// Uses same settings as dashboard - invalidation happens after transactions
 	$: usdcBalanceQuery = createQuery({
 		queryKey: [
-			'usdcWalletBalance',
+			'paymentTokenWalletBalance',
 			$walletAddress,
 			$currentNetwork?.chainId,
 			paymentTokens.map((token) => token.address).join(',')
@@ -30,14 +31,15 @@
 		),
 		staleTime: 30_000, // Consider data fresh for 30 seconds
 		queryFn: async () => {
-			if (paymentTokens.length === 0 || !$walletAddress) return [];
+			if (paymentTokens.length === 0 || !$walletAddress || !$currentNetwork) return [];
 
 			// Build multicall contracts array
 			const contracts = paymentTokens.map((token) => ({
 				abi: erc20Abi,
 				address: token.address as `0x${string}`,
 				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`],
+				chainId: $currentNetwork.chainId
 			}));
 
 			try {
@@ -60,15 +62,17 @@
 					})
 					.filter((b): b is NonNullable<typeof b> => b !== null);
 			} catch (e) {
-				console.error('Multicall failed for USDC balance:', e);
+				console.error('Multicall failed for payment-token balances:', e);
 				return [];
 			}
 		}
 	});
 
-	// Check if USDC balance is 0
-	$: usdcBalance = $usdcBalanceQuery.data?.find((t) => t.symbol === 'USDC')?.walletBalance ?? 0n;
-	$: hasNoFunds = usdcBalance === 0n && $usdcBalanceQuery.isSuccess;
+	$: primaryPaymentBalance =
+		$usdcBalanceQuery.data?.find(
+			(token) => token.address.toLowerCase() === primaryPaymentToken?.address.toLowerCase()
+		)?.walletBalance ?? 0n;
+	$: hasNoFunds = primaryPaymentBalance === 0n && $usdcBalanceQuery.isSuccess;
 	$: showBanner = $isAuthenticated && hasNoFunds && !dismissed;
 
 	function handleDeposit() {
@@ -91,7 +95,7 @@
 					d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 				/>
 			</svg>
-			<span>No USDC found in your wallet.</span>
+			<span>No {primaryPaymentToken?.symbol ?? 'payment tokens'} found in your wallet.</span>
 			<button
 				type="button"
 				on:click={handleDeposit}

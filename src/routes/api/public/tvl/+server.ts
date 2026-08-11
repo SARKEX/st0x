@@ -6,99 +6,126 @@ import { withConditionalCache, CACHE_KEYS, CACHE_TTL } from '$lib/server/cache';
 import { kvGet, KV_KEYS, type SnapshotBlockRecord } from '$lib/server/kv';
 import { list } from '@vercel/blob';
 import type { BlockSnapshot } from '$lib/server/snapshots/types';
-import { TOKENS } from '$lib/config/tokens';
+import { getTokensByNetwork, type CategorizedToken } from '$lib/config/tokens';
 import { env } from '$env/dynamic/private';
-
-const tokenSymbols = TOKENS.map((t) => t.symbol);
-const previousSymbolsByToken = new Map<string, string[]>(
-	TOKENS.filter((t) => t.previousSymbols?.length).map((t) => [t.symbol, t.previousSymbols!])
-);
+import { getServerApplicationCatalog } from '$lib/server/applicationCatalog';
+import type { Network } from '$lib/config/networks';
 
 interface PublicTvlResponse {
 	success: boolean;
 	latest: {
 		totalTvl: number;
 		tokenTvl: Record<string, number>;
+		networks: { chainId: number; blockNumber: number; totalTvl: number }[];
 	} | null;
 }
 
 async function fetchSnapshot(
-	tokenSymbol: string,
-	blockNumber: number
+	chainId: number,
+	token: CategorizedToken,
+	blockNumber: number,
+	allowLegacySnapshots: boolean
 ): Promise<BlockSnapshot | null> {
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return null;
 	}
 
-	const candidates = [tokenSymbol, ...(previousSymbolsByToken.get(tokenSymbol) ?? [])];
+	const candidates = [token.symbol, ...(token.previousSymbols ?? [])];
 
 	for (const symbol of candidates) {
 		try {
-			const prefix = `snapshots/${symbol}/${blockNumber}.json`;
-			const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
-
-			if (blobs.length === 0) continue;
-
-			const response = await fetch(blobs[0].url);
-			if (!response.ok) continue;
-
-			return await response.json();
+			const prefixes = [`snapshots/${chainId}/${symbol}/${blockNumber}.json`];
+			if (allowLegacySnapshots) prefixes.push(`snapshots/${symbol}/${blockNumber}.json`);
+			for (const prefix of prefixes) {
+				const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
+				if (blobs.length === 0) continue;
+				const response = await fetch(blobs[0].url);
+				if (response.ok) return await response.json();
+			}
 		} catch (error) {
-			console.error(`[Public TVL] Error fetching snapshot ${symbol}/${blockNumber}:`, error);
+			console.error(
+				`[Public TVL] Error fetching snapshot ${chainId}/${symbol}/${blockNumber}:`,
+				error
+			);
 		}
 	}
 
 	return null;
 }
 
-async function computeAggregateTvl(): Promise<PublicTvlResponse> {
+async function computeNetworkTvl(
+	network: Network,
+	latestBlock: SnapshotBlockRecord,
+	allowLegacySnapshots: boolean
+): Promise<{
+	totalTvl: number;
+	tokenTvl: Record<string, number>;
+	network: { chainId: number; blockNumber: number; totalTvl: number };
+}> {
+	const tokens = getTokensByNetwork(network.chainId);
+	const snapshots = await Promise.all(
+		tokens.map((token) =>
+			fetchSnapshot(network.chainId, token, latestBlock.blockNumber, allowLegacySnapshots)
+		)
+	);
+	const tokenTvl: Record<string, number> = {};
+	let totalTvl = 0;
+	for (let index = 0; index < snapshots.length; index++) {
+		const snapshot = snapshots[index];
+		const token = tokens[index];
+		let value = 0;
+		if (snapshot) {
+			const price = snapshot.price?.price ?? 0;
+			for (const balanceStr of Object.values(snapshot.balances)) {
+				const balance = BigInt(balanceStr);
+				if (balance > 0n) value += (Number(balance) / 10 ** token.decimals) * price;
+			}
+		}
+		tokenTvl[`${network.chainId}:${token.symbol}`] = value;
+		totalTvl += value;
+	}
+	return {
+		totalTvl,
+		tokenTvl,
+		network: { chainId: network.chainId, blockNumber: latestBlock.blockNumber, totalTvl }
+	};
+}
+
+async function computeAggregateTvl(networkCatalog: Network[]): Promise<PublicTvlResponse> {
 	const allBlocks = (await kvGet<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];
 
 	if (allBlocks.length === 0) {
 		return { success: true, latest: null };
 	}
 
-	// Get the latest block
-	const sorted = [...allBlocks].sort((a, b) => b.timestamp - a.timestamp);
-	const latestBlock = sorted[0];
-
-	// Fetch all token snapshots in parallel
-	const snapshots = await Promise.all(
-		tokenSymbols.map((symbol) => fetchSnapshot(symbol, latestBlock.blockNumber))
-	);
-
-	const tokenTvl: Record<string, number> = {};
-	let totalTvl = 0;
-
-	for (let i = 0; i < snapshots.length; i++) {
-		const snapshot = snapshots[i];
-		const symbol = tokenSymbols[i];
-
-		if (!snapshot) {
-			tokenTvl[symbol] = 0;
-			continue;
-		}
-
-		const price = snapshot.price?.price ?? 0;
-		let tokenTotal = 0;
-
-		for (const balanceStr of Object.values(snapshot.balances)) {
-			const balance = BigInt(balanceStr);
-			if (balance <= 0n) continue;
-			tokenTotal += (Number(balance) / 1e18) * price;
-		}
-
-		tokenTvl[symbol] = tokenTotal;
-		totalTvl += tokenTotal;
+	const allowLegacySnapshots = networkCatalog.length === 1;
+	const latestByChain = new Map<number, SnapshotBlockRecord>();
+	for (const network of networkCatalog) {
+		const candidates = allBlocks.filter(
+			(block) =>
+				block.chainId === network.chainId || (allowLegacySnapshots && block.chainId === undefined)
+		);
+		const latest = candidates.sort((left, right) => right.timestamp - left.timestamp)[0];
+		if (latest) latestByChain.set(network.chainId, latest);
 	}
+	const results = await Promise.all(
+		networkCatalog.flatMap((network) => {
+			const latest = latestByChain.get(network.chainId);
+			return latest ? [computeNetworkTvl(network, latest, allowLegacySnapshots)] : [];
+		})
+	);
+	if (results.length === 0) return { success: true, latest: null };
+	const tokenTvl = Object.assign({}, ...results.map((result) => result.tokenTvl));
+	const totalTvl = results.reduce((sum, result) => sum + result.totalTvl, 0);
 
 	return {
 		success: true,
-		latest: { totalTvl, tokenTvl }
+		latest: { totalTvl, tokenTvl, networks: results.map((result) => result.network) }
 	};
 }
 
 export const GET: RequestHandler = async ({ request }) => {
+	const { networkCatalog } = await getServerApplicationCatalog();
 	const clientIp = getClientIp(request);
 	const rateLimit = await rateLimiters.publicApi(`public-api:${clientIp}`);
 
@@ -119,7 +146,7 @@ export const GET: RequestHandler = async ({ request }) => {
 	try {
 		const data = await withConditionalCache<PublicTvlResponse>(
 			CACHE_KEYS.publicTvl(),
-			computeAggregateTvl,
+			() => computeAggregateTvl(networkCatalog),
 			(result) => result.success && result.latest !== null && result.latest.totalTvl > 0,
 			CACHE_TTL.LONG
 		);

@@ -8,7 +8,7 @@
 	 *  - 'unwrapped' → shares (the t* asset)
 	 *  - 'wrapped'   → tokens (the wt* wrapper)
 	 *
-	 * These match the new query param accepted by /v1/trades/* and /v1/orders/*
+	 * These match the query param accepted by /v2/trades/* and /v2/orders/*
 	 * (renamed from tstock/wtstock).
 	 */
 	import { createEventDispatcher } from 'svelte';

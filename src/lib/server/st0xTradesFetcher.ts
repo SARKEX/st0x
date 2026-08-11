@@ -49,7 +49,7 @@ export function createServerTradesQueryFetcher({
 		const timeout = setTimeout(() => requestController.abort(), timeoutMs);
 
 		try {
-			const response = await fetchFn(`${apiBase}/v1/trades/query`, {
+			const response = await fetchFn(`${apiBase}/v2/trades/query`, {
 				method: 'POST',
 				headers: {
 					Authorization: authHeader,
@@ -59,7 +59,7 @@ export function createServerTradesQueryFetcher({
 				body: JSON.stringify(request),
 				signal: requestController.signal
 			});
-			logSt0xRequestBudget('v1/trades/query', credentialLabel, response);
+			logSt0xRequestBudget('v2/trades/query', credentialLabel, response);
 			if (response.status === 429) {
 				rateLimitError = new St0xTradesRateLimitError(
 					parseRetryAfterMs(response.headers.get('Retry-After'))

@@ -303,7 +303,7 @@ async function collectProcessedOrderPages({
  * request stream and converts them to ProcessedQuotes.
  */
 export async function fetchAndQuotePaymentTokenOrders(
-	networkId: number = 8453,
+	networkId: number,
 	overridePaymentToken?: Token,
 	signal?: AbortSignal,
 	fetchOrders: OrdersQueryFetcher = apiQueryOrders
@@ -360,13 +360,14 @@ export async function fetchAndQuoteOwnerOrders(
 ): Promise<ProcessedQuote[]> {
 	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
 	const chainId = networks.find((n) => n.id === networkId)?.chainId;
+	if (chainId === undefined) throw new Error(`Unknown network ${networkId}`);
 
 	const processedQuotes: ProcessedQuote[] = [];
 	const seen = new Set<string>();
 	let page = 1;
 	let hasMore = true;
 	while (hasMore && page <= MAX_ORDER_PAGES) {
-		const response = await apiGetOrdersByOwner(ownerAddress, { page, pageSize: 50 });
+		const response = await apiGetOrdersByOwner(ownerAddress, chainId, { page, pageSize: 50 });
 		for (const order of response.orders) {
 			if (chainId !== undefined && order.chainId !== chainId) continue;
 			if (seen.has(order.orderHash)) continue;
@@ -401,11 +402,13 @@ export async function fetchAndQuoteTokenOrders(
 	overridePaymentToken?: Token
 ) {
 	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
+	const chainId = networks.find((network) => network.id === networkId)?.chainId;
+	if (chainId === undefined) throw new Error(`Unknown network ${networkId}`);
 
 	return collectProcessedOrderPages({
 		fetchPage: (page) =>
 			apiQueryOrders({
-				chainId: networkId,
+				chainId,
 				tokenAddresses: [tokenAddress.toLowerCase()],
 				state: 'active',
 				page,

@@ -14,9 +14,9 @@ import { getCachedSt0xResponse, type CachedSt0xResponse } from '$lib/server/st0x
 import { applyRateLimit, rateLimiters } from '$lib/server/rateLimit';
 import type { RequestEvent, RequestHandler } from './$types';
 
-const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
-const TOKEN_LIST_PATH = 'v1/tokens';
-const TOKEN_DETAILS_PATH = /^v1\/tokens\/[^/]+\/details$/;
+const TOKEN_DETAILS_LIST_PATH = 'v2/tokens/details';
+const TOKEN_LIST_PATH = 'v2/tokens';
+const TOKEN_DETAILS_PATH = /^v2\/tokens\/[^/]+\/details$/;
 const WEBSITE_ONLY_CACHE_CONTROL = 'private, no-store';
 
 function errorResponse(requestId: string, status: number, code: string, message: string): Response {
@@ -63,63 +63,61 @@ const ALLOWED_PROXY_ROUTES: Array<{
 	{ method: 'GET', pattern: /^health$/ },
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens$/,
+		pattern: /^v2\/tokens$/,
 		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/details$/,
+		pattern: /^v2\/tokens\/details$/,
 		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/[^/]+\/details$/,
+		pattern: /^v2\/tokens\/[^/]+\/details$/,
 		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/wrap-ratio$/,
+		pattern: /^v2\/tokens\/wrap-ratio$/,
 		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/wrap-ratio\/[^/]+$/,
+		pattern: /^v2\/tokens\/wrap-ratio\/[^/]+$/,
 		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/wrap-ratio\/[^/]+\/history$/,
+		pattern: /^v2\/tokens\/wrap-ratio\/[^/]+\/history$/,
 		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/[^/]+\/proofs$/,
+		pattern: /^v2\/tokens\/[^/]+\/proofs$/,
 		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 300
 	},
 	// Order reads use the bounded POST query below. Do not expose the API's
 	// per-token GET endpoint as a public authenticated pass-through.
-	{ method: 'POST', pattern: /^v1\/orders\/query$/ },
+	{ method: 'POST', pattern: /^v2\/orders\/query$/ },
 	{
 		method: 'GET',
-		pattern: /^v1\/trades\/token\/[^/]+$/,
+		pattern: /^v2\/trades\/token\/[^/]+$/,
 		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 900
 	},
 	// Per-user endpoints — no shared caching
-	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/tx\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|query$)[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
-	{ method: 'POST', pattern: /^v1\/trades\/query$/ },
-	{ method: 'POST', pattern: /^v1\/swap\/quote$/ },
-	{ method: 'POST', pattern: /^v1\/swap\/calldata$/ },
+	{ method: 'GET', pattern: /^v2\/orders\/owner\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v2\/trades\/tx\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v2\/trades\/(?!taker\/|query$)[^/]+$/ },
+	{ method: 'GET', pattern: /^v2\/trades\/taker\/[^/]+$/ },
+	{ method: 'POST', pattern: /^v2\/trades\/query$/ },
 	{ method: 'POST', pattern: /^v2\/swap\/quote$/ },
 	{ method: 'POST', pattern: /^v2\/swap\/calldata$/ }
 ];
@@ -143,21 +141,21 @@ function sharedCacheKey(
 		if (value !== null) canonical.set(name, value);
 	};
 
-	if (/^v1\/trades\/token\/[^/]+$/.test(pathSuffix)) {
+	if (/^v2\/trades\/token\/[^/]+$/.test(pathSuffix)) {
 		set('page');
 		set('pageSize');
 		set('startTime');
 		set('endTime');
-	} else if (/^v1\/tokens\/[^/]+\/details$/.test(pathSuffix)) {
+	} else if (/^v2\/tokens\/[^/]+\/details$/.test(pathSuffix)) {
 		set('chainId');
 		set('activityLimit');
-	} else if (/^v1\/tokens\/[^/]+\/proofs$/.test(pathSuffix)) {
+	} else if (/^v2\/tokens\/[^/]+\/proofs$/.test(pathSuffix)) {
 		set('chainId');
-	} else if (/^v1\/tokens\/wrap-ratio\/[^/]+\/history$/.test(pathSuffix)) {
+	} else if (/^v2\/tokens\/wrap-ratio\/[^/]+\/history$/.test(pathSuffix)) {
 		set('chainId');
 		set('page');
 		set('pageSize');
-	} else if (/^v1\/tokens\/wrap-ratio\/[^/]+$/.test(pathSuffix)) {
+	} else if (/^v2\/tokens\/wrap-ratio\/[^/]+$/.test(pathSuffix)) {
 		set('chainId');
 	}
 

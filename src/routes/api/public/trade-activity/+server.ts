@@ -18,6 +18,7 @@ import {
 	St0xTradesRateLimitError
 } from '$lib/server/st0xTradesFetcher';
 import { getSt0xActivityApiConfig } from '$lib/server/st0xApiConfig';
+import { ensureServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 export type {
 	NetworkTradeStats,
@@ -51,6 +52,7 @@ async function computeTradeActivity(): Promise<PublicTradeActivitySnapshot> {
 }
 
 export const GET: RequestHandler = async ({ request }) => {
+	await ensureServerApplicationCatalog();
 	const clientIp = getClientIp(request);
 	const rateLimit = await rateLimiters.publicApi(`public-api:${clientIp}`);
 

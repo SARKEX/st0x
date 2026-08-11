@@ -75,7 +75,9 @@
 	{:else if priceData}
 		<td class="px-2 py-1">
 			<ExternalLink
-				href={`${$currentNetwork.blockExplorer}/address/${token.address}`}
+				href={`${$currentNetwork?.blockExplorer ?? 'https://blockscan.com'}/address/${
+					token.address
+				}`}
 				label={token.symbol || ''}
 				className="underline"
 			/>

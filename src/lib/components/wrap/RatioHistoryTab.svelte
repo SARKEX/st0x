@@ -2,6 +2,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createExchangeRateHistoryQuery } from '$lib/queries/exchangeRates';
 	import RatioStepChart from './RatioStepChart.svelte';
+	import { currentNetwork } from '$lib/stores';
 
 	/**
 	 * "Ratio History" tab inside Token Details. The REST API returns sampled
@@ -13,7 +14,9 @@
 	export let currentRatio: number;
 	export let onLearnMore: (() => void) | undefined = undefined;
 
-	$: query = createExchangeRateHistoryQuery(wrappedTokenAddress, { pageSize: 100 });
+	$: query = createExchangeRateHistoryQuery(wrappedTokenAddress, $currentNetwork?.chainId, {
+		pageSize: 100
+	});
 
 	$: rawEvents = $query.data?.events ?? [];
 	$: events = [...rawEvents].sort((a, b) => {
