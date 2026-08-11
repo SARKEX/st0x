@@ -17,7 +17,7 @@ describe('trade SEO metadata', () => {
 		expect(metadata).toEqual({
 			title: 'Trade Wrapped NVIDIA Corporation ST0x | ST0x',
 			description:
-				'Trade Wrapped NVIDIA Corporation ST0x 24/7 on ST0x with on-chain execution and non-custodial settlement on Base.',
+				'Trade Wrapped NVIDIA Corporation ST0x 24/7 on ST0x with on-chain execution and non-custodial settlement on supported networks.',
 			canonicalUrl: `https://www.st0x.io/trade/${NVDA_WRAPPED}`
 		});
 	});

@@ -120,7 +120,7 @@
 		currentToken?.address ?? null
 	);
 	let midpointPricesQuery = createMidpointPricesQuery($currentNetwork);
-	const exchangeRatesQuery = createExchangeRatesQuery();
+	$: exchangeRatesQuery = createExchangeRatesQuery($currentNetwork?.chainId);
 	$: {
 		orderbookQuotesQuery = createTokenOrderbookQuotesQuery(
 			$currentNetwork,
@@ -341,14 +341,15 @@
 	$: walletBalanceQuery = createQuery({
 		queryKey: ['walletBalance', $currentNetwork?.id, currentToken?.address, $walletAddress],
 		queryFn: async () => {
-			if (!currentToken?.address || !$walletAddress || !$wagmiConfig) {
+			if (!currentToken?.address || !$walletAddress || !$currentNetwork || !$wagmiConfig) {
 				return 0n;
 			}
 			const balance = await readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: currentToken.address as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$walletAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`],
+				chainId: $currentNetwork.chainId
 			});
 			return balance as bigint;
 		},
@@ -958,7 +959,7 @@
 							>{currentApiToken?.symbol ?? currentToken.symbol}</span
 						>
 						<span class="text-text-muted">·</span>
-						<span>Wrapped tStock on {$currentNetwork.displayName}</span>
+						<span>Wrapped tStock on {$currentNetwork?.displayName ?? 'the selected network'}</span>
 					</div>
 				</div>
 				<WrapRatioChip
@@ -1404,7 +1405,7 @@
 															.toString(16)
 															.padStart(64, '0')}`}
 														{@const raindexUrl = getRaindexVaultUrl(
-															$currentNetwork?.chainId ?? 8453,
+															$currentNetwork?.chainId,
 															vault.raindex,
 															vault.id
 														)}
@@ -1554,8 +1555,8 @@
 									<div>
 										<div class="sm:hidden">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentApiToken?.address ??
-													tokenId}"
+												href="{$currentNetwork?.blockExplorer ??
+													'https://blockscan.com'}/token/{currentApiToken?.address ?? tokenId}"
 												label={currentApiToken?.address ?? tokenId}
 												truncate={{ start: 0, end: 6 }}
 												className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
@@ -1563,8 +1564,8 @@
 										</div>
 										<div class="hidden sm:block">
 											<ExternalLink
-												href="{$currentNetwork.blockExplorer}/token/{currentApiToken?.address ??
-													tokenId}"
+												href="{$currentNetwork?.blockExplorer ??
+													'https://blockscan.com'}/token/{currentApiToken?.address ?? tokenId}"
 												label={truncateAddress(currentApiToken?.address ?? tokenId)}
 												className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 											/>
@@ -1577,7 +1578,8 @@
 										<div>
 											<div class="sm:hidden">
 												<ExternalLink
-													href="{$currentNetwork.blockExplorer}/token/{currentApiToken.unwrappedAddress}"
+													href="{$currentNetwork?.blockExplorer ??
+														'https://blockscan.com'}/token/{currentApiToken.unwrappedAddress}"
 													label={currentApiToken.unwrappedAddress}
 													truncate={{ start: 0, end: 6 }}
 													className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
@@ -1585,7 +1587,8 @@
 											</div>
 											<div class="hidden sm:block">
 												<ExternalLink
-													href="{$currentNetwork.blockExplorer}/token/{currentApiToken.unwrappedAddress}"
+													href="{$currentNetwork?.blockExplorer ??
+														'https://blockscan.com'}/token/{currentApiToken.unwrappedAddress}"
 													label={truncateAddress(currentApiToken.unwrappedAddress)}
 													className="flex items-center gap-1 font-mono text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 												/>
@@ -1595,7 +1598,7 @@
 								{/if}
 								<div class="flex justify-between py-2.5">
 									<span class="text-text-2">Network</span>
-									<span>{$currentNetwork.displayName}</span>
+									<span>{$currentNetwork?.displayName ?? 'Unknown network'}</span>
 								</div>
 								<div class="flex justify-between py-2.5">
 									<span class="text-text-2">Symbol</span>
@@ -1964,8 +1967,8 @@
 								{/if}
 								<div class="flex items-center gap-1 text-xs text-text-2 sm:gap-2 sm:text-sm">
 									<span>On</span>
-									<img src="/images/BASE.svg" alt="Base" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-									<span>{$currentNetwork.displayName}</span>
+									<img src="/images/ETH.svg" alt="Network" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+									<span>{$currentNetwork?.displayName ?? 'Unknown network'}</span>
 								</div>
 								{#if hasRatio}
 									<label

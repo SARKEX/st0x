@@ -5,6 +5,7 @@ import { rateLimiters, applyRateLimit } from '$lib/server/rateLimit';
 import { verifyWalletSignature } from '$lib/server/accessCodes';
 import { verifySessionLoginChallenge } from '$lib/server/signatureChallenge';
 import { createSession } from '$lib/server/walletSession';
+import { getServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 // SEC-03 / Plan 03-08a: verify the user's signature over the 'session_login'
 // nonce → mint an HttpOnly + Secure + SameSite=Strict 'session' cookie bound
@@ -19,7 +20,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	if (rateLimitResponse) return rateLimitResponse;
 
 	try {
-		const { address, nonce, signature } = await request.json();
+		const { address, nonce, signature, chainId: requestedChainId } = await request.json();
 
 		if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
 			return json({ error: 'Invalid wallet address' }, { status: 400 });
@@ -39,10 +40,19 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			);
 		}
 
+		const { networkCatalog } = await getServerApplicationCatalog();
+		if (requestedChainId === undefined && networkCatalog.length !== 1) {
+			return json({ error: 'chainId is required' }, { status: 400 });
+		}
+		const chainId = requestedChainId ?? networkCatalog[0]?.chainId;
+		const network = networkCatalog.find((candidate) => candidate.chainId === chainId);
+		if (!network) return json({ error: 'Unsupported chainId' }, { status: 400 });
+
 		const valid = await verifyWalletSignature(
 			address,
 			challenge.message,
-			signature as `0x${string}`
+			signature as `0x${string}`,
+			network
 		);
 		if (!valid) {
 			return json({ success: false, error: 'Signature verification failed' }, { status: 401 });

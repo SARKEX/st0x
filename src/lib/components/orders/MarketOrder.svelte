@@ -553,6 +553,8 @@
 		if (!selectedAmount) {
 			return;
 		}
+		const selectedNetwork = $currentNetwork;
+		if (!selectedNetwork) return;
 
 		if (isSubmittingMarketOrder) {
 			return;
@@ -638,7 +640,7 @@
 						decimals: paymentToken.decimals,
 						symbol: paymentToken.symbol
 					},
-					network: $currentNetwork
+					network: selectedNetwork
 				});
 
 				if (!result.success && result.error) {
@@ -719,7 +721,7 @@
 	}}
 />
 
-{#if $currentNetwork && assetToken}
+{#if $currentNetwork && assetToken && paymentToken}
 	<div data-testid="market-form" data-mode="market" data-side={orderSide.toLowerCase()}>
 		<div
 			class="space-y-4"

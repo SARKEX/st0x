@@ -38,7 +38,12 @@
 	// Build available tokens list based on current network
 	$: availableTokens = (() => {
 		const tokens: TokenOption[] = [
-			{ symbol: 'ETH', name: 'Ethereum', address: 'native', decimals: 18 }
+			{
+				symbol: $currentNetwork?.currencySymbol ?? 'ETH',
+				name: `${$currentNetwork?.displayName ?? 'Network'} native currency`,
+				address: 'native',
+				decimals: 18
+			}
 		];
 
 		for (const token of apiTokens) {
@@ -56,7 +61,7 @@
 
 	let recipientAddress = '';
 	let amount = '';
-	let selectedTokenSymbol = 'ETH';
+	let selectedTokenSymbol = '';
 	let sending = false;
 	let error: string | null = null;
 	let txHash: string | null = null;
@@ -64,6 +69,9 @@
 	// When modal opens with pre-selected token, set it
 	$: if ($showSendFundsModal && $sendModalToken) {
 		selectedTokenSymbol = $sendModalToken.symbol;
+	}
+	$: if (!availableTokens.some((token) => token.symbol === selectedTokenSymbol)) {
+		selectedTokenSymbol = availableTokens[0]?.symbol ?? '';
 	}
 
 	// Get the selected token object
@@ -89,7 +97,7 @@
 	function resetForm() {
 		recipientAddress = '';
 		amount = '';
-		selectedTokenSymbol = 'ETH';
+		selectedTokenSymbol = $currentNetwork?.currencySymbol ?? '';
 		error = null;
 		txHash = null;
 		sending = false;
@@ -140,8 +148,8 @@
 			dispatch('sent', { to: recipientAddress, amount, token: selectedToken.symbol, txHash: hash });
 
 			// Invalidate balance queries to refresh the page
-			queryClient.invalidateQueries({ queryKey: ['usdcWalletBalance'] });
-			queryClient.invalidateQueries({ queryKey: ['ethWalletBalance'] });
+			queryClient.invalidateQueries({ queryKey: ['paymentTokenWalletBalance'] });
+			queryClient.invalidateQueries({ queryKey: ['nativeWalletBalance'] });
 			queryClient.invalidateQueries({ queryKey: ['sftHoldings'] });
 		} catch (err) {
 			console.error('[send] Error:', err);
@@ -200,7 +208,7 @@
 						rel="noopener noreferrer"
 						class="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
 					>
-						View on BaseScan
+						View transaction
 						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
 								stroke-linecap="round"

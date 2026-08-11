@@ -53,6 +53,7 @@ import { invalidateUserVaultQueries } from '$lib/queries/vaults';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
 import { walletAddress } from '$lib/stores/authStore';
 import { currentNetwork } from '$lib/stores';
+import type { Network } from '$lib/config/network';
 import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
 import { getRaindexOrderUrl, getRaindexVaultUrl, isPaymentToken } from '$lib/utils/tokenMath';
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
@@ -185,13 +186,19 @@ function createRaindexLink(
 	return { url, text: linkText };
 }
 
+function getSelectedNetwork(): Network {
+	const network = get(currentNetwork);
+	if (!network) throw new Error('No network selected');
+	return network;
+}
+
 export const handleStrategyDeployment = async (
 	deploymentArgs: DeploymentTransactionArgs,
 	assetTokenInfo?: AssetTokenInfo,
 	eventContext?: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'submission', 'wallet_config', network?.id);
@@ -276,7 +283,8 @@ export const handleStrategyDeployment = async (
 						abi: erc20Abi,
 						address: d.approval.token as `0x${string}`,
 						functionName: 'balanceOf',
-						args: [$signerAddress as Hex]
+						args: [$signerAddress as Hex],
+						chainId: network.chainId
 					})
 				)
 			)) as bigint[];
@@ -516,7 +524,7 @@ export const showRainlangConfirmation = async (
 export const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	awaitWalletConfirmation(`Preparing strategy...`);
 	const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(network, args);
 
@@ -528,7 +536,7 @@ export const handleDcaDeploy = async (
 	eventContext: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'calldata', 'prepare_dca', network?.id);
@@ -578,7 +586,7 @@ export const handleLimitDeploy = async (
 	eventContext: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'calldata', 'prepare_limit', network?.id);
@@ -635,7 +643,7 @@ export const handleWithdraw = async (vault: RaindexVault) => {
 	let hash: Hash;
 	try {
 		// Security: Validate orderbook address is trusted before sending transaction
-		const network = get(currentNetwork);
+		const network = getSelectedNetwork();
 		validateOrderbookAddress(vault.raindex, network);
 
 		awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
@@ -740,7 +748,7 @@ export const handleRemoveOrder = async (quote: {
 }) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	const $signerAddress = get(walletAddress);
 
 	if (!$signerAddress) {
@@ -972,7 +980,7 @@ export const handleWithdrawFromOrder = async (quote: {
 }) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	const $signerAddress = get(walletAddress);
 
 	if (!$signerAddress) {
@@ -1201,7 +1209,7 @@ export const handleWithdrawFromOrder = async (quote: {
 };
 
 export const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	awaitWalletConfirmation(`Preparing strategy...`);
 	const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(network, args);
 

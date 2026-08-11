@@ -24,6 +24,7 @@ describe('exchangeRates REST adapters', () => {
 	it('composes token refs from token metadata and resolves by share or asset address', () => {
 		const rate = mapApiWrapRatio(
 			{
+				chainId: 8453,
 				shareAddress: '0xShare',
 				assetAddress: '0xAsset',
 				assetsPerShare: '1.0027',
@@ -45,6 +46,7 @@ describe('exchangeRates REST adapters', () => {
 	it('maps snapshot history events', () => {
 		const history = mapApiWrapRatioHistory(
 			{
+				chainId: 8453,
 				shareAddress: '0xShare',
 				assetAddress: '0xAsset',
 				events: [

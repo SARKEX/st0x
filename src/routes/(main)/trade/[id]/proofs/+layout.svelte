@@ -12,8 +12,8 @@
 
 	$: query = createQuery({
 		queryKey: ['getTokenProofs', id, $currentNetwork?.id],
-		enabled: Boolean(browser && id),
-		queryFn: () => apiGetTokenProofs(id)
+		enabled: Boolean(browser && id && $currentNetwork),
+		queryFn: () => apiGetTokenProofs(id, $currentNetwork!.chainId)
 	});
 
 	$: if ($query && $query.data) {
@@ -34,7 +34,9 @@
 				(wrappedAddress && v.address?.toLowerCase() === wrappedAddress)
 		);
 		if ($query?.data) {
-			const token = getTokenByAnyAddress(id) ?? getTokenByAnyAddress($query.data.address);
+			const token =
+				getTokenByAnyAddress(id, $currentNetwork?.chainId) ??
+				getTokenByAnyAddress($query.data.address, $currentNetwork?.chainId);
 			currentToken.set({
 				...(foundInSfts ?? {}),
 				id: $query.data.address,

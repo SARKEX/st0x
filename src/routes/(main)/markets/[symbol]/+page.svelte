@@ -51,7 +51,7 @@
 						Trade tokenized {asset.companyName}
 					</h1>
 					<p class="mt-2 text-lg text-gray-400">
-						{asset.ticker} · {asset.tokenSymbol} on Base
+						{asset.ticker} · {asset.tokenSymbol} on ST0x
 					</p>
 				</div>
 			</div>
@@ -81,8 +81,8 @@
 						underlying listed {asset.instrumentLabel}. The issued asset token is a claim against S01
 						Issuer GmbH on the terms set out in its base prospectus; holders are unsecured
 						contractual creditors of the Issuer. On ST0x it trades as
-						<span class="font-mono text-gray-200">{asset.tokenSymbol}</span>, a vault wrapper on
-						Base whose exchange rate to the issued token can change over time.
+						<span class="font-mono text-gray-200">{asset.tokenSymbol}</span>, a vault wrapper whose
+						exchange rate to the issued token can change over time.
 					</p>
 				</div>
 
@@ -98,8 +98,8 @@
 							vaults you control; ST0x never takes custody.
 						</li>
 						<li>
-							<span class="font-medium text-white">On-chain &amp; composable.</span> Settle on Base
-							and use your tokenized {asset.ticker} across DeFi.
+							<span class="font-medium text-white">On-chain &amp; composable.</span> Settle on the
+							selected network and use your tokenized {asset.ticker} across DeFi.
 						</li>
 						<li>
 							<span class="font-medium text-white">Intent-based execution.</span> Orders are placed on-chain

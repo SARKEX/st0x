@@ -102,6 +102,8 @@ export const KV_KEYS = {
 
 // Types for snapshot block records
 export interface SnapshotBlockRecord {
+	/** Absent only on records created before multichain snapshot support. */
+	chainId?: number;
 	blockNumber: number;
 	timestamp: number;
 	date: string; // YYYY-MM-DD

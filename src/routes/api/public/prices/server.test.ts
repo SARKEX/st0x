@@ -24,6 +24,10 @@ vi.mock('$lib/server/kv', () => ({
 	}
 }));
 
+vi.mock('$lib/server/applicationCatalog', () => ({
+	ensureServerApplicationCatalog: vi.fn(async () => undefined)
+}));
+
 import { env } from '$env/dynamic/private';
 import { networks } from '$lib/config/network';
 import { clearPublicPricesMemoryCache } from '$lib/server/publicPricesCache';
@@ -65,7 +69,7 @@ describe('/api/public/prices', () => {
 		expect(response.status).toBe(200);
 		expect(fetchMock).toHaveBeenCalledTimes(networks.length);
 		for (const [url, init] of fetchMock.mock.calls) {
-			expect(String(url)).toMatch(/^https:\/\/api\.example\.test\/v1\/prices\?chainId=\d+$/);
+			expect(String(url)).toMatch(/^https:\/\/api\.example\.test\/v2\/prices\?chainId=\d+$/);
 			if (!init) throw new Error('Expected batch request options');
 			const headers = init.headers as Record<string, string>;
 			expect(headers.Authorization).toBe('Basic cHJpY2VzLWtleTpwcmljZXMtc2VjcmV0');

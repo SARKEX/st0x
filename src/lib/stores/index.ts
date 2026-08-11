@@ -3,7 +3,7 @@ import type { OffchainAssetReceiptVault } from '$lib/types/OffchainAssetReceiptV
 import type { MetaV1S } from '$lib/types/OffchainAssetReceiptVault';
 import type { ApiTokenProofsResponse } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
-import { networks } from '$lib/config/network';
+import { replaceNetworkCatalog } from '$lib/config/network';
 import type { MidpointPrice } from '$lib/queries/midpointPrices';
 import { createMidpointPricesQuery } from '$lib/queries/midpointPrices';
 import { createSftsQuery } from '$lib/queries/vaults';
@@ -17,11 +17,11 @@ function mapQueryData<T>(queryStore: QueryResultStore<T>, fallback: T) {
 }
 
 function createNetworkQueryStore<T>(
-	networkStore: Readable<Network>,
+	networkStore: Readable<Network | null>,
 	factory: (network: Network | null) => QueryResultStore<T>
 ): QueryResultStore<T> {
 	return derived(networkStore, ($network, set) => {
-		const queryStore = factory($network ?? null);
+		const queryStore = factory($network);
 		const unsubscribe = queryStore.subscribe(set);
 		return () => unsubscribe();
 	});
@@ -29,7 +29,21 @@ function createNetworkQueryStore<T>(
 
 export const sftMetadata = writable<MetaV1S[] | null>(null);
 export const tokenProofs = writable<ApiTokenProofsResponse | null>(null);
-export const currentNetwork = writable<Network>(networks[0]); // Base is default
+export const availableNetworks = writable<Network[]>([]);
+export const currentNetwork = writable<Network | null>(null);
+
+export function hydrateNetworkCatalog(catalog: readonly Network[]): void {
+	const next = [...catalog];
+	replaceNetworkCatalog(next);
+	availableNetworks.set(next);
+	currentNetwork.update((selected) => {
+		if (selected) {
+			const refreshed = next.find((network) => network.chainId === selected.chainId);
+			if (refreshed) return refreshed;
+		}
+		return next[0] ?? null;
+	});
+}
 
 // Re-export wrongNetwork from authStore to maintain backward compatibility
 export { wrongNetwork } from './authStore';
@@ -67,20 +81,21 @@ const REVIEW_STRATEGY_KEY = 'st0x_review_strategy_on_deploy';
 
 function createReviewStrategyStore() {
 	// Initialize from localStorage if available, default to false
-	const initialValue = browser ? localStorage.getItem(REVIEW_STRATEGY_KEY) === 'true' : false;
+	const hasStorage = browser && typeof localStorage !== 'undefined';
+	const initialValue = hasStorage ? localStorage.getItem(REVIEW_STRATEGY_KEY) === 'true' : false;
 	const { subscribe, set } = writable<boolean>(initialValue);
 
 	return {
 		subscribe,
 		set: (value: boolean) => {
-			if (browser) {
+			if (hasStorage) {
 				localStorage.setItem(REVIEW_STRATEGY_KEY, String(value));
 			}
 			set(value);
 		},
 		toggle: () => {
-			const newValue = browser ? localStorage.getItem(REVIEW_STRATEGY_KEY) !== 'true' : false;
-			if (browser) {
+			const newValue = hasStorage ? localStorage.getItem(REVIEW_STRATEGY_KEY) !== 'true' : false;
+			if (hasStorage) {
 				localStorage.setItem(REVIEW_STRATEGY_KEY, String(newValue));
 			}
 			set(newValue);

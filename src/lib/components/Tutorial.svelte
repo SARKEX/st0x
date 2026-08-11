@@ -60,7 +60,7 @@
 		'buy-sell-panel': {
 			title: 'Place Orders',
 			description:
-				'Click Buy or Sell to open the order panel. Choose between market orders, limit orders, and DCAs. All orders are against USDC on Base.',
+				'Click Buy or Sell to open the order panel. Choose between market orders, limit orders, and DCAs. Orders use the selected network’s configured quote token.',
 			targetSelector: ['[data-tutorial="buy-sell-buttons"]', '[data-tutorial="trade-panel"]'],
 			buttonText: 'Next'
 		},

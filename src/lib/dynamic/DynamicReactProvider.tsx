@@ -43,6 +43,7 @@ interface DynamicBridgeProps {
 		value: string;
 		data?: string;
 	} | null;
+	chainId?: number;
 }
 
 // Token refresh interval (refresh every 50 minutes to be safe before 1 hour expiry)
@@ -55,7 +56,8 @@ function DynamicBridge({
 	triggerLogin,
 	triggerLogout,
 	triggerExportWallet,
-	triggerSendTransaction
+	triggerSendTransaction,
+	chainId
 }: Omit<DynamicBridgeProps, 'environmentId'>) {
 	const { sdkHasLoaded, user, primaryWallet, handleLogOut, setShowAuthFlow } = useDynamicContext();
 
@@ -152,8 +154,7 @@ function DynamicBridge({
 				return;
 			}
 
-			// Base chain ID
-			const BASE_CHAIN_ID = '8453';
+			let selectedChainId = chainId ? String(chainId) : undefined;
 
 			// Cache wallet and public clients for reuse (reset on each activeWallet change)
 			let cachedWalletClient: Awaited<ReturnType<typeof activeWallet.getWalletClient>> | null =
@@ -180,11 +181,11 @@ function DynamicBridge({
 					try {
 						console.log(
 							'[dynamic] Getting wallet client for chain',
-							BASE_CHAIN_ID,
+							selectedChainId,
 							'auth token present:',
 							!!authToken
 						);
-						cachedWalletClient = await activeWallet.getWalletClient(BASE_CHAIN_ID);
+						cachedWalletClient = await activeWallet.getWalletClient(selectedChainId);
 						console.log('[dynamic] Got wallet client:', cachedWalletClient ? 'success' : 'null');
 					} catch (error) {
 						console.error('[dynamic] Error getting wallet client:', error);
@@ -229,6 +230,12 @@ function DynamicBridge({
 
 					// Handle chain switching - Dynamic manages this internally
 					if (args.method === 'wallet_switchEthereumChain') {
+						const requested = (args.params?.[0] as { chainId?: string } | undefined)?.chainId;
+						if (requested) {
+							selectedChainId = String(Number.parseInt(requested, 16));
+							cachedWalletClient = null;
+							cachedPublicClient = null;
+						}
 						return null;
 					}
 
@@ -296,7 +303,7 @@ function DynamicBridge({
 			// Clear provider when wallet is not available
 			onWalletProviderReadyRef.current(null);
 		}
-	}, [activeWallet]);
+	}, [activeWallet, chainId]);
 
 	// Handle login trigger
 	useEffect(() => {
@@ -376,8 +383,8 @@ function DynamicBridge({
 		if (triggerSendTransaction && activeWallet && isEthereumWallet(activeWallet)) {
 			(async () => {
 				try {
-					// Get wallet client for Base chain
-					const walletClient = await activeWallet.getWalletClient('8453');
+					if (!chainId) throw new Error('No network selected');
+					const walletClient = await activeWallet.getWalletClient(String(chainId));
 					if (!walletClient) {
 						throw new Error('Wallet client not available');
 					}
@@ -401,7 +408,7 @@ function DynamicBridge({
 				}
 			})();
 		}
-	}, [triggerSendTransaction, activeWallet]);
+	}, [triggerSendTransaction, activeWallet, chainId]);
 
 	// This component doesn't render anything visible
 	return null;

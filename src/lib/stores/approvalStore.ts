@@ -14,7 +14,7 @@
  *     hits a load-balanced RPC should be wrapped with `withRetry`".
  *   - APPROVAL_TX_CONFIRMATIONS = 2 per CONVENTIONS.md "Confirmations &
  *     Transaction Hygiene". DO NOT lower — confirmations=1 races with
- *     short-tail re-orgs on Base/Arbitrum.
+ *     short-tail re-orgs on supported EVM networks.
  *
  * Pitfall-aware design (per 02-PATTERNS.md "Variation flag"):
  *   The existing inline approval code in transaction.ts interleaved

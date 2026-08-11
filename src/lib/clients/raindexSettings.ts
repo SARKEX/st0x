@@ -21,7 +21,7 @@ function resolveRegistryManifestUrl(): string {
 	return new URL(REGISTRY_MANIFEST_URL, `${appOrigin()}/`).toString();
 }
 
-function settingsUrlFromManifest(manifest: string, manifestUrl: string): string {
+export function settingsUrlFromManifest(manifest: string, manifestUrl: string): string {
 	const settingsEntry = manifest
 		.split(/\r?\n/)
 		.map((line) => line.trim())

@@ -81,12 +81,13 @@ export function createSftsQuery(network: Network | null) {
 		staleTime: Infinity,
 		refetchInterval: false,
 		queryFn: async () => {
-			const response = await apiGetTokenDetails();
+			if (!network) return [];
+			const response = await apiGetTokenDetails(network.chainId);
 			if (response.errors.length) {
 				console.warn('Some token details failed to load', response.errors);
 			}
 			return response.data.map((summary) =>
-				tokenDetailsSummaryToVault(summary, undefined, network?.chainId)
+				tokenDetailsSummaryToVault(summary, undefined, network.chainId)
 			);
 		}
 	});
@@ -134,7 +135,9 @@ export function createSingleSftQuery(
 		initialDataUpdatedAt: getCachedTimestamp(),
 		queryFn: async () => {
 			if (!network || !tokenId) return null;
-			const detail = await apiGetTokenDetailsByAddress(tokenId, { activityLimit: 5 });
+			const detail = await apiGetTokenDetailsByAddress(tokenId, network.chainId, {
+				activityLimit: 5
+			});
 			return tokenDetailsSummaryToVault(detail, detail, network.chainId);
 		}
 	});

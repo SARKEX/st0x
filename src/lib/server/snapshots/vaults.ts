@@ -1,20 +1,22 @@
 // Query vault holdings from the Rain orderbook subgraph
 // Used to attribute orderbook holdings to vault owners
 
-import { networks } from '$lib/config/networks';
-import { TOKENS } from '$lib/config/tokens';
+import type { Network } from '$lib/config/networks';
+import { onTokenCatalogChange } from '$lib/config/tokens';
 import { parseFloatHex } from '$lib/utils/tokenMath';
 
 const BATCH_SIZE = 1000;
 
-// Get orderbook subgraph URLs from network config (current + inactive/legacy)
-const ORDERBOOK_SUBGRAPH_URLS = [
-	networks[0].orderbook_subgraph_url,
-	...(networks[0].orderbook_subgraph_urls_inactive ?? [])
-].filter(Boolean);
-
 // Get token addresses for filtering
-const TOKEN_ADDRESSES = TOKENS.map((t) => t.address.toLowerCase());
+const TOKEN_ADDRESSES: string[] = [];
+
+onTokenCatalogChange((tokens) => {
+	TOKEN_ADDRESSES.splice(
+		0,
+		TOKEN_ADDRESSES.length,
+		...tokens.map((token) => token.address.toLowerCase())
+	);
+});
 
 interface SubgraphVault {
 	id: string;
@@ -187,22 +189,27 @@ async function fetchAllVaultHoldingsFromSubgraph(
  * @param blockNumber - If provided, queries vault state at this specific block
  */
 export async function fetchAllVaultHoldings(
-	tokenAddresses: string[] = TOKEN_ADDRESSES,
-	blockNumber?: number
+	tokenAddresses: string[],
+	blockNumber: number | undefined,
+	network: Network
 ): Promise<VaultHolding[]> {
+	const orderbookSubgraphUrls = [
+		network.orderbook_subgraph_url,
+		...network.orderbook_subgraph_urls_inactive
+	].filter(Boolean);
 	const deduped = new Map<string, VaultHolding>();
 
 	console.log(
 		`[Vaults] Fetching vault holdings for ${tokenAddresses.length} tokens${
 			blockNumber ? ` at block ${blockNumber}` : ''
-		} from ${ORDERBOOK_SUBGRAPH_URLS.length} orderbook subgraph(s)`
+		} from ${orderbookSubgraphUrls.length} orderbook subgraph(s)`
 	);
 	console.log(`[Vaults] Token addresses: ${tokenAddresses.join(', ')}`);
-	console.log(`[Vaults] Subgraph URLs: ${ORDERBOOK_SUBGRAPH_URLS.join(', ')}`);
+	console.log(`[Vaults] Subgraph URLs: ${orderbookSubgraphUrls.join(', ')}`);
 
 	try {
 		const results = await Promise.all(
-			ORDERBOOK_SUBGRAPH_URLS.map(async (url, i) => {
+			orderbookSubgraphUrls.map(async (url, i) => {
 				try {
 					const holdings = await fetchAllVaultHoldingsFromSubgraph(
 						url,
@@ -210,7 +217,7 @@ export async function fetchAllVaultHoldings(
 						blockNumber
 					);
 					console.log(
-						`[Vaults] Subgraph ${i + 1}/${ORDERBOOK_SUBGRAPH_URLS.length}: ${
+						`[Vaults] Subgraph ${i + 1}/${orderbookSubgraphUrls.length}: ${
 							holdings.length
 						} vault holdings`
 					);

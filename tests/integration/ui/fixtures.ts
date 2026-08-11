@@ -363,7 +363,7 @@ export const test = base.extend<UiFixtures>({
 				headers: { 'access-control-allow-origin': '*' }
 			});
 		});
-		await page.route('**/api/st0x/v1/orders/token/**', async (route) => {
+		await page.route('**/api/st0x/v2/orders/token/**', async (route) => {
 			// When maker orders are registered, serve a fully-synthetic
 			// response built from the maker registry. Specs that don't
 			// register any maker (e.g. limitDeploy, which only deploys and
@@ -417,7 +417,7 @@ export const test = base.extend<UiFixtures>({
 		);
 		await use(page);
 		// Drain in-flight route handlers BEFORE Playwright tears down the
-		// page/context. The trade page polls /api/st0x/v1/orders/token/* every
+		// page/context. The trade page polls /api/st0x/v2/orders/token/* every
 		// 15s, and a `route.fetch` mid-flight at teardown throws "Target page
 		// closed" — Playwright then reports that as a test failure even though
 		// the assertions all passed. `ignoreErrors` swallows still-pending

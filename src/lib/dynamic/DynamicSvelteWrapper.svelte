@@ -17,6 +17,7 @@
 		type DynamicSession
 	} from '$lib/stores/dynamicStore';
 	import { setDynamicWalletProvider } from '$lib/services/walletService';
+	import { currentNetwork } from '$lib/stores';
 
 	// Prevent TypeScript warning about unused import (used via react: prefix)
 	used(DynamicReactProvider);
@@ -91,6 +92,7 @@
 		triggerLogout={$dynamicTriggerLogout}
 		triggerExportWallet={$dynamicTriggerExportWallet}
 		triggerSendTransaction={$dynamicTriggerSendTransaction}
+		chainId={$currentNetwork?.chainId}
 	/>
 {:else if browser && !environmentId}
 	<!-- No Dynamic environment ID configured -->

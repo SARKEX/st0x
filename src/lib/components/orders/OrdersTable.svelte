@@ -257,7 +257,7 @@
 				let page = 1;
 				let hasMore = true;
 				while (hasMore && page <= MAX_CLOSED_ORDER_PAGES) {
-					const result = await apiGetOrdersByOwner(signer, {
+					const result = await apiGetOrdersByOwner(signer, network.chainId, {
 						page,
 						pageSize: CLOSED_ORDERS_PAGE_SIZE,
 						state: 'inactive'
@@ -662,7 +662,7 @@
 								<td class="py-3 pr-4">
 									{#if quote}
 										{@const raindexUrl = getRaindexOrderUrl(
-											$currentNetwork?.id ?? 0,
+											$currentNetwork?.chainId,
 											orderbookId,
 											quote.orderHash
 										)}

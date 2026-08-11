@@ -104,6 +104,7 @@ export function buildMarketSwapQuoteRequest(
 
 	return {
 		...(taker ? { taker } : {}),
+		chainId: input.network.chainId,
 		inputToken: inputToken.address,
 		outputToken: outputToken.address,
 		mode: isOutputAnchored ? 'buyUpTo' : 'spendUpTo',
@@ -130,6 +131,7 @@ function buildApprovalRetryRequest(
 	}
 	return {
 		taker: request.taker,
+		chainId: request.chainId,
 		inputToken: request.inputToken,
 		outputToken: request.outputToken,
 		mode: request.mode,
@@ -286,10 +288,13 @@ function validateReadyCalldata(
 const TRADE_INDEX_MAX_ATTEMPTS = 60;
 const TRADE_INDEX_POLL_INTERVAL_MS = 5_000;
 
-async function pollForIndexedTrade(hash: string): Promise<ApiTradesByTxResponse | null> {
+async function pollForIndexedTrade(
+	hash: string,
+	chainId: number
+): Promise<ApiTradesByTxResponse | null> {
 	for (let attempt = 0; attempt < TRADE_INDEX_MAX_ATTEMPTS; attempt++) {
 		try {
-			const response = await apiGetTradesByTx(hash);
+			const response = await apiGetTradesByTx(hash, chainId);
 			if (response.trades.length > 0) return response;
 		} catch (error) {
 			if (attempt === TRADE_INDEX_MAX_ATTEMPTS - 1) {
@@ -471,7 +476,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 		});
 		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'completed');
 		invalidateDashboardBalances();
-		const indexedTrade = await pollForIndexedTrade(hash);
+		const indexedTrade = await pollForIndexedTrade(hash, network.chainId);
 		let metadata: { marketOrderSummary: ReturnType<typeof buildMarketOrderSummary> } | undefined;
 		if (indexedTrade) {
 			try {

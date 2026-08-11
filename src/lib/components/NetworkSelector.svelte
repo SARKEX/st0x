@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { currentNetwork } from '$lib/stores';
-	import { networks } from '$lib/config/network';
+	import { availableNetworks, currentNetwork } from '$lib/stores';
+	import type { Network } from '$lib/config/network';
 	import { switchChain } from '@wagmi/core';
 	import { wagmiConfig, chainId, connected } from 'svelte-wagmi';
 	import { get } from 'svelte/store';
@@ -9,19 +9,11 @@
 
 	let isOpen = false;
 
-	function getChainLogo(n: (typeof networks)[0]): string {
-		if (!n) return '/images/ETH.svg';
-		switch (n.chainId) {
-			case 42161:
-				return '/images/ARB.svg';
-			case 8453:
-				return '/images/BASE.svg';
-			default:
-				return '/images/ETH.svg';
-		}
+	function getChainLogo(network: Network): string {
+		return network.icon.startsWith('/') ? network.icon : '/images/ETH.svg';
 	}
 
-	async function selectNetwork(network: (typeof networks)[0]) {
+	async function selectNetwork(network: Network) {
 		const previousNetwork = $currentNetwork;
 
 		$currentNetwork = network;
@@ -64,9 +56,10 @@
 
 	// Auto-trigger network switch when currentNetwork changes from other parts of the app
 	$: if ($currentNetwork && $connected && $chainId && $chainId !== $currentNetwork.id) {
+		const network = $currentNetwork;
 		// Small delay to avoid immediate switching during initial load
 		setTimeout(async () => {
-			await switchChain(get(wagmiConfig), { chainId: $currentNetwork.id });
+			await switchChain(get(wagmiConfig), { chainId: network.id });
 		}, 100);
 	}
 
@@ -96,7 +89,7 @@
 		class="flex items-center gap-1.5 rounded-lg border border-line bg-overlay-1 px-2.5 py-1.5 text-sm font-medium text-text-2 transition-all duration-200 hover:bg-overlay-hover active:scale-95"
 	>
 		<span class="h-2 w-2 rounded-full bg-iris-500"></span>
-		<span class="hidden capitalize sm:inline">{$currentNetwork.name}</span>
+		<span class="hidden capitalize sm:inline">{$currentNetwork?.name ?? 'Network'}</span>
 		<Icon
 			name="chevronDown"
 			className="h-4 w-4 text-text-3 transition-transform duration-200 {isOpen ? 'rotate-180' : ''}"
@@ -118,10 +111,10 @@
 			class="bg-surface-1/95 absolute left-0 right-0 top-full z-[9999] mx-2 mt-1 min-w-[200px] rounded-lg border border-line shadow-[var(--shadow-2)] backdrop-blur-lg sm:left-auto sm:right-0 sm:top-full sm:mx-0 sm:w-auto"
 		>
 			<div class="p-1">
-				{#each networks as network}
+				{#each $availableNetworks as network}
 					<button
 						on:click={() => selectNetwork(network)}
-						class="flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm text-text transition-colors hover:bg-surface-2 active:bg-surface-3 {$currentNetwork.id ===
+						class="flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm text-text transition-colors hover:bg-surface-2 active:bg-surface-3 {$currentNetwork?.id ===
 						network.id
 							? 'bg-accent-soft'
 							: ''}"
@@ -129,8 +122,7 @@
 						<img
 							src={getChainLogo(network)}
 							alt={network.displayName}
-							class="h-4 w-4"
-							class:rounded-full={network.chainId !== 8453}
+							class="h-4 w-4 rounded-full"
 						/>
 						<div class="flex flex-col items-start">
 							<span class="font-medium">{network.displayName}</span>
