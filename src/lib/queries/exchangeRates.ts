@@ -185,8 +185,8 @@ export function createExchangeRatesQuery(chainId: number | null | undefined) {
 	return createQuery<ExchangeRateLookup>({
 		queryKey: ['exchangeRates', chainId],
 		enabled: browser && Boolean(chainId),
-		staleTime: 60_000,
-		refetchOnWindowFocus: true,
+		staleTime: Infinity,
+		refetchInterval: 60_000,
 		queryFn: async () => {
 			if (!chainId) throw new Error('chainId is required');
 			const [apiTokens, wrapRatios] = await Promise.all([
@@ -215,7 +215,8 @@ export function createExchangeRateHistoryQuery(
 			options?.pageSize ?? 50
 		],
 		enabled: browser && Boolean(wrappedTokenAddress && chainId),
-		staleTime: 60_000,
+		staleTime: Infinity,
+		refetchInterval: 60_000,
 		retry: false,
 		queryFn: async () => {
 			if (!wrappedTokenAddress || !chainId) {

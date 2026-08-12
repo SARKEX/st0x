@@ -532,10 +532,13 @@ export const handleAggregatedTakeOrdersCalldata = async (
 		awaitWalletConfirmation(`Awaiting wallet confirmation to approve ${approvalTokenSymbol}...`);
 		const approvalHash = await sendTransaction({
 			to: maybeApprovalInfo.token as `0x${string}`,
-			data: maybeApprovalInfo.calldata as Hex
+			data: maybeApprovalInfo.calldata as Hex,
+			chainId: network.chainId
 		});
 		awaitApprovalTx(approvalHash);
-		await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+		await waitForTransaction(approvalHash, network.chainId, {
+			confirmations: APPROVAL_TX_CONFIRMATIONS
+		});
 		calldataWrapped = await fetchAggregatedTakeOrdersCalldata(takeRequest, { preferCache: false });
 		if (calldataWrapped.error || !calldataWrapped.value) {
 			transactionError(
@@ -585,10 +588,11 @@ export const handleAggregatedTakeOrdersCalldata = async (
 		awaitWalletConfirmation(`Awaiting wallet confirmation...`);
 		const hash = await sendTransaction({
 			to: raindex as `0x${string}`,
-			data: calldata as Hex
+			data: calldata as Hex,
+			chainId: network.chainId
 		});
 		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-		await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
+		await waitForTransaction(hash, network.chainId, { confirmations: TAKE_TX_CONFIRMATIONS });
 		await pollAndFinalizeTakeOrders([hash], primaryOrder, params, network);
 		return true;
 	} catch (txError) {
@@ -837,10 +841,13 @@ export const handleTakeOrders = async (
 						);
 						const approvalHash = await sendTransaction({
 							to: maybeApprovalInfo.token as `0x${string}`,
-							data: maybeApprovalInfo.calldata as Hex
+							data: maybeApprovalInfo.calldata as Hex,
+							chainId: network.chainId
 						});
 						awaitApprovalTx(approvalHash);
-						await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+						await waitForTransaction(approvalHash, network.chainId, {
+							confirmations: APPROVAL_TX_CONFIRMATIONS
+						});
 						readyCalldataResult = await orderToExecute.getTakeCalldata(
 							Number(getMakerInputIOIndex(orderConfig)),
 							Number(getMakerOutputIOIndex(orderConfig)),
@@ -857,10 +864,13 @@ export const handleTakeOrders = async (
 					);
 					const approvalHash = await sendTransaction({
 						to: maybeApprovalInfo.token as `0x${string}`,
-						data: maybeApprovalInfo.calldata as Hex
+						data: maybeApprovalInfo.calldata as Hex,
+						chainId: network.chainId
 					});
 					awaitApprovalTx(approvalHash);
-					await waitForTransaction(approvalHash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+					await waitForTransaction(approvalHash, network.chainId, {
+						confirmations: APPROVAL_TX_CONFIRMATIONS
+					});
 					readyCalldataResult = await orderToExecute.getTakeCalldata(
 						Number(getMakerInputIOIndex(orderConfig)),
 						Number(getMakerOutputIOIndex(orderConfig)),
@@ -948,7 +958,8 @@ export const handleTakeOrders = async (
 
 			hash = await sendTransaction({
 				to: readyCalldataResult.value.takeOrdersInfo.raindex as `0x${string}`,
-				data: readyCalldataResult.value.takeOrdersInfo.calldata as Hex
+				data: readyCalldataResult.value.takeOrdersInfo.calldata as Hex,
+				chainId: network.chainId
 			});
 
 			console.log(`${TX_LOG_PREFIX} Order ${orderIndex + 1} transaction submitted`, {
@@ -957,7 +968,7 @@ export const handleTakeOrders = async (
 			});
 
 			awaitWalletConfirmation(`Awaiting transaction confirmation${batchLabel}...`, progressData);
-			await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
+			await waitForTransaction(hash, network.chainId, { confirmations: TAKE_TX_CONFIRMATIONS });
 
 			console.log(`${TX_LOG_PREFIX} Order ${orderIndex + 1} transaction confirmed`, { hash });
 

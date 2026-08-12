@@ -72,3 +72,16 @@ export function getSt0xActivityApiConfig(environment: St0xEnvironment): St0xApiC
 		'activity'
 	);
 }
+
+/** Resolve the general REST API credential used by catalog and registry requests. */
+export function getSt0xGeneralApiConfig(environment: St0xEnvironment): St0xApiConfig | null {
+	const url = environment.ST0X_API_URL;
+	const key = environment.ST0X_API_KEY;
+	const secret = environment.ST0X_API_SECRET;
+	if (!url || !key || !secret) return null;
+	return {
+		apiBase: url.replace(/\/+$/, ''),
+		authHeader: basicAuth(key, secret),
+		credentialLabel: 'general'
+	};
+}

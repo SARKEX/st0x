@@ -131,8 +131,9 @@ export const GET: RequestHandler = async ({ request }) => {
 			const allBlocks = (await kvGet<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];
 			allBlocks.push(...blockRecords);
 
-			// Keep only last 365 days worth of blocks (730 records at 2 per day)
-			const trimmedBlocks = allBlocks.slice(-730);
+			// Retain a full year independently of how many networks are active.
+			const retentionCutoff = Math.floor(now.getTime() / 1000) - 365 * 24 * 60 * 60;
+			const trimmedBlocks = allBlocks.filter((record) => record.timestamp >= retentionCutoff);
 			await kvSet(KV_KEYS.snapshotBlocks(), trimmedBlocks);
 
 			console.log(`[Cron] Stored block records in KV`);

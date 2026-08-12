@@ -91,7 +91,7 @@ export function createBatchTradesQuery(
 	return createQuery<Map<string, ApiTradeByAddress[]>>({
 		queryKey: ['batchTrades', network?.id, sortedKey],
 		enabled: Boolean(network && orderHashes.length > 0),
-		staleTime: 600_000,
+		staleTime: Infinity,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
 			const response = await apiGetTradesBatch(orderHashes, network!.chainId);
@@ -126,7 +126,7 @@ export function createTakerTradesQuery(
 	return createQuery<TakerTradesPayload>({
 		queryKey: ['takerTrades', network?.id, walletAddress],
 		enabled: Boolean(network && walletAddress),
-		staleTime: 600_000,
+		staleTime: Infinity,
 		refetchInterval: pollInterval,
 		retry: shouldRetryTradeQuery,
 		queryFn: () => fetchRecentTakerTrades(walletAddress!, network!.chainId)

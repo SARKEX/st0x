@@ -8,7 +8,7 @@ import { fetchAllVaultHoldings } from './vaults';
 import { fetchMarketPrices } from '$lib/server/marketPrices';
 import { getRewardsExcludedWalletsSet } from '$lib/server/kv';
 import type { Network } from '$lib/config/networks';
-import { TOKENS, getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
+import { getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
 import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
 import { withRetry } from '$lib/utils/retry';
 import { getServerApplicationCatalog } from '$lib/server/applicationCatalog';
@@ -264,8 +264,10 @@ export async function generateAllTokenSnapshots(
 	network: Network,
 	blockNumber: number
 ): Promise<BlockSnapshot[]> {
-	await getServerApplicationCatalog();
-	const chainTokens = TOKENS.filter((token) => token.chainId === network.chainId);
+	const { tokenCatalog } = await getServerApplicationCatalog();
+	const chainTokens = tokenCatalog.filter(
+		(token) => token.category === 'ST0x' && token.chainId === network.chainId
+	);
 	const allTokenAddresses = chainTokens.flatMap((token) => getTokenAddressVariants(token));
 	// Get block timestamp first (needed for retained price lookup)
 	const timestamp = await getBlockTimestamp(network, blockNumber);

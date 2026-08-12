@@ -130,7 +130,13 @@ export function replaceTokenCatalog(tokens: readonly CategorizedToken[]): void {
 
 	rebuildTokenLookups();
 	rebuildPaymentTokens();
-	for (const listener of tokenCatalogListeners) listener(TOKENS);
+	for (const listener of tokenCatalogListeners) {
+		try {
+			listener(TOKENS);
+		} catch (error) {
+			console.error('[token-catalog] Listener failed:', error);
+		}
+	}
 }
 
 export function onTokenCatalogChange(listener: TokenCatalogListener): () => void {

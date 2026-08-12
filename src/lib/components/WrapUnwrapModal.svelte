@@ -152,12 +152,22 @@
 
 		try {
 			const amountWei = parseUnits(amount, selectedTokenData.decimals);
+			const chainId = $currentNetwork?.chainId;
+			if (!chainId) return;
 
 			if (isWrapMode) {
-				const shares = await previewWrap(selectedTokenData.address as `0x${string}`, amountWei);
+				const shares = await previewWrap(
+					selectedTokenData.address as `0x${string}`,
+					amountWei,
+					chainId
+				);
 				previewAmount = formatUnits(shares, currentMapping.wrappedToken.decimals);
 			} else {
-				const assets = await previewUnwrap(selectedTokenData.address as `0x${string}`, amountWei);
+				const assets = await previewUnwrap(
+					selectedTokenData.address as `0x${string}`,
+					amountWei,
+					chainId
+				);
 				previewAmount = formatUnits(assets, currentMapping.unwrappedToken.decimals);
 			}
 		} catch {
@@ -207,7 +217,7 @@
 
 	// Execute wrap or unwrap
 	async function handleExecute() {
-		if (!selectedTokenData || !currentMapping || !$walletAddress) return;
+		if (!selectedTokenData || !currentMapping || !$walletAddress || !$currentNetwork) return;
 		if (parsedAmount <= 0) return;
 
 		// Capture values before closing modal (handleClose resets state)
@@ -217,6 +227,7 @@
 		const wrapMode = isWrapMode;
 		const targetToken = wrapMode ? mapping.wrappedToken : mapping.unwrappedToken;
 		const walletAddr = $walletAddress;
+		const chainId = $currentNetwork.chainId;
 
 		track('wrap_unwrap_initiated', {
 			mode: wrapMode ? 'wrap' : 'unwrap',
@@ -237,7 +248,8 @@
 			amountWei,
 			walletAddr as `0x${string}`,
 			tokenData.symbol,
-			targetToken.symbol
+			targetToken.symbol,
+			chainId
 		);
 
 		// Invalidate modal-specific query (dashboard queries handled by transactionStore)

@@ -352,7 +352,8 @@ export const handleStrategyDeployment = async (
 
 		hash = await sendTransaction({
 			to: deploymentArgs.raindexAddress as `0x${string}`,
-			data: deploymentArgs.deploymentCalldata as Hex
+			data: deploymentArgs.deploymentCalldata as Hex,
+			chainId: network.chainId
 		});
 		if (submitContext) addTradeFlowBreadcrumb(submitContext, 'completed');
 		// OBS-07 (Plan 02-03 Task 2c): tx hash returned post-dispatch — emit
@@ -670,11 +671,14 @@ export const handleWithdraw = async (vault: RaindexVault) => {
 
 		hash = await sendTransaction({
 			to: vault.raindex as `0x${string}`,
-			data: vaultCalldatas.value.withdraw as Hex
+			data: vaultCalldatas.value.withdraw as Hex,
+			chainId: network.chainId
 		});
 		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
-		await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
+		await waitForTransaction(hash, network.chainId, {
+			confirmations: TAKE_TX_CONFIRMATIONS
+		});
 
 		const $signer = get(walletAddress);
 		const raindexLink = {
@@ -713,7 +717,8 @@ export const handleWrapUnwrap = async (
 	amount: bigint,
 	userAddress: `0x${string}`,
 	tokenSymbol: string,
-	targetSymbol: string
+	targetSymbol: string,
+	chainId: number
 ) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
@@ -725,13 +730,13 @@ export const handleWrapUnwrap = async (
 		awaitWalletConfirmation(`Awaiting wallet confirmation to ${mode} ${tokenSymbol}...`);
 
 		if (mode === 'wrap') {
-			hash = await wrapToken(tokenAddress, amount, userAddress);
+			hash = await wrapToken(tokenAddress, amount, userAddress, chainId);
 		} else {
-			hash = await unwrapToken(tokenAddress, amount, userAddress, userAddress);
+			hash = await unwrapToken(tokenAddress, amount, userAddress, userAddress, chainId);
 		}
 
 		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-		await waitForTransaction(hash);
+		await waitForTransaction(hash, chainId);
 
 		// Invalidate balance queries (same pattern as handleWithdraw)
 		invalidateDashboardBalances();
@@ -925,12 +930,13 @@ export const handleRemoveOrder = async (quote: {
 
 				const withdrawHash = await sendTransaction({
 					to: vault.raindex as `0x${string}`,
-					data: vaultCalldatas.value.withdraw as Hex
+					data: vaultCalldatas.value.withdraw as Hex,
+					chainId: network.chainId
 				});
 
 				awaitWalletConfirmation(`Awaiting withdrawal confirmation...`);
 
-				await waitForTransaction(withdrawHash);
+				await waitForTransaction(withdrawHash, network.chainId);
 			}
 		}
 
@@ -947,12 +953,13 @@ export const handleRemoveOrder = async (quote: {
 
 		const hash = await sendTransaction({
 			to: order.raindex as `0x${string}`,
-			data: removeCalldata.value as Hex
+			data: removeCalldata.value as Hex,
+			chainId: network.chainId
 		});
 
 		awaitWalletConfirmation('Awaiting transaction confirmation...');
 
-		await waitForTransaction(hash);
+		await waitForTransaction(hash, network.chainId);
 
 		const raindexLink = createRaindexLink(network.id, order.raindex, quote.orderHash);
 
@@ -1063,12 +1070,13 @@ export const handleWithdrawFromOrder = async (quote: {
 
 				const removeHash = await sendTransaction({
 					to: order.raindex as `0x${string}`,
-					data: removeCalldata.value as Hex
+					data: removeCalldata.value as Hex,
+					chainId: network.chainId
 				});
 
 				awaitWalletConfirmation('Awaiting deactivation confirmation...');
 
-				await waitForTransaction(removeHash);
+				await waitForTransaction(removeHash, network.chainId);
 			}
 		}
 
@@ -1190,12 +1198,13 @@ export const handleWithdrawFromOrder = async (quote: {
 
 			lastHash = await sendTransaction({
 				to: vault.raindex as `0x${string}`,
-				data: vaultCalldatas.value.withdraw as Hex
+				data: vaultCalldatas.value.withdraw as Hex,
+				chainId: network.chainId
 			});
 
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
-			await waitForTransaction(lastHash);
+			await waitForTransaction(lastHash, network.chainId);
 		}
 
 		const chainId = network.id;

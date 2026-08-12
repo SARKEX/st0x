@@ -51,7 +51,6 @@ async function computePrices(): Promise<PublicPricesSnapshot> {
 }
 
 export const GET: RequestHandler = async ({ request }) => {
-	await ensureServerApplicationCatalog();
 	const clientIp = getClientIp(request);
 	const rateLimit = await rateLimiters.publicApi(`public-api:${clientIp}`);
 
@@ -70,6 +69,7 @@ export const GET: RequestHandler = async ({ request }) => {
 	}
 
 	try {
+		await ensureServerApplicationCatalog();
 		const cached = await getCachedPublicPrices(computePrices);
 
 		return json(cached.value, {

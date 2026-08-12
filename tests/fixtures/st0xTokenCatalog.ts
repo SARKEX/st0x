@@ -66,6 +66,7 @@ export const TEST_ST0X_TOKENS: CategorizedToken[] = assets.map((asset, index) =>
 	address: asset.address,
 	unwrappedAddress: asset.unwrappedAddress,
 	legacyAddress: asset.legacyAddress,
+	migrationOrderHash: `0x${String(index + 1).padStart(64, '0')}`,
 	symbol: `wt${asset.symbol}`,
 	legacySymbol: 'legacySymbol' in asset ? asset.legacySymbol : undefined,
 	previousSymbols: 'previousSymbols' in asset ? [...asset.previousSymbols] : undefined,

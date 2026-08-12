@@ -235,8 +235,13 @@ function DynamicBridge({
 							selectedChainId = String(Number.parseInt(requested, 16));
 							cachedWalletClient = null;
 							cachedPublicClient = null;
+							lastWalletClientAttempt = 0;
 						}
 						return null;
+					}
+
+					if (args.method === 'eth_chainId' && selectedChainId) {
+						return `0x${Number(selectedChainId).toString(16)}`;
 					}
 
 					// For transactions, use the wallet client
@@ -271,7 +276,6 @@ function DynamicBridge({
 
 					// For read methods, try the public client first (better RPC support)
 					const readMethods = [
-						'eth_chainId',
 						'eth_blockNumber',
 						'eth_getBalance',
 						'eth_getTransactionCount',

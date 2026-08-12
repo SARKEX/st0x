@@ -142,7 +142,9 @@ async function buildNetworkCatalogFromClient(
 			blockExplorerIcon: 'etherscan',
 			rpcUrl: rpcs[0],
 			fallbackRpcUrls: rpcs.slice(1),
-			icon: 'ethereum',
+			// The registry SDK does not currently expose a network icon URL.
+			// Consumers render a neutral chain glyph unless a future catalog supplies one.
+			icon: '',
 			subgraph_url: subgraphs.get(`sft-${slug}`) ?? '',
 			metadata_subgraph_url: metaboards.get(slug) ?? '',
 			orderbook_subgraph_url: orderbookSubgraph,

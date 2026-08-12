@@ -111,7 +111,8 @@
 	}
 
 	async function handleSend() {
-		if (!canSend || !$dynamicSession?.walletAddress || !selectedToken) return;
+		if (!canSend || !$dynamicSession?.walletAddress || !selectedToken || !$currentNetwork) return;
+		const chainId = $currentNetwork.chainId;
 
 		error = null;
 		sending = true;
@@ -124,7 +125,8 @@
 				const valueInWei = parseEther(amount);
 				hash = await sendTransaction({
 					to: recipientAddress as `0x${string}`,
-					value: valueInWei
+					value: valueInWei,
+					chainId
 				});
 			} else {
 				// Send ERC20 token
@@ -140,7 +142,8 @@
 				// Send transaction to the token contract
 				hash = await sendTransaction({
 					to: selectedToken.address,
-					data
+					data,
+					chainId
 				});
 			}
 
