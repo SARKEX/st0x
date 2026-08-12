@@ -88,4 +88,20 @@ describe('/api/public/tvl compatibility', () => {
 			expect.objectContaining({ signal: expect.any(AbortSignal) })
 		);
 	});
+
+	it('omits legacy fields when multiple networks are configured but only one has a snapshot', async () => {
+		mocks.getServerApplicationCatalog.mockResolvedValue({
+			tokenCatalog: [token],
+			networkCatalog: [network, { id: 10, chainId: 10 }]
+		});
+
+		const response = await GET({
+			request: new Request('http://localhost/api/public/tvl')
+		} as TvlEvent);
+		const body = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(body.latest.tokenTvl).toEqual({ '8453:wtTEST': 10 });
+		expect(body.latest).not.toHaveProperty('blockNumber');
+	});
 });

@@ -186,7 +186,10 @@
 			balance = data.balance;
 			const resolvedDecimals = parseDecimals(data.decimals);
 			balanceDecimals = resolvedDecimals;
-			if (resolvedDecimals !== null && activeFingerprint === amountTokenFingerprint) {
+			if (
+				resolvedDecimals !== null &&
+				getTokenFingerprint(balanceToken ?? amountToken) === amountTokenFingerprint
+			) {
 				amountDecimals = resolvedDecimals;
 			}
 		})

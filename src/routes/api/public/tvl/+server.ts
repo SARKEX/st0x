@@ -123,7 +123,7 @@ async function computeAggregateTvl(networkCatalog: Network[]): Promise<PublicTvl
 	if (results.length === 0) return { success: true, latest: null };
 	const tokenTvl = Object.assign({}, ...results.map((result) => result.tokenTvl));
 	const totalTvl = results.reduce((sum, result) => sum + result.totalTvl, 0);
-	const singleNetwork = results.length === 1 ? results[0] : null;
+	const singleNetwork = networkCatalog.length === 1 && results.length === 1 ? results[0] : null;
 	if (singleNetwork) {
 		// Preserve the original public contract while the deployment has one network.
 		// Qualified keys remain canonical and avoid collisions once more networks are configured.

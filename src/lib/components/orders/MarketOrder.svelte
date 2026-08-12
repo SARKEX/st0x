@@ -43,7 +43,7 @@
 	} from '$lib/services/tradeError';
 	import TradeErrorPanel from '$lib/components/trade/TradeErrorPanel.svelte';
 	import { selectVisibleTradeError } from '$lib/components/trade/tradeErrorUi';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -90,6 +90,8 @@
 	// Quote freshness tracking
 	let quoteFreshnessSeconds = 0;
 	let quoteFreshnessInterval: ReturnType<typeof setInterval> | null = null;
+	let marketHoursInterval: ReturnType<typeof setInterval> | null = null;
+	let marketClosed = isOutsideMarketHours();
 
 	function updateQuoteFreshness() {
 		const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
@@ -146,6 +148,10 @@
 
 	onMount(() => {
 		panelOpenTime = Date.now();
+		marketClosed = isOutsideMarketHours();
+		marketHoursInterval = setInterval(() => {
+			marketClosed = isOutsideMarketHours();
+		}, 30_000);
 		trackTradeEvent('trade_panel_opened', {
 			order_type: 'market',
 			token_symbol: assetToken?.symbol
@@ -217,10 +223,10 @@
 	}
 
 	// Cleanup interval on component destroy
-	import { onDestroy } from 'svelte';
 	onDestroy(() => {
 		debouncedMarketQuoteRequest.destroy();
 		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
+		if (marketHoursInterval) clearInterval(marketHoursInterval);
 
 		// Track abandonment if user had entered values but didn't complete trade
 		// Use trackingState to get current values (avoids stale closure)
@@ -444,8 +450,6 @@
 		orderSide === 'Buy'
 			? 'bg-green-500 hover:bg-green-600 text-text'
 			: 'bg-red-500 hover:bg-red-600 text-text';
-	$: marketClosed = isOutsideMarketHours();
-
 	$: disableDeploy =
 		!selectedAmount ||
 		!assetToken ||
@@ -578,6 +582,7 @@
 		}
 		const selectedNetwork = $currentNetwork;
 		if (!selectedNetwork) return;
+		marketClosed = isOutsideMarketHours();
 		if (marketClosed) {
 			orderPreparationTradeError = createTradeError('TRADE_MARKET_CLOSED', {
 				stage: 'calldata'
