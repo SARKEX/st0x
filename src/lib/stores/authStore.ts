@@ -69,7 +69,14 @@ export const wrongNetwork = derived(
 		// Helper to compute and set the value
 		const updateValue = ($currentNetwork: Network | null) => {
 			if (isActive) {
-				set(!!($walletAddress && $currentNetwork && $chainId !== $currentNetwork.id));
+				set(
+					!!(
+						$walletAddress &&
+						$currentNetwork &&
+						$chainId != null &&
+						$chainId !== $currentNetwork.id
+					)
+				);
 			}
 		};
 

@@ -65,6 +65,12 @@
 		return `${address}:${chainId}`;
 	};
 
+	const getBalanceRequestFingerprint = (token?: Token, address?: string | null) => {
+		const tokenFingerprint = getTokenFingerprint(token);
+		if (!tokenFingerprint || !address) return undefined;
+		return `${address.toLowerCase()}:${tokenFingerprint}`;
+	};
+
 	$: if (amountToken) {
 		const fingerprint = getTokenFingerprint(amountToken);
 		const fallbackDecimals = parseDecimals((amountToken as Partial<Token>).decimals);
@@ -141,11 +147,13 @@
 
 	$: balancePromise = (async () => {
 		const token = balanceToken ?? amountToken;
+		balance = 0n;
+		balanceDecimals = null;
 		if (!token) return null;
 		if (!token.chainId) return null;
 		if (!$walletAddress) return null;
 		if (!$wagmiConfig) return null;
-		const fingerprint = getTokenFingerprint(token);
+		const fingerprint = getBalanceRequestFingerprint(token, $walletAddress);
 		const [tokenBalance, tokenDecimals] = await Promise.all([
 			readContract($wagmiConfig, {
 				abi: erc20Abi,
@@ -168,7 +176,10 @@
 	$: balancePromise
 		.then((data) => {
 			if (!data) return;
-			const activeFingerprint = getTokenFingerprint(balanceToken ?? amountToken);
+			const activeFingerprint = getBalanceRequestFingerprint(
+				balanceToken ?? amountToken,
+				$walletAddress
+			);
 			if (!activeFingerprint || data.fingerprint !== activeFingerprint) {
 				return;
 			}

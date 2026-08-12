@@ -13,3 +13,12 @@ export function invalidateDashboardBalances() {
 	queryClient.invalidateQueries({ queryKey: ['paymentTokenWalletBalance'] });
 	queryClient.invalidateQueries({ queryKey: ['nativeWalletBalance'] });
 }
+
+/** Refresh balances and trade-derived data after a confirmed market execution. */
+export function invalidateExecutedTradeQueries() {
+	invalidateDashboardBalances();
+	queryClient.invalidateQueries({ queryKey: ['tokenTradeActivity'] });
+	queryClient.invalidateQueries({ queryKey: ['takerTrades'] });
+	queryClient.invalidateQueries({ queryKey: ['batchTrades'] });
+	queryClient.invalidateQueries({ queryKey: ['costBasis'] });
+}

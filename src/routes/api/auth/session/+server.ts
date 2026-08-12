@@ -19,8 +19,23 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.authStrict, 'session-login');
 	if (rateLimitResponse) return rateLimitResponse;
 
+	let body: unknown;
 	try {
-		const { address, nonce, signature, chainId: requestedChainId } = await request.json();
+		body = await request.json();
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
+	}
+
+	try {
+		if (!body || typeof body !== 'object' || Array.isArray(body)) {
+			return json({ error: 'Invalid request body' }, { status: 400 });
+		}
+		const {
+			address,
+			nonce,
+			signature,
+			chainId: requestedChainId
+		} = body as Record<string, unknown>;
 
 		if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
 			return json({ error: 'Invalid wallet address' }, { status: 400 });
@@ -41,6 +56,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		const { networkCatalog } = await getServerApplicationCatalog();
+		if (requestedChainId !== undefined && !Number.isSafeInteger(requestedChainId)) {
+			return json({ error: 'chainId must be an integer' }, { status: 400 });
+		}
 		if (requestedChainId === undefined && networkCatalog.length !== 1) {
 			return json({ error: 'chainId is required' }, { status: 400 });
 		}
@@ -69,7 +87,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		});
 
 		return json({ success: true, walletAddress: address.toLowerCase(), expiresAt });
-	} catch {
-		return json({ error: 'Invalid request body' }, { status: 400 });
+	} catch (error) {
+		console.error('[auth/session] Session creation failed:', error);
+		return json({ error: 'Unable to create session' }, { status: 500 });
 	}
 };

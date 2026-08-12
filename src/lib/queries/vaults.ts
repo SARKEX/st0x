@@ -128,9 +128,8 @@ export function createSingleSftQuery(
 	return createQuery<OffchainAssetReceiptVault | null>({
 		queryKey: ['sft', network?.id, tokenId],
 		enabled: Boolean(browser && network && tokenId),
-		staleTime: 30_000,
+		staleTime: Infinity,
 		refetchInterval: false,
-		refetchOnWindowFocus: true, // Only refetch on focus if stale
 		initialData: getCachedToken() ?? undefined,
 		initialDataUpdatedAt: getCachedTimestamp(),
 		queryFn: async () => {

@@ -3,65 +3,62 @@
 	import type { Network } from '$lib/config/network';
 	import { switchChain } from '@wagmi/core';
 	import { wagmiConfig, chainId, connected } from 'svelte-wagmi';
-	import { get } from 'svelte/store';
 	import { track } from '$lib/services/analytics';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import { onDestroy } from 'svelte';
 
 	let isOpen = false;
+	let pendingSwitchTimer: ReturnType<typeof setTimeout> | null = null;
 
-	function getChainLogo(network: Network): string {
-		return network.icon.startsWith('/') ? network.icon : '/images/ETH.svg';
-	}
-
-	async function selectNetwork(network: Network) {
-		const previousNetwork = $currentNetwork;
-
+	function selectNetwork(network: Network) {
 		$currentNetwork = network;
 		isOpen = false;
+	}
 
-		// If wallet is connected and on a different network, prompt to switch
-		if ($connected && $chainId && $chainId !== network.id) {
-			track('network_switch_initiated', {
-				from_network: previousNetwork?.displayName,
-				to_network: network.displayName,
-				from_chain_id: previousNetwork?.chainId,
-				to_chain_id: network.chainId
-			});
+	function scheduleWalletSwitch(
+		network: Network | null,
+		isConnected: boolean,
+		walletChainId: number | null | undefined,
+		config: Parameters<typeof switchChain>[0] | undefined
+	) {
+		if (pendingSwitchTimer) {
+			clearTimeout(pendingSwitchTimer);
+			pendingSwitchTimer = null;
+		}
+		if (!network || !isConnected || !walletChainId || !config || walletChainId === network.id) {
+			return;
+		}
 
+		track('network_switch_initiated', {
+			to_network: network.displayName,
+			from_chain_id: walletChainId,
+			to_chain_id: network.chainId
+		});
+		pendingSwitchTimer = setTimeout(async () => {
+			pendingSwitchTimer = null;
 			try {
-				await switchChain(get(wagmiConfig), { chainId: network.id });
+				await switchChain(config, { chainId: network.id });
 				track('network_switched', {
-					from_network: previousNetwork?.displayName,
 					to_network: network.displayName,
-					from_chain_id: previousNetwork?.chainId,
+					from_chain_id: walletChainId,
 					to_chain_id: network.chainId
 				});
 			} catch (error) {
 				track('network_switch_failed', {
-					from_network: previousNetwork?.displayName,
 					to_network: network.displayName,
+					from_chain_id: walletChainId,
+					to_chain_id: network.chainId,
 					error: error instanceof Error ? error.message : 'Unknown error'
 				});
 			}
-		} else {
-			// No wallet chain switch needed, just track the UI selection
-			track('network_switched', {
-				from_network: previousNetwork?.displayName,
-				to_network: network.displayName,
-				from_chain_id: previousNetwork?.chainId,
-				to_chain_id: network.chainId
-			});
-		}
-	}
-
-	// Auto-trigger network switch when currentNetwork changes from other parts of the app
-	$: if ($currentNetwork && $connected && $chainId && $chainId !== $currentNetwork.id) {
-		const network = $currentNetwork;
-		// Small delay to avoid immediate switching during initial load
-		setTimeout(async () => {
-			await switchChain(get(wagmiConfig), { chainId: network.id });
 		}, 100);
 	}
+
+	$: scheduleWalletSwitch($currentNetwork, $connected, $chainId, $wagmiConfig);
+
+	onDestroy(() => {
+		if (pendingSwitchTimer) clearTimeout(pendingSwitchTimer);
+	});
 
 	function toggleDropdown() {
 		isOpen = !isOpen;
@@ -119,11 +116,11 @@
 							? 'bg-accent-soft'
 							: ''}"
 					>
-						<img
-							src={getChainLogo(network)}
-							alt={network.displayName}
-							class="h-4 w-4 rounded-full"
-						/>
+						{#if network.icon.startsWith('/')}
+							<img src={network.icon} alt={network.displayName} class="h-4 w-4 rounded-full" />
+						{:else}
+							<Icon name="blocks" className="h-4 w-4 text-text-3" />
+						{/if}
 						<div class="flex flex-col items-start">
 							<span class="font-medium">{network.displayName}</span>
 							<span class="text-xs text-text-3">{network.currencySymbol}</span>

@@ -18,7 +18,7 @@ import {
 	type ApiTradesByTxResponse
 } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
-import { invalidateDashboardBalances } from '$lib/queries/balances';
+import { invalidateExecutedTradeQueries } from '$lib/queries/balances';
 import {
 	APPROVAL_TX_CONFIRMATIONS,
 	getSignerAddress,
@@ -49,6 +49,7 @@ import {
 	DEFAULT_MARKET_ORDER_SLIPPAGE_BPS as DEFAULT_BPS,
 	MAX_SLIPPAGE_BPS as MAX_BPS
 } from '$lib/utils/marketOrderFill';
+import { isOutsideMarketHours } from '$lib/utils/marketHours';
 import {
 	decodeFunctionData,
 	erc20Abi,
@@ -202,9 +203,15 @@ async function submitApprovals(
 		transactionStoreInternal.awaitWalletConfirmation(
 			`Awaiting wallet confirmation to approve ${approval.symbol || 'token'}...`
 		);
-		const hash = await sendTransaction({ to: transaction.token, data: transaction.data });
+		const hash = await sendTransaction({
+			to: transaction.token,
+			data: transaction.data,
+			chainId: network.chainId
+		});
 		transactionStoreInternal.awaitApprovalTx(hash);
-		await waitForTransaction(hash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+		await waitForTransaction(hash, network.chainId, {
+			confirmations: APPROVAL_TX_CONFIRMATIONS
+		});
 	}
 }
 
@@ -419,6 +426,9 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 	};
 
 	try {
+		if (isOutsideMarketHours()) {
+			return failWith(new Error('Market is closed'));
+		}
 		const taker = getSignerAddress();
 		if (!taker) {
 			activeTradeErrorStage = 'signing';
@@ -459,7 +469,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			order_side: orderSide.toLowerCase() as 'buy' | 'sell'
 		});
 		transactionStoreInternal.awaitWalletConfirmation('Awaiting wallet confirmation...');
-		const hash = await sendTransaction(transaction);
+		const hash = await sendTransaction({ ...transaction, chainId: network.chainId });
 		activeTradeErrorStage = 'confirmation';
 		trackTradeEvent('broadcast', {
 			order_type: 'market',
@@ -467,7 +477,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			asset_symbol: assetToken.symbol,
 			payment_symbol: paymentToken.symbol
 		});
-		await waitForTransaction(hash);
+		await waitForTransaction(hash, network.chainId);
 		trackTradeEvent('confirmed', {
 			order_type: 'market',
 			order_side: orderSide.toLowerCase() as 'buy' | 'sell',
@@ -475,7 +485,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			payment_symbol: paymentToken.symbol
 		});
 		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'completed');
-		invalidateDashboardBalances();
+		invalidateExecutedTradeQueries();
 		const indexedTrade = await pollForIndexedTrade(hash, network.chainId);
 		let metadata: { marketOrderSummary: ReturnType<typeof buildMarketOrderSummary> } | undefined;
 		if (indexedTrade) {

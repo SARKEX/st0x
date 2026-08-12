@@ -8,6 +8,7 @@
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { derived } from 'svelte/store';
 	import { onMount, onDestroy } from 'svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
@@ -329,10 +330,13 @@
 	): number | null {
 		const restPrice = symbol ? findNetworkQuote(symbol, networkId)?.close ?? null : null;
 		if (restPrice != null) return restPrice;
+		const configuredToken = tokenAddress ? tokenForNetwork(networkId, tokenAddress) : undefined;
+		if (configuredToken?.fallbackPrice != null && configuredToken.fallbackPrice > 0) {
+			return configuredToken.fallbackPrice;
+		}
+		if (symbol && ['USD', 'USDC', 'USDT'].includes(symbol.toUpperCase())) return 1;
 
-		const network = networks.find((candidate) => candidate.chainId === networkId);
-		const paymentTokenAddress = normalizeAddress(network?.defaultPaymentToken?.address);
-		return tokenAddress && normalizeAddress(tokenAddress) === paymentTokenAddress ? 1 : null;
+		return null;
 	}
 
 	function vaultBalanceToNumber(vault: RaindexVault): number {
@@ -425,7 +429,13 @@
 						return hash ? orderHashHasTStockInput.get(hash) === true : false;
 					});
 					if (hasTStockInputOrder) {
-						total += balance; // USDC value is 1:1
+						const tokenInfo = tokenForNetwork(networkId, address);
+						const price = getNetworkPrice(
+							networkId,
+							address,
+							tokenInfo?.symbol ?? vault.token.symbol
+						);
+						if (price != null) total += balance * price;
 					}
 				}
 			});
@@ -600,8 +610,8 @@
 	// header "Live · N markets" pill. Derived from existing per-network active sets.
 	$: liveMarketCount = (() => {
 		const markets = new Set<string>();
-		activeTokensByNetwork.forEach((set) => {
-			set.forEach((address) => markets.add(address));
+		activeTokensByNetwork.forEach((set, chainId) => {
+			set.forEach((address) => markets.add(`${chainId}:${address}`));
 		});
 		return markets.size;
 	})();
@@ -753,13 +763,15 @@
 							<tr class="hover:bg-overlay-hover">
 								<td class="sticky left-0 p-2 sm:p-3 sm:text-sm">
 									<div class="flex items-center gap-2 sm:gap-3">
-										<img
-											src={stats.network.icon.startsWith('/')
-												? stats.network.icon
-												: '/images/ETH.svg'}
-											alt={stats.network.displayName}
-											class="h-8 w-8 rounded-full sm:h-10 sm:w-10"
-										/>
+										{#if stats.network.icon.startsWith('/')}
+											<img
+												src={stats.network.icon}
+												alt={stats.network.displayName}
+												class="h-8 w-8 rounded-full sm:h-10 sm:w-10"
+											/>
+										{:else}
+											<Icon name="blocks" className="h-8 w-8 text-text-3 sm:h-10 sm:w-10" />
+										{/if}
 										<div class="min-w-0">
 											<div class="truncate font-medium">{stats.network.displayName}</div>
 											<div class="hidden text-xs text-text-2 sm:block">{stats.network.name}</div>

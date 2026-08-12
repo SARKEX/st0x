@@ -81,6 +81,13 @@ function resolveMapping(
 }
 
 onTokenCatalogChange((tokens) => {
+	for (const token of tokens) {
+		if (token.category === 'ST0x' && token.legacyAddress && !token.migrationOrderHash) {
+			console.warn(
+				`[token-migration] ${token.symbol} on chain ${token.chainId} has a legacy address but no migrationOrderHash`
+			);
+		}
+	}
 	const mappings = tokens
 		.filter((token) => token.legacyAddress && token.migrationOrderHash && token.category === 'ST0x')
 		.map((token) => {

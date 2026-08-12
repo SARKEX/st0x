@@ -17,6 +17,8 @@ interface PublicTvlResponse {
 		totalTvl: number;
 		tokenTvl: Record<string, number>;
 		networks: { chainId: number; blockNumber: number; totalTvl: number }[];
+		/** @deprecated Use the matching entry in `networks`. Present only for one-network catalogs. */
+		blockNumber?: number;
 	} | null;
 }
 
@@ -37,10 +39,14 @@ async function fetchSnapshot(
 			const prefixes = [`snapshots/${chainId}/${symbol}/${blockNumber}.json`];
 			if (allowLegacySnapshots) prefixes.push(`snapshots/${symbol}/${blockNumber}.json`);
 			for (const prefix of prefixes) {
-				const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
-				if (blobs.length === 0) continue;
-				const response = await fetch(blobs[0].url);
-				if (response.ok) return await response.json();
+				try {
+					const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
+					if (blobs.length === 0) continue;
+					const response = await fetch(blobs[0].url, { signal: AbortSignal.timeout(10_000) });
+					if (response.ok) return await response.json();
+				} catch (error) {
+					console.error(`[Public TVL] Error fetching snapshot prefix ${prefix}:`, error);
+				}
 			}
 		} catch (error) {
 			console.error(
@@ -117,15 +123,28 @@ async function computeAggregateTvl(networkCatalog: Network[]): Promise<PublicTvl
 	if (results.length === 0) return { success: true, latest: null };
 	const tokenTvl = Object.assign({}, ...results.map((result) => result.tokenTvl));
 	const totalTvl = results.reduce((sum, result) => sum + result.totalTvl, 0);
+	const singleNetwork = results.length === 1 ? results[0] : null;
+	if (singleNetwork) {
+		// Preserve the original public contract while the deployment has one network.
+		// Qualified keys remain canonical and avoid collisions once more networks are configured.
+		for (const [qualifiedKey, value] of Object.entries(singleNetwork.tokenTvl)) {
+			const symbol = qualifiedKey.slice(qualifiedKey.indexOf(':') + 1);
+			tokenTvl[symbol] = value;
+		}
+	}
 
 	return {
 		success: true,
-		latest: { totalTvl, tokenTvl, networks: results.map((result) => result.network) }
+		latest: {
+			totalTvl,
+			tokenTvl,
+			networks: results.map((result) => result.network),
+			...(singleNetwork ? { blockNumber: singleNetwork.network.blockNumber } : {})
+		}
 	};
 }
 
 export const GET: RequestHandler = async ({ request }) => {
-	const { networkCatalog } = await getServerApplicationCatalog();
 	const clientIp = getClientIp(request);
 	const rateLimit = await rateLimiters.publicApi(`public-api:${clientIp}`);
 
@@ -144,6 +163,7 @@ export const GET: RequestHandler = async ({ request }) => {
 	}
 
 	try {
+		const { networkCatalog } = await getServerApplicationCatalog();
 		const data = await withConditionalCache<PublicTvlResponse>(
 			CACHE_KEYS.publicTvl(),
 			() => computeAggregateTvl(networkCatalog),

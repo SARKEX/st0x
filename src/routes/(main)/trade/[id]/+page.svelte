@@ -1967,7 +1967,15 @@
 								{/if}
 								<div class="flex items-center gap-1 text-xs text-text-2 sm:gap-2 sm:text-sm">
 									<span>On</span>
-									<img src="/images/ETH.svg" alt="Network" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+									{#if $currentNetwork?.icon.startsWith('/')}
+										<img
+											src={$currentNetwork.icon}
+											alt={$currentNetwork.displayName}
+											class="h-3.5 w-3.5 sm:h-4 sm:w-4"
+										/>
+									{:else}
+										<Icon name="blocks" className="h-3.5 w-3.5 text-text-3 sm:h-4 sm:w-4" />
+									{/if}
 									<span>{$currentNetwork?.displayName ?? 'Unknown network'}</span>
 								</div>
 								{#if hasRatio}

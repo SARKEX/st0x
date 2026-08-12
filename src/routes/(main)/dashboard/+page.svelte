@@ -44,7 +44,7 @@
 	import { createExchangeRatesQuery, resolveRatio } from '$lib/queries/exchangeRates';
 	import { holdingsDenom } from '$lib/stores/panelDenomStore';
 	import { manualCostBasisStore, type ManualCostBasisEntry } from '$lib/stores/manualCostBasis';
-	import { derived } from 'svelte/store';
+	import { derived, type Readable } from 'svelte/store';
 	import { onDestroy } from 'svelte';
 	import transactionStore from '$lib/stores/transaction';
 	import OrdersTable from '$lib/components/orders/OrdersTable.svelte';
@@ -74,13 +74,23 @@
 	// Default vault ID (0x1 padded to 32 bytes)
 	const DEFAULT_VAULT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
 
-	$: apiTokensQuery = createApiTokensQuery($currentNetwork?.chainId);
+	type ApiTokensQueryValue = ReturnType<typeof createApiTokensQuery> extends Readable<infer Value>
+		? Value
+		: never;
+	const apiTokensQuery = derived(
+		currentNetwork,
+		($network, set) => {
+			const query = createApiTokensQuery($network?.chainId);
+			return query.subscribe(set);
+		},
+		undefined as ApiTokensQueryValue | undefined
+	);
 	// Default to [] (not undefined): the createQuery(derived(...)) closures below run
 	// at component init, BEFORE these reactive statements first flush. Reading
 	// ALL_TOKENS.length on an undefined value there threw an intermittent
 	// "Cannot read properties of undefined (reading 'length')" on dashboard load.
 	let ALL_TOKENS: CategorizedToken[] = [];
-	$: ALL_TOKENS = $apiTokensQuery.data ?? [];
+	$: ALL_TOKENS = $apiTokensQuery?.data ?? [];
 	let paymentTokens: CategorizedToken[] = [];
 	$: paymentTokens = ALL_TOKENS.filter((token) => token.category === 'CRYPTO');
 
@@ -358,139 +368,162 @@
 	// We query balances on wrapped token addresses from the REST API token list since those are traded.
 	const walletHoldingsQuery = createQuery(
 		derived(
-			[isAuthenticated, walletAddress, sfts, currentNetwork, wagmiConfig],
-			([$isAuthenticated, $walletAddress, $sfts, $currentNetwork, $wagmiConfig]) => ({
-				queryKey: ['walletHoldings', $walletAddress, $currentNetwork?.id, $sfts?.length],
-				enabled: !!(
-					$isAuthenticated &&
-					$walletAddress &&
-					$sfts &&
-					$currentNetwork &&
-					$wagmiConfig &&
-					ALL_TOKENS.length
-				),
-				refetchOnMount: 'always' as const,
-				refetchInterval: QUERY_POLL_INTERVAL_MS,
-				staleTime: QUERY_STALE_TIME_MS,
-				queryFn: async () => {
-					if (!$sfts || !$walletAddress || !$currentNetwork || !$wagmiConfig) return [];
+			[isAuthenticated, walletAddress, sfts, currentNetwork, wagmiConfig, apiTokensQuery],
+			([
+				$isAuthenticated,
+				$walletAddress,
+				$sfts,
+				$currentNetwork,
+				$wagmiConfig,
+				$apiTokensQuery
+			]) => {
+				const chainTokens = $apiTokensQuery?.data ?? [];
+				const catalogKey = chainTokens
+					.map((token) => `${token.chainId}:${token.address.toLowerCase()}`)
+					.join(',');
+				return {
+					queryKey: [
+						'walletHoldings',
+						$walletAddress,
+						$currentNetwork?.id,
+						$sfts?.length,
+						catalogKey
+					],
+					enabled: !!(
+						$isAuthenticated &&
+						$walletAddress &&
+						$sfts &&
+						$currentNetwork &&
+						$wagmiConfig &&
+						chainTokens.length
+					),
+					refetchOnMount: 'always' as const,
+					refetchInterval: QUERY_POLL_INTERVAL_MS,
+					staleTime: QUERY_STALE_TIME_MS,
+					queryFn: async () => {
+						if (!$sfts || !$walletAddress || !$currentNetwork || !$wagmiConfig) return [];
 
-					// Token details already normalize to wrapped addresses, but token lookup keeps
-					// legacy/unwrapped variants safe for older cached rows.
-					const sftsWithWrappedAddresses = $sfts.map((sft) => {
-						const tokenConfig = findApiTokenByAnyAddress(
-							ALL_TOKENS.filter((token) => token.chainId === $currentNetwork.chainId),
-							sft.address
-						);
-						return {
-							...sft,
-							wrappedAddress: tokenConfig?.address ?? sft.address
-						};
-					});
-
-					// Build multicall contracts array for all wrapped token balances
-					const contracts = sftsWithWrappedAddresses.map((sft) => ({
-						abi: erc20Abi,
-						address: sft.wrappedAddress as `0x${string}`,
-						functionName: 'balanceOf' as const,
-						args: [$walletAddress as `0x${string}`],
-						chainId: $currentNetwork.chainId
-					}));
-
-					try {
-						// Single multicall for all token balances
-						const results = await readContracts($wagmiConfig, { contracts });
-
-						return sftsWithWrappedAddresses.map((sft, index) => {
-							const result = results[index];
-							let walletBalance = 0n;
-
-							if (result.status === 'success') {
-								walletBalance = result.result as bigint;
-							}
-
-							const tokenConfig = findApiTokenByAnyAddress(
-								ALL_TOKENS.filter((token) => token.chainId === $currentNetwork.chainId),
-								sft.address
-							);
-
+						// Token details already normalize to wrapped addresses, but token lookup keeps
+						// legacy/unwrapped variants safe for older cached rows.
+						const sftsWithWrappedAddresses = $sfts.map((sft) => {
+							const tokenConfig = findApiTokenByAnyAddress(chainTokens, sft.address);
 							return {
-								id: sft.id,
-								address: sft.wrappedAddress, // Use wrapped address
-								name: tokenConfig?.name ?? sft.name,
-								symbol: tokenConfig?.symbol ?? sft.symbol,
-								walletBalance,
-								decimals: 18
+								...sft,
+								wrappedAddress: tokenConfig?.address ?? sft.address
 							};
 						});
-					} catch (error) {
-						console.error('Multicall failed for wallet holdings:', error);
-						return $sfts.map((sft) => {
-							const tokenConfig = findApiTokenByAnyAddress(
-								ALL_TOKENS.filter((token) => token.chainId === $currentNetwork.chainId),
-								sft.address
-							);
-							return {
-								id: sft.id,
-								address: tokenConfig?.address ?? sft.address,
-								name: tokenConfig?.name ?? sft.name,
-								symbol: tokenConfig?.symbol ?? sft.symbol,
-								walletBalance: 0n,
-								decimals: 18
-							};
-						});
+
+						// Build multicall contracts array for all wrapped token balances
+						const contracts = sftsWithWrappedAddresses.map((sft) => ({
+							abi: erc20Abi,
+							address: sft.wrappedAddress as `0x${string}`,
+							functionName: 'balanceOf' as const,
+							args: [$walletAddress as `0x${string}`],
+							chainId: $currentNetwork.chainId
+						}));
+
+						try {
+							// Single multicall for all token balances
+							const results = await readContracts($wagmiConfig, { contracts });
+
+							return sftsWithWrappedAddresses.map((sft, index) => {
+								const result = results[index];
+								let walletBalance = 0n;
+
+								if (result.status === 'success') {
+									walletBalance = result.result as bigint;
+								}
+
+								const tokenConfig = findApiTokenByAnyAddress(chainTokens, sft.address);
+
+								return {
+									id: sft.id,
+									address: sft.wrappedAddress, // Use wrapped address
+									name: tokenConfig?.name ?? sft.name,
+									symbol: tokenConfig?.symbol ?? sft.symbol,
+									walletBalance,
+									decimals: 18
+								};
+							});
+						} catch (error) {
+							console.error('Multicall failed for wallet holdings:', error);
+							return $sfts.map((sft) => {
+								const tokenConfig = findApiTokenByAnyAddress(chainTokens, sft.address);
+								return {
+									id: sft.id,
+									address: tokenConfig?.address ?? sft.address,
+									name: tokenConfig?.name ?? sft.name,
+									symbol: tokenConfig?.symbol ?? sft.symbol,
+									walletBalance: 0n,
+									decimals: 18
+								};
+							});
+						}
 					}
-				}
-			})
+				};
+			}
 		)
 	);
 
 	// Query configured payment-token balances via multicall.
 	const usdcBalanceQuery = createQuery(
 		derived(
-			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig],
-			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig]) => ({
-				queryKey: ['paymentTokenWalletBalance', $walletAddress, $currentNetwork?.chainId],
-				enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
-				refetchOnMount: 'always' as const,
-				refetchInterval: QUERY_POLL_INTERVAL_MS,
-				staleTime: QUERY_STALE_TIME_MS,
-				queryFn: async () => {
-					if (!$currentNetwork || !$walletAddress || !$wagmiConfig) return [];
-					if (paymentTokens.length === 0) return [];
+			[isAuthenticated, walletAddress, currentNetwork, wagmiConfig, apiTokensQuery],
+			([$isAuthenticated, $walletAddress, $currentNetwork, $wagmiConfig, $apiTokensQuery]) => {
+				const activePaymentTokens = ($apiTokensQuery?.data ?? []).filter(
+					(token) => token.category === 'CRYPTO'
+				);
+				const catalogKey = activePaymentTokens
+					.map((token) => `${token.chainId}:${token.address.toLowerCase()}`)
+					.join(',');
+				return {
+					queryKey: [
+						'paymentTokenWalletBalance',
+						$walletAddress,
+						$currentNetwork?.chainId,
+						catalogKey
+					],
+					enabled: !!($isAuthenticated && $walletAddress && $currentNetwork && $wagmiConfig),
+					refetchOnMount: 'always' as const,
+					refetchInterval: QUERY_POLL_INTERVAL_MS,
+					staleTime: QUERY_STALE_TIME_MS,
+					queryFn: async () => {
+						if (!$currentNetwork || !$walletAddress || !$wagmiConfig) return [];
+						if (activePaymentTokens.length === 0) return [];
 
-					const contracts = paymentTokens.map((token) => ({
-						abi: erc20Abi,
-						address: token.address as `0x${string}`,
-						functionName: 'balanceOf' as const,
-						args: [$walletAddress as `0x${string}`],
-						chainId: $currentNetwork.chainId
-					}));
+						const contracts = activePaymentTokens.map((token) => ({
+							abi: erc20Abi,
+							address: token.address as `0x${string}`,
+							functionName: 'balanceOf' as const,
+							args: [$walletAddress as `0x${string}`],
+							chainId: $currentNetwork.chainId
+						}));
 
-					try {
-						const results = await readContracts($wagmiConfig, { contracts });
-						return paymentTokens
-							.map((token, index) => {
-								const result = results[index];
-								if (result.status === 'success') {
-									return {
-										id: token.address,
-										address: token.address,
-										name: token.name,
-										symbol: token.symbol,
-										walletBalance: result.result as bigint,
-										decimals: token.decimals
-									};
-								}
-								return null;
-							})
-							.filter((balance): balance is NonNullable<typeof balance> => balance !== null);
-					} catch (error) {
-						console.error('Multicall failed for payment-token balances:', error);
-						return [];
+						try {
+							const results = await readContracts($wagmiConfig, { contracts });
+							return activePaymentTokens
+								.map((token, index) => {
+									const result = results[index];
+									if (result.status === 'success') {
+										return {
+											id: token.address,
+											address: token.address,
+											name: token.name,
+											symbol: token.symbol,
+											walletBalance: result.result as bigint,
+											decimals: token.decimals
+										};
+									}
+									return null;
+								})
+								.filter((balance): balance is NonNullable<typeof balance> => balance !== null);
+						} catch (error) {
+							console.error('Multicall failed for payment-token balances:', error);
+							return [];
+						}
 					}
-				}
-			})
+				};
+			}
 		)
 	);
 

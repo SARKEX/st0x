@@ -11,7 +11,6 @@ import {
 import type { Hash, Hex } from 'viem';
 import { authMethod } from '$lib/stores/authStore';
 import { dynamicWalletAddress } from '$lib/stores/dynamicStore';
-import { currentNetwork } from '$lib/stores';
 import { withRetry } from '$lib/utils/retry';
 
 // Store for Dynamic wallet provider (set by React component)
@@ -43,6 +42,7 @@ export async function sendTransaction(params: {
 	to: `0x${string}`;
 	data?: Hex;
 	value?: bigint;
+	chainId: number;
 }): Promise<Hash> {
 	const method = get(authMethod);
 	const config = get(wagmiConfig);
@@ -58,17 +58,17 @@ export async function sendTransaction(params: {
 			throw new Error('Dynamic wallet address not available');
 		}
 
-		const network = get(currentNetwork);
-		if (!network) throw new Error('No network selected');
-
-		// Keep the embedded wallet on the registry-backed network selected in the UI.
-		try {
-			await dynamicWalletProvider!.request({
-				method: 'wallet_switchEthereumChain',
-				params: [{ chainId: `0x${network.chainId.toString(16)}` }]
-			});
-		} catch {
-			// Chain might already be correct, or not supported - continue anyway
+		// Bind the complete operation to the caller's captured chain. A failed switch
+		// must stop submission instead of allowing the transaction on another network.
+		await dynamicWalletProvider.request({
+			method: 'wallet_switchEthereumChain',
+			params: [{ chainId: `0x${params.chainId.toString(16)}` }]
+		});
+		const activeChain = await dynamicWalletProvider.request({ method: 'eth_chainId' });
+		const activeChainId =
+			typeof activeChain === 'string' ? Number.parseInt(activeChain, 16) : Number.NaN;
+		if (activeChainId !== params.chainId) {
+			throw new Error(`Wallet did not switch to chain ${params.chainId}`);
 		}
 
 		// Build transaction params - let wallet handle gas estimation
@@ -107,15 +107,12 @@ export async function sendTransaction(params: {
 		if (!config) {
 			throw new Error('Wagmi config not available');
 		}
-		const network = get(currentNetwork);
-		if (!network) throw new Error('No network selected');
-
 		const hash = await withRetry(() =>
 			wagmiSendTransaction(config, {
 				to: params.to,
 				data: params.data,
 				value: params.value,
-				chainId: network.chainId
+				chainId: params.chainId
 			})
 		);
 
@@ -134,19 +131,17 @@ export const APPROVAL_TX_CONFIRMATIONS = 2;
  */
 export async function waitForTransaction(
 	hash: Hash,
+	chainId: number,
 	options?: { confirmations?: number }
 ): Promise<void> {
 	const config = get(wagmiConfig);
 	if (!config) {
 		throw new Error('Wagmi config not available');
 	}
-	const network = get(currentNetwork);
-	if (!network) throw new Error('No network selected');
-
 	await withRetry(() =>
 		wagmiWaitForTransactionReceipt(config, {
 			hash,
-			chainId: network.chainId,
+			chainId,
 			...(options?.confirmations != null ? { confirmations: options.confirmations } : {})
 		})
 	);

@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
 	update: vi.fn(),
 	invalidateDashboardBalances: vi.fn(),
 	trackTradeEvent: vi.fn(),
-	captureTradeFlowError: vi.fn()
+	captureTradeFlowError: vi.fn(),
+	isOutsideMarketHours: vi.fn()
 }));
 
 vi.mock('$lib/api/st0xApi', () => ({
@@ -30,7 +31,10 @@ vi.mock('$lib/services/walletService', () => ({
 	waitForTransaction: mocks.waitForTransaction
 }));
 vi.mock('$lib/queries/balances', () => ({
-	invalidateDashboardBalances: mocks.invalidateDashboardBalances
+	invalidateExecutedTradeQueries: mocks.invalidateDashboardBalances
+}));
+vi.mock('$lib/utils/marketHours', () => ({
+	isOutsideMarketHours: mocks.isOutsideMarketHours
 }));
 vi.mock('$lib/stores/transactionShared', async (importOriginal) => {
 	const actual = (await importOriginal()) as object;
@@ -256,6 +260,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mocks.getSignerAddress.mockReturnValue(TAKER);
+		mocks.isOutsideMarketHours.mockReturnValue(false);
 		mocks.apiGetSwapCalldataV2.mockImplementation(async (request) => readyResponse(request));
 		mocks.apiGetTradesByTx.mockImplementation(async () => {
 			const request = mocks.apiGetSwapCalldataV2.mock.calls.at(-1)?.[0];
@@ -293,7 +298,8 @@ describe('executeMarketOrder REST calldata execution', () => {
 		expect(mocks.sendTransaction).toHaveBeenCalledWith({
 			to: ORDERBOOK,
 			data: expect.stringMatching(/^0x69c72856/),
-			value: 0n
+			value: 0n,
+			chainId: 8453
 		});
 		expect(mocks.apiGetTradesByTx).toHaveBeenCalledWith(TRADE_HASH, 8453);
 		expect(mocks.transactionSuccess).toHaveBeenCalledWith(TRADE_HASH, 'Market order confirmed', {
@@ -502,9 +508,10 @@ describe('executeMarketOrder REST calldata execution', () => {
 		expect(result.success).toBe(true);
 		expect(mocks.sendTransaction).toHaveBeenNthCalledWith(1, {
 			to: PAYMENT,
-			data: approvalData
+			data: approvalData,
+			chainId: 8453
 		});
-		expect(mocks.waitForTransaction).toHaveBeenNthCalledWith(1, APPROVAL_HASH, {
+		expect(mocks.waitForTransaction).toHaveBeenNthCalledWith(1, APPROVAL_HASH, 8453, {
 			confirmations: 2
 		});
 		expect(mocks.apiGetSwapCalldataV2).toHaveBeenNthCalledWith(2, {
@@ -626,5 +633,24 @@ describe('executeMarketOrder REST calldata execution', () => {
 				stage: 'signing'
 			}
 		});
+	});
+
+	it('blocks execution before API or wallet work while the market is closed', async () => {
+		mocks.isOutsideMarketHours.mockReturnValue(true);
+
+		const result = await executeMarketOrder({
+			orderSide: 'Buy',
+			amount: 1_000_000_000_000_000_000n,
+			...tokens,
+			network
+		});
+
+		expect(result).toMatchObject({
+			success: false,
+			errorClass: 'market_closed',
+			tradeError: { code: 'TRADE_MARKET_CLOSED' }
+		});
+		expect(mocks.apiGetSwapCalldataV2).not.toHaveBeenCalled();
+		expect(mocks.sendTransaction).not.toHaveBeenCalled();
 	});
 });

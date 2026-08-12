@@ -5,6 +5,7 @@ import {
 	type Network
 } from '$lib/config/networks';
 import { getServerTokenCatalog } from '$lib/server/tokenCatalog';
+import { getSt0xGeneralApiConfig } from '$lib/server/st0xApiConfig';
 
 const CACHE_TTL_MS = 60_000;
 const REGISTRY_REPOSITORY_RAW_URL =
@@ -17,23 +18,22 @@ let cachedNetworks: Network[] = [];
 let cacheExpiresAt = 0;
 let inFlight: Promise<Network[]> | null = null;
 
-function apiConfig(): { url: string; authorization: string } {
-	const url = env.ST0X_API_URL?.replace(/\/+$/, '');
-	const key = env.ST0X_API_KEY;
-	const secret = env.ST0X_API_SECRET;
-	if (!url || !key || !secret) throw new Error('ST0X REST API registry is not configured');
-	return { url, authorization: `Basic ${btoa(`${key}:${secret}`)}` };
+function apiConfig() {
+	const config = getSt0xGeneralApiConfig(env);
+	if (!config) throw new Error('ST0X REST API registry is not configured');
+	return config;
 }
 
 async function fetchNetworkCatalog(): Promise<Network[]> {
-	const [tokens, config] = await Promise.all([
+	const config = apiConfig();
+	const [tokens, metadataResponse] = await Promise.all([
 		getServerTokenCatalog(),
-		Promise.resolve(apiConfig())
+		fetch(`${config.apiBase}/registry`, {
+			headers: { Accept: 'application/json', Authorization: config.authHeader },
+			cache: 'no-store',
+			signal: AbortSignal.timeout(10_000)
+		})
 	]);
-	const metadataResponse = await fetch(`${config.url}/registry`, {
-		headers: { Accept: 'application/json', Authorization: config.authorization },
-		cache: 'no-store'
-	});
 	if (!metadataResponse.ok) {
 		throw new Error(`Registry metadata request failed with HTTP ${metadataResponse.status}`);
 	}

@@ -10,7 +10,11 @@
 	import type { Network } from '$lib/config/networks';
 	import { hydrateNetworkCatalog } from '$lib/stores';
 
-	export let data: { tokenCatalog?: CategorizedToken[]; networkCatalog?: Network[] };
+	export let data: {
+		tokenCatalog?: CategorizedToken[];
+		networkCatalog?: Network[];
+		catalogUnavailable?: boolean;
+	};
 
 	function hydrateCatalogs(tokens: CategorizedToken[], networkCatalog: Network[]): void {
 		replaceTokenCatalog(tokens);
@@ -146,7 +150,8 @@
 
 		const configuredNetworks = data.networkCatalog ?? [];
 		if (configuredNetworks.length === 0) {
-			throw new Error('The active registry contains no wallet networks');
+			console.error('[wallet] The application catalog contains no wallet networks');
+			return;
 		}
 		const chains = configuredNetworks.map((network) =>
 			defineChain({
@@ -268,6 +273,14 @@
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>
+	{#if data.catalogUnavailable}
+		<div
+			class="border-b border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-center text-sm text-yellow-200"
+			role="alert"
+		>
+			Network data is temporarily unavailable. Trading and wallet actions are disabled.
+		</div>
+	{/if}
 	<!-- Dynamic SDK wrapper (invisible, handles auth state) -->
 	{#if DynamicSvelteWrapper}
 		<svelte:component this={DynamicSvelteWrapper} />
