@@ -82,7 +82,10 @@ const tokens = {
 
 const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const;
 
-function takeOrdersData(request: ApiSwapCalldataV2Request) {
+function takeOrdersData(
+	request: ApiSwapCalldataV2Request,
+	options: { nonce?: `0x${string}` } = {}
+) {
 	return encodeFunctionData({
 		abi: TAKE_ORDERS_4_ABI,
 		functionName: 'takeOrders4',
@@ -99,7 +102,7 @@ function takeOrdersData(request: ApiSwapCalldataV2Request) {
 							evaluable: { interpreter: TAKER, store: TAKER, bytecode: '0x' },
 							validInputs: [{ token: request.inputToken, vaultId: ZERO_BYTES32 }],
 							validOutputs: [{ token: request.outputToken, vaultId: ZERO_BYTES32 }],
-							nonce: ZERO_BYTES32
+							nonce: options.nonce ?? ZERO_BYTES32
 						},
 						inputIOIndex: 0n,
 						outputIOIndex: 0n,
@@ -449,7 +452,61 @@ describe('executeMarketOrder REST calldata execution', () => {
 		);
 	});
 
-	it('submits API approvals then retries with the fixed resolved price cap', async () => {
+	it('refreshes ready calldata immediately before wallet broadcast', async () => {
+		const initialRequest = {
+			taker: TAKER,
+			inputToken: PAYMENT,
+			outputToken: ASSET,
+			mode: 'buyUpTo' as const,
+			amount: '1',
+			slippageBps: 100,
+			denomination: 'wrapped' as const
+		};
+		const refreshRequest = {
+			taker: TAKER,
+			inputToken: PAYMENT,
+			outputToken: ASSET,
+			mode: 'buyUpTo' as const,
+			amount: '1',
+			priceCap: '2.02',
+			denomination: 'wrapped' as const
+		};
+		const staleData = takeOrdersData(initialRequest, { nonce: `0x${'1'.repeat(64)}` });
+		const freshData = takeOrdersData(refreshRequest, { nonce: `0x${'2'.repeat(64)}` });
+		mocks.apiGetSwapCalldataV2
+			.mockResolvedValueOnce({
+				...readyResponse(initialRequest),
+				data: staleData,
+				resolvedPriceCap: '2.02'
+			})
+			.mockResolvedValueOnce({
+				...readyResponse(refreshRequest),
+				data: freshData,
+				resolvedPriceCap: '2.02'
+			});
+
+		const result = await executeMarketOrder({
+			orderSide: 'Buy',
+			amount: 1_000_000_000_000_000_000n,
+			slippageBps: 100,
+			...tokens,
+			network
+		});
+
+		expect(result.success).toBe(true);
+		expect(mocks.apiGetSwapCalldataV2).toHaveBeenCalledTimes(2);
+		expect(mocks.apiGetSwapCalldataV2).toHaveBeenNthCalledWith(2, refreshRequest);
+		expect(mocks.sendTransaction).toHaveBeenCalledWith({
+			to: ORDERBOOK,
+			data: freshData,
+			value: 0n
+		});
+		expect(mocks.sendTransaction).not.toHaveBeenCalledWith(
+			expect.objectContaining({ data: staleData })
+		);
+	});
+
+	it('submits API approvals then retries and refreshes with the fixed resolved price cap', async () => {
 		const approvalData = encodeFunctionData({
 			abi: erc20Abi,
 			functionName: 'approve',
@@ -479,6 +536,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 					}
 				]
 			})
+			.mockResolvedValueOnce(readyResponse(retryRequest))
 			.mockResolvedValueOnce(readyResponse(retryRequest));
 		mocks.sendTransaction.mockResolvedValueOnce(APPROVAL_HASH).mockResolvedValueOnce(TRADE_HASH);
 
@@ -501,6 +559,10 @@ describe('executeMarketOrder REST calldata execution', () => {
 		expect(mocks.apiGetSwapCalldataV2).toHaveBeenNthCalledWith(2, {
 			...retryRequest
 		});
+		expect(mocks.apiGetSwapCalldataV2).toHaveBeenNthCalledWith(3, {
+			...retryRequest
+		});
+		expect(mocks.apiGetSwapCalldataV2).toHaveBeenCalledTimes(3);
 	});
 
 	it.each([

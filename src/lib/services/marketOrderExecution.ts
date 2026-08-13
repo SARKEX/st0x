@@ -4,8 +4,9 @@
  * The browser deliberately does not walk orders, hydrate SDK objects, simulate
  * candidates, derive price caps, or build takeOrders calldata. Those decisions
  * live in the REST API and the Raindex SDK it calls. This module validates the
- * returned transactions, handles approvals, submits them, and reports indexed
- * fill totals after confirmation.
+ * returned transactions, handles approvals, refreshes executable calldata
+ * immediately before broadcast (so short-lived oracle signed context stays
+ * fresh), submits them, and reports indexed fill totals after confirmation.
  */
 
 import {
@@ -444,6 +445,17 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				buildApprovalRetryRequest(request, response.resolvedPriceCap)
 			);
 		}
+
+		// Oracle-backed orders embed a short-lived signed quote in takeOrders
+		// calldata. Approvals and wallet confirmation can outlive that quote, so
+		// fetch a fresh frame with the already-resolved price cap immediately
+		// before asking the wallet to broadcast.
+		activeTradeErrorStage = 'calldata';
+		addTradeFlowBreadcrumb(flowContext('calldata', 'refresh_api_calldata'), 'started');
+		response = await apiGetSwapCalldataV2(
+			buildApprovalRetryRequest(request, response.resolvedPriceCap)
+		);
+		addTradeFlowBreadcrumb(flowContext('calldata', 'refresh_api_calldata'), 'completed');
 
 		const transaction = validateReadyCalldata(response, request, network);
 		activeStage = 'submission';
