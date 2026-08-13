@@ -207,13 +207,34 @@ async function submitApprovals(
 	}
 }
 
+const APPROVAL_SETTLE_ATTEMPTS = 4;
+const APPROVAL_SETTLE_DELAY_MS = 400;
+
+async function fetchSwapCalldataUntilApproved(
+	request: ApiSwapCalldataV2Request
+): Promise<ApiSwapCalldataV2Response> {
+	let last: ApiSwapCalldataV2Response | undefined;
+	for (let attempt = 0; attempt < APPROVAL_SETTLE_ATTEMPTS; attempt++) {
+		if (attempt > 0) {
+			await new Promise((resolve) =>
+				setTimeout(resolve, APPROVAL_SETTLE_DELAY_MS * 2 ** (attempt - 1))
+			);
+		}
+		last = await apiGetSwapCalldataV2(request);
+		if (last.approvals.length === 0) return last;
+	}
+	throw new Error('Approval is still settling on-chain. Please try the trade again in a moment.');
+}
+
 function validateReadyCalldata(
 	response: ApiSwapCalldataV2Response,
 	request: ApiSwapCalldataV2Request,
 	network: Network
 ): { to: `0x${string}`; data: Hex; value: bigint } {
 	if (response.approvals.length > 0) {
-		throw new Error('Calldata API still requires approval after approval confirmation');
+		throw new Error(
+			'Approval is still settling on-chain. Please try the trade again in a moment.'
+		);
 	}
 	if (!isAddress(response.to)) {
 		throw new Error('Calldata API returned an invalid transaction target');
@@ -440,22 +461,24 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			activeTradeErrorStage = 'approval';
 			const inputTokenDecimals = orderSide === 'Buy' ? paymentToken.decimals : assetToken.decimals;
 			await submitApprovals(response.approvals, request, network, inputTokenDecimals);
+			const retryRequest = buildApprovalRetryRequest(request, response.resolvedPriceCap);
+			// Poll until the API's RPC sees the new allowance. The last clean
+			// payload is also the fresh oracle-signed takeOrders frame.
+			addTradeFlowBreadcrumb(flowContext('calldata', 'refresh_api_calldata'), 'started');
+			response = await fetchSwapCalldataUntilApproved(retryRequest);
+			addTradeFlowBreadcrumb(flowContext('calldata', 'refresh_api_calldata'), 'completed');
+		} else {
+			// Oracle-backed orders embed a short-lived signed quote in takeOrders
+			// calldata. Wallet confirmation can outlive that quote, so fetch a
+			// fresh frame with the already-resolved price cap immediately before
+			// asking the wallet to broadcast.
 			activeTradeErrorStage = 'calldata';
+			addTradeFlowBreadcrumb(flowContext('calldata', 'refresh_api_calldata'), 'started');
 			response = await apiGetSwapCalldataV2(
 				buildApprovalRetryRequest(request, response.resolvedPriceCap)
 			);
+			addTradeFlowBreadcrumb(flowContext('calldata', 'refresh_api_calldata'), 'completed');
 		}
-
-		// Oracle-backed orders embed a short-lived signed quote in takeOrders
-		// calldata. Approvals and wallet confirmation can outlive that quote, so
-		// fetch a fresh frame with the already-resolved price cap immediately
-		// before asking the wallet to broadcast.
-		activeTradeErrorStage = 'calldata';
-		addTradeFlowBreadcrumb(flowContext('calldata', 'refresh_api_calldata'), 'started');
-		response = await apiGetSwapCalldataV2(
-			buildApprovalRetryRequest(request, response.resolvedPriceCap)
-		);
-		addTradeFlowBreadcrumb(flowContext('calldata', 'refresh_api_calldata'), 'completed');
 
 		const transaction = validateReadyCalldata(response, request, network);
 		activeStage = 'submission';
