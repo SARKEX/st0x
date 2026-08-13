@@ -232,9 +232,7 @@ function validateReadyCalldata(
 	network: Network
 ): { to: `0x${string}`; data: Hex; value: bigint } {
 	if (response.approvals.length > 0) {
-		throw new Error(
-			'Approval is still settling on-chain. Please try the trade again in a moment.'
-		);
+		throw new Error('Approval is still settling on-chain. Please try the trade again in a moment.');
 	}
 	if (!isAddress(response.to)) {
 		throw new Error('Calldata API returned an invalid transaction target');
