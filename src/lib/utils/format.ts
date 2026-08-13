@@ -2,7 +2,27 @@
  * Format utilities to replace duplicate code across the app
  */
 
+import { formatUnits } from 'viem';
+
 const ETH_ADDRESS_RE = /^0x[a-f0-9]{40}$/i;
+
+/**
+ * Format a token amount for display or analytics without throwing.
+ * viem's formatUnits calls value.toString(); an undefined amount after a
+ * failed trade (cleared bound input) otherwise crashes the failure path.
+ */
+export function formatUnitsSafe(
+	amount: bigint | null | undefined,
+	decimals: number | null | undefined
+): string {
+	if (amount === undefined || amount === null) return '0';
+	if (typeof decimals !== 'number' || !Number.isFinite(decimals) || decimals < 0) return '0';
+	try {
+		return formatUnits(amount, decimals);
+	} catch {
+		return '0';
+	}
+}
 
 /**
  * Validate an Ethereum address (0x + 40 hex chars, case-insensitive)

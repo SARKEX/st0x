@@ -1,7 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { describe, it, expect } from 'vitest';
-import { truncateAddress, formatUsd, formatPoints, formatApy } from '$lib/utils/format';
+import { formatUnits } from 'viem';
+import {
+	truncateAddress,
+	formatUsd,
+	formatPoints,
+	formatApy,
+	formatUnitsSafe
+} from '$lib/utils/format';
 
 describe('format utilities', () => {
 	describe('truncateAddress', () => {
@@ -54,6 +61,27 @@ describe('format utilities', () => {
 			[0, Math.round(0).toLocaleString('en-US')]
 		])('should format %s as %s', (value, expected) => {
 			expect(formatPoints(value)).toBe(expected);
+		});
+	});
+
+	describe('formatUnitsSafe', () => {
+		it('does not throw when amount is undefined (ST0-28 / ST0X-DEX-UI-2B)', () => {
+			expect(() => formatUnits(undefined as unknown as bigint, 18)).toThrow(
+				/Cannot read properties of undefined/
+			);
+			expect(() => formatUnitsSafe(undefined, 18)).not.toThrow();
+			expect(formatUnitsSafe(undefined, 18)).toBe('0');
+		});
+
+		it('does not throw when amount is null or decimals are missing', () => {
+			expect(formatUnitsSafe(null, 6)).toBe('0');
+			expect(formatUnitsSafe(1_000_000n, undefined)).toBe('0');
+			expect(formatUnitsSafe(1_000_000n, null)).toBe('0');
+		});
+
+		it('formats a valid amount the same as viem formatUnits', () => {
+			expect(formatUnitsSafe(1_000_000n, 6)).toBe(formatUnits(1_000_000n, 6));
+			expect(formatUnitsSafe(0n, 18)).toBe('0');
 		});
 	});
 

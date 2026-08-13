@@ -136,6 +136,21 @@ describe('MarketOrder.svelte event instrumentation (Plan 02-03 Task 1a)', () => 
 		);
 	});
 
+	it('Test 11: snapshots the submitted amount before executeMarketOrder so a cleared input cannot crash trade_failed', () => {
+		const handlerStart = componentSource.indexOf('const handleMarketOrder');
+		const handlerEnd = componentSource.indexOf('};', handlerStart) + 2;
+		const handlerBlock = componentSource.slice(handlerStart, handlerEnd);
+		const executeIdx = handlerBlock.indexOf('await executeMarketOrder(');
+		expect(executeIdx).toBeGreaterThan(-1);
+
+		const beforeExecute = handlerBlock.slice(0, executeIdx);
+		const afterExecute = handlerBlock.slice(executeIdx);
+
+		expect(beforeExecute).toMatch(/formatUnitsSafe\s*\(/);
+		expect(afterExecute).not.toMatch(/formatUnits\s*\(\s*selectedAmount/);
+		expect(handlerBlock).toMatch(/trackTradeEvent\(\s*['"]trade_failed['"]/);
+	});
+
 	it('Test 10: remaps unexpected post-preparation failures at the wallet boundary', () => {
 		expect(componentSource).toMatch(/inferWalletFailureStage/);
 		expect(componentSource).toMatch(
