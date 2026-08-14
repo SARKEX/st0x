@@ -81,8 +81,6 @@
 	// Quote freshness tracking
 	let quoteFreshnessSeconds = 0;
 	let quoteFreshnessInterval: ReturnType<typeof setInterval> | null = null;
-	let marketHoursInterval: ReturnType<typeof setInterval> | null = null;
-	let marketClosed = isOutsideMarketHours();
 
 	function updateQuoteFreshness() {
 		const lastUpdated = $orderbookQuotesQuery?.dataUpdatedAt ?? 0;
@@ -139,10 +137,6 @@
 
 	onMount(() => {
 		panelOpenTime = Date.now();
-		marketClosed = isOutsideMarketHours();
-		marketHoursInterval = setInterval(() => {
-			marketClosed = isOutsideMarketHours();
-		}, 30_000);
 		trackTradeEvent('trade_panel_opened', {
 			order_type: 'market',
 			token_symbol: assetToken?.symbol
@@ -216,7 +210,6 @@
 	// Cleanup interval on component destroy
 	onDestroy(() => {
 		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
-		if (marketHoursInterval) clearInterval(marketHoursInterval);
 
 		// Track abandonment if user had entered values but didn't complete trade
 		// Use trackingState to get current values (avoids stale closure)
@@ -434,7 +427,6 @@
 		!assetToken ||
 		selectedAmountError ||
 		insufficientBalanceError ||
-		marketClosed ||
 		isSubmittingMarketOrder;
 
 	// Calculate the "other side" of the trade for display
@@ -561,15 +553,6 @@
 		}
 		const selectedNetwork = $currentNetwork;
 		if (!selectedNetwork) return;
-		marketClosed = isOutsideMarketHours();
-		if (marketClosed) {
-			orderPreparationTradeError = createTradeError('TRADE_MARKET_CLOSED', {
-				stage: 'calldata'
-			});
-			orderPreparationError = orderPreparationTradeError.message;
-			serviceErrorClass = orderPreparationTradeError.errorClass;
-			return;
-		}
 
 		if (isSubmittingMarketOrder) {
 			return;
@@ -1107,11 +1090,6 @@
 				>
 					Cancel
 				</button>
-				{#if marketClosed}
-					<p class="text-center text-xs text-text-3" role="status">
-						Market orders are available during NYSE trading hours.
-					</p>
-				{/if}
 				<button
 					class="flex-1 rounded-xl bg-amber-500/20 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-500/30 dark:text-amber-400"
 					on:click={confirmHighSlippage}
