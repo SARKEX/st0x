@@ -91,6 +91,20 @@ describe('tradeError', () => {
 		});
 	});
 
+	it('maps post-approve calldata lag to TRADE_APPROVAL_SETTLING (ST0-27)', () => {
+		expect(
+			toUserFacingTradeError(
+				new Error('Approval is still settling on-chain. Please try the trade again in a moment.'),
+				'approval'
+			)
+		).toMatchObject({
+			code: 'TRADE_APPROVAL_SETTLING',
+			stage: 'approval',
+			retryable: true,
+			action: 'try_later'
+		});
+	});
+
 	it('maps RPC rate-limit failures to UPSTREAM_UNAVAILABLE instead of stage fallback', () => {
 		expect(toUserFacingTradeError(new Error('over rate limit'), 'approval')).toMatchObject({
 			code: 'UPSTREAM_UNAVAILABLE',

@@ -211,6 +211,14 @@ const ERROR_CATALOG: Record<string, CatalogEntry> = {
 		action: 'retry',
 		errorClass: 'unknown'
 	},
+	TRADE_APPROVAL_SETTLING: {
+		title: 'Approval is still confirming',
+		message:
+			'The approval went through, but the network has not picked it up yet. Try the trade again in a moment.',
+		retryable: true,
+		action: 'try_later',
+		errorClass: 'unknown'
+	},
 	TRADE_SIGNING_FAILED: {
 		title: 'Signature failed',
 		message: 'The wallet signature did not complete. Check your wallet and try again.',
@@ -309,6 +317,9 @@ export function toUserFacingTradeError(
 	}
 	if (/wallet.*(not connected|disconnected)/.test(message)) {
 		return createTradeError('TRADE_WALLET_NOT_CONNECTED', { stage });
+	}
+	if (message.includes('still settling') || message.includes('still requires approval')) {
+		return createTradeError('TRADE_APPROVAL_SETTLING', { stage: 'approval' });
 	}
 	if (message.includes('slippage')) {
 		return createTradeError('TRADE_SLIPPAGE_EXCEEDED', { stage });

@@ -253,6 +253,10 @@ describe('executeMarketOrder REST calldata execution', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mocks.apiGetSwapCalldataV2.mockReset();
+		mocks.sendTransaction.mockReset();
+		mocks.waitForTransaction.mockReset();
+		mocks.apiGetTradesByTx.mockReset();
 		mocks.getSignerAddress.mockReturnValue(TAKER);
 		mocks.apiGetSwapCalldataV2.mockImplementation(async (request) => readyResponse(request));
 		mocks.apiGetTradesByTx.mockImplementation(async () => {
@@ -536,7 +540,6 @@ describe('executeMarketOrder REST calldata execution', () => {
 					}
 				]
 			})
-			.mockResolvedValueOnce(readyResponse(retryRequest))
 			.mockResolvedValueOnce(readyResponse(retryRequest));
 		mocks.sendTransaction.mockResolvedValueOnce(APPROVAL_HASH).mockResolvedValueOnce(TRADE_HASH);
 
@@ -559,10 +562,115 @@ describe('executeMarketOrder REST calldata execution', () => {
 		expect(mocks.apiGetSwapCalldataV2).toHaveBeenNthCalledWith(2, {
 			...retryRequest
 		});
-		expect(mocks.apiGetSwapCalldataV2).toHaveBeenNthCalledWith(3, {
-			...retryRequest
+		expect(mocks.apiGetSwapCalldataV2).toHaveBeenCalledTimes(2);
+	});
+
+	it('retries calldata after approve when the next responses still list approvals (ST0-27)', async () => {
+		const approvalData = encodeFunctionData({
+			abi: erc20Abi,
+			functionName: 'approve',
+			args: [ORDERBOOK, 100_000_000n]
 		});
-		expect(mocks.apiGetSwapCalldataV2).toHaveBeenCalledTimes(3);
+		const retryRequest = {
+			taker: TAKER,
+			inputToken: PAYMENT,
+			outputToken: ASSET,
+			mode: 'buyUpTo' as const,
+			amount: '1',
+			priceCap: '2.02',
+			denomination: 'wrapped' as const
+		};
+		const pending = {
+			...readyResponse(),
+			data: '0x',
+			resolvedPriceCap: '2.02',
+			approvals: [
+				{
+					token: PAYMENT,
+					spender: ORDERBOOK,
+					amount: '100',
+					symbol: 'USDC',
+					approvalData
+				}
+			]
+		};
+		const timeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation((cb) => {
+			if (typeof cb === 'function') cb();
+			return 0 as unknown as ReturnType<typeof setTimeout>;
+		});
+		try {
+			mocks.apiGetSwapCalldataV2
+				.mockResolvedValueOnce(pending)
+				.mockResolvedValueOnce(pending)
+				.mockResolvedValueOnce(pending)
+				.mockResolvedValueOnce(readyResponse(retryRequest));
+			mocks.sendTransaction.mockResolvedValueOnce(APPROVAL_HASH).mockResolvedValueOnce(TRADE_HASH);
+
+			const result = await executeMarketOrder({
+				orderSide: 'Buy',
+				amount: 1_000_000_000_000_000_000n,
+				slippageBps: 100,
+				...tokens,
+				network
+			});
+
+			expect(result.success).toBe(true);
+			expect(mocks.sendTransaction).toHaveBeenNthCalledWith(1, {
+				to: PAYMENT,
+				data: approvalData
+			});
+			expect(mocks.apiGetSwapCalldataV2.mock.calls.length).toBeGreaterThanOrEqual(4);
+		} finally {
+			timeoutSpy.mockRestore();
+		}
+	});
+
+	it('surfaces a settling error after approve if calldata keeps requiring approval (ST0-27)', async () => {
+		const approvalData = encodeFunctionData({
+			abi: erc20Abi,
+			functionName: 'approve',
+			args: [ORDERBOOK, 100_000_000n]
+		});
+		const pending = {
+			...readyResponse(),
+			data: '0x',
+			resolvedPriceCap: '2.02',
+			approvals: [
+				{
+					token: PAYMENT,
+					spender: ORDERBOOK,
+					amount: '100',
+					symbol: 'USDC',
+					approvalData
+				}
+			]
+		};
+		const timeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation((cb) => {
+			if (typeof cb === 'function') cb();
+			return 0 as unknown as ReturnType<typeof setTimeout>;
+		});
+		try {
+			mocks.apiGetSwapCalldataV2.mockResolvedValue(pending);
+			mocks.sendTransaction.mockResolvedValueOnce(APPROVAL_HASH);
+
+			const result = await executeMarketOrder({
+				orderSide: 'Buy',
+				amount: 1_000_000_000_000_000_000n,
+				slippageBps: 100,
+				...tokens,
+				network
+			});
+
+			expect(result.success).toBe(false);
+			expect(result.error).toMatch(/still settling/i);
+			expect(result.tradeError).toMatchObject({
+				code: 'TRADE_APPROVAL_SETTLING',
+				stage: 'approval'
+			});
+			expect(mocks.sendTransaction).toHaveBeenCalledTimes(1);
+		} finally {
+			timeoutSpy.mockRestore();
+		}
 	});
 
 	it.each([
