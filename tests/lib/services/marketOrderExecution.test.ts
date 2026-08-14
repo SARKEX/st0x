@@ -18,8 +18,7 @@ const mocks = vi.hoisted(() => ({
 	invalidateCostBasis: vi.fn(),
 	invalidateTakerTrades: vi.fn(),
 	trackTradeEvent: vi.fn(),
-	captureTradeFlowError: vi.fn(),
-	isOutsideMarketHours: vi.fn()
+	captureTradeFlowError: vi.fn()
 }));
 
 vi.mock('$lib/api/st0xApi', () => ({
@@ -37,9 +36,6 @@ vi.mock('$lib/queries/balances', () => ({
 	invalidateCostBasis: mocks.invalidateCostBasis,
 	invalidateTakerTrades: mocks.invalidateTakerTrades,
 	invalidateExecutedTradeQueries: mocks.invalidateDashboardBalances
-}));
-vi.mock('$lib/utils/marketHours', () => ({
-	isOutsideMarketHours: mocks.isOutsideMarketHours
 }));
 vi.mock('$lib/stores/transactionShared', async (importOriginal) => {
 	const actual = (await importOriginal()) as object;
@@ -272,7 +268,6 @@ describe('executeMarketOrder REST calldata execution', () => {
 		mocks.waitForTransaction.mockReset();
 		mocks.apiGetTradesByTx.mockReset();
 		mocks.getSignerAddress.mockReturnValue(TAKER);
-		mocks.isOutsideMarketHours.mockReturnValue(false);
 		mocks.apiGetSwapCalldataV2.mockImplementation(async (request) => readyResponse(request));
 		mocks.apiGetTradesByTx.mockImplementation(async () => {
 			const request = mocks.apiGetSwapCalldataV2.mock.calls.at(-1)?.[0];
@@ -840,24 +835,5 @@ describe('executeMarketOrder REST calldata execution', () => {
 				stage: 'signing'
 			}
 		});
-	});
-
-	it('blocks execution before API or wallet work while the market is closed', async () => {
-		mocks.isOutsideMarketHours.mockReturnValue(true);
-
-		const result = await executeMarketOrder({
-			orderSide: 'Buy',
-			amount: 1_000_000_000_000_000_000n,
-			...tokens,
-			network
-		});
-
-		expect(result).toMatchObject({
-			success: false,
-			errorClass: 'market_closed',
-			tradeError: { code: 'TRADE_MARKET_CLOSED' }
-		});
-		expect(mocks.apiGetSwapCalldataV2).not.toHaveBeenCalled();
-		expect(mocks.sendTransaction).not.toHaveBeenCalled();
 	});
 });

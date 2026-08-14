@@ -54,7 +54,6 @@ import {
 	DEFAULT_MARKET_ORDER_SLIPPAGE_BPS as DEFAULT_BPS,
 	MAX_SLIPPAGE_BPS as MAX_BPS
 } from '$lib/utils/marketOrderFill';
-import { isOutsideMarketHours } from '$lib/utils/marketHours';
 import {
 	decodeFunctionData,
 	erc20Abi,
@@ -450,9 +449,6 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 	};
 
 	try {
-		if (isOutsideMarketHours()) {
-			return failWith(new Error('Market is closed'));
-		}
 		const taker = getSignerAddress();
 		if (!taker) {
 			activeTradeErrorStage = 'signing';
