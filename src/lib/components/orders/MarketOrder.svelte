@@ -29,6 +29,7 @@
 	import { withTradeId } from '$lib/services/observability/tradeId';
 	import {
 		createTradeError,
+		shouldRetryTradeQuery,
 		toUserFacingTradeError,
 		type UserFacingTradeError
 	} from '$lib/services/tradeError';
@@ -332,6 +333,7 @@
 	$: errorClass = (() => {
 		if (insufficientBalanceError) return 'insufficient_balance';
 		if (serviceErrorClass) return serviceErrorClass;
+		if (marketQuoteTradeError) return marketQuoteTradeError.errorClass;
 		if (isOutsideMarketHours() && orderPreparationError) return 'market_closed';
 		if (priceError && (priceErrorReason === 'no_quotes' || priceErrorReason === 'no_fill'))
 			return 'no_liquidity';
@@ -392,7 +394,7 @@
 		queryKey: ['marketSwapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
 		enabled: Boolean(marketQuoteRequest),
 		staleTime: 5_000,
-		retry: 1,
+		retry: shouldRetryTradeQuery,
 		queryFn: () => {
 			if (!marketQuoteRequest) throw new Error('Missing market quote request');
 			return apiGetSwapQuoteV2(marketQuoteRequest);

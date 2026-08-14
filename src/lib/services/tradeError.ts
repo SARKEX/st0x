@@ -57,6 +57,13 @@ const ERROR_CATALOG: Record<string, CatalogEntry> = {
 		action: 'adjust_amount',
 		errorClass: 'no_liquidity'
 	},
+	SWAP_ORACLE_UNAVAILABLE: {
+		title: 'Price data unavailable',
+		message: 'Live price data is temporarily unavailable. Try again in a moment.',
+		retryable: true,
+		action: 'try_later',
+		errorClass: 'stale_oracle'
+	},
 	SWAP_QUOTE_FAILED: {
 		title: 'Quote unavailable',
 		message: 'We could not calculate a reliable quote. Refresh the market data and try again.',
@@ -236,6 +243,13 @@ const STAGE_FALLBACK: Record<TradeErrorStage, string> = {
 	submission: 'TRADE_SUBMISSION_FAILED',
 	confirmation: 'TRADE_CONFIRMATION_FAILED'
 };
+
+/** Avoid amplifying explicit REST backoff responses while retaining one retry for other failures. */
+export function shouldRetryTradeQuery(failureCount: number, error: unknown): boolean {
+	return (
+		failureCount < 1 && !(isHttpError(error) && (error.status === 429 || error.status === 503))
+	);
+}
 
 function safeCode(code: string): string {
 	return /^[A-Z][A-Z0-9_]{0,63}$/.test(code) ? code : 'TRADE_UNKNOWN';
