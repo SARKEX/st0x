@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '$lib/clients/http';
-import { createTradeError, toUserFacingTradeError } from '$lib/services/tradeError';
+import {
+	createTradeError,
+	shouldRetryTradeQuery,
+	toUserFacingTradeError
+} from '$lib/services/tradeError';
 
 describe('tradeError', () => {
 	it('maps a typed REST failure without exposing its raw public message', () => {
@@ -37,6 +41,43 @@ describe('tradeError', () => {
 		expect(result.code).toBe('FUTURE_API_FAILURE');
 		expect(result.requestId).toBe('request-future');
 		expect(result.message).not.toContain('do not display this');
+	});
+
+	it('maps oracle-unavailable quotes to temporary price-data guidance', () => {
+		const error = new HttpError({
+			status: 503,
+			code: 'SWAP_ORACLE_UNAVAILABLE',
+			requestId: 'request-oracle',
+			publicMessage: 'raw oracle dependency wording',
+			retryAfter: null
+		});
+
+		expect(toUserFacingTradeError(error, 'quote')).toEqual({
+			code: 'SWAP_ORACLE_UNAVAILABLE',
+			title: 'Price data unavailable',
+			message: 'Live price data is temporarily unavailable. Try again in a moment.',
+			requestId: 'request-oracle',
+			stage: 'quote',
+			retryable: true,
+			action: 'try_later',
+			errorClass: 'stale_oracle'
+		});
+	});
+
+	it('does not immediately retry explicit backoff responses', () => {
+		const httpError = (status: number) =>
+			new HttpError({
+				status,
+				code: `HTTP_${status}`,
+				requestId: null,
+				publicMessage: 'request failed',
+				retryAfter: null
+			});
+
+		expect(shouldRetryTradeQuery(0, httpError(429))).toBe(false);
+		expect(shouldRetryTradeQuery(0, httpError(503))).toBe(false);
+		expect(shouldRetryTradeQuery(0, httpError(502))).toBe(true);
+		expect(shouldRetryTradeQuery(1, new Error('network failed'))).toBe(false);
 	});
 
 	it('normalizes wallet rejection and balance failures to stable local codes', () => {

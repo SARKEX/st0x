@@ -661,6 +661,36 @@ describe('executeMarketOrder REST calldata execution', () => {
 		});
 	});
 
+	it('surfaces oracle-unavailable calldata failures as temporary price-data errors', async () => {
+		mocks.apiGetSwapCalldataV2.mockRejectedValue(
+			new HttpError({
+				status: 503,
+				code: 'SWAP_ORACLE_UNAVAILABLE',
+				requestId: 'request-oracle',
+				publicMessage: 'Required swap oracle unavailable',
+				retryAfter: null
+			})
+		);
+
+		const result = await executeMarketOrder({
+			orderSide: 'Buy',
+			amount: 1_000_000_000_000_000_000n,
+			...tokens,
+			network
+		});
+
+		expect(result).toMatchObject({
+			success: false,
+			errorClass: 'stale_oracle',
+			tradeError: {
+				code: 'SWAP_ORACLE_UNAVAILABLE',
+				requestId: 'request-oracle',
+				stage: 'calldata',
+				action: 'try_later'
+			}
+		});
+	});
+
 	it('maps wallet rejection to the signing support code', async () => {
 		mocks.sendTransaction.mockRejectedValue(new Error('User rejected request'));
 

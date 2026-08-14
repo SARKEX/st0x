@@ -32,6 +32,7 @@
 	} from '$lib/services/marketOrderExecution';
 	import {
 		createTradeError,
+		shouldRetryTradeQuery,
 		toUserFacingTradeError,
 		type UserFacingTradeError
 	} from '$lib/services/tradeError';
@@ -198,7 +199,7 @@
 		queryKey: ['swapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
 		enabled: browser && Boolean(marketQuoteRequest),
 		staleTime: 5_000,
-		retry: 1,
+		retry: shouldRetryTradeQuery,
 		queryFn: () => {
 			if (!marketQuoteRequest) throw new Error('Missing swap quote request');
 			return apiGetSwapQuoteV2(marketQuoteRequest);
