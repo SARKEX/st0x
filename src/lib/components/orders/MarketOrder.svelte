@@ -3,6 +3,7 @@
 	import { currentNetwork } from '$lib/stores';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits } from 'viem';
+	import { formatUnitsSafe } from '$lib/utils/format';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
@@ -578,18 +579,20 @@
 				assetSymbol: assetToken?.symbol,
 				paymentSymbol: paymentToken?.symbol
 			});
+			// Snapshot before any await. TradeAmountInput can bind selectedAmount
+			// to undefined while the swap request is in flight; formatting the
+			// live binding on trade_failed then throws (ST0-28 / ST0X-DEX-UI-2B).
+			const submittedAmountFormatted = formatUnitsSafe(
+				selectedAmount,
+				inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
+			);
 			try {
 				trackTradeEvent('trade_button_clicked', {
 					order_type: 'market',
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 					asset_symbol: assetToken?.symbol,
 					payment_symbol: paymentToken?.symbol,
-					amount: selectedAmount
-						? formatUnits(
-								selectedAmount,
-								inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
-							)
-						: '0',
+					amount: submittedAmountFormatted,
 					slippage_bps: slippageBps,
 					mode: inputMode === 'spend' ? 'spendUpTo' : 'buyUpTo'
 				});
@@ -658,10 +661,7 @@
 						order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 						asset_symbol: assetToken?.symbol,
 						payment_symbol: paymentToken?.symbol,
-						amount: formatUnits(
-							selectedAmount,
-							inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
-						),
+						amount: submittedAmountFormatted,
 						avg_price: marketPrice,
 						error_class: eventErrorClass,
 						error_message: userFacingError.message,
@@ -675,10 +675,7 @@
 						order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 						asset_symbol: assetToken?.symbol,
 						payment_symbol: paymentToken?.symbol,
-						amount: formatUnits(
-							selectedAmount,
-							inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
-						),
+						amount: submittedAmountFormatted,
 						avg_price: marketPrice
 					});
 				}
@@ -698,10 +695,7 @@
 					order_side: orderSide.toLowerCase() as 'buy' | 'sell',
 					asset_symbol: assetToken?.symbol,
 					payment_symbol: paymentToken?.symbol,
-					amount: formatUnits(
-						selectedAmount,
-						inputMode === 'spend' ? paymentToken?.decimals ?? 6 : assetToken?.decimals ?? 18
-					),
+					amount: submittedAmountFormatted,
 					avg_price: marketPrice,
 					error_class: userFacingError.errorClass,
 					error_message: userFacingError.message,
