@@ -11,6 +11,7 @@ import {
 import { kvGet, KV_KEYS } from '$lib/server/kv';
 import { applyTieredRateLimit } from '$lib/server/rateLimit';
 import { readSession } from '$lib/server/walletSession';
+import { getServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 export const GET: RequestHandler = async ({ url, request, cookies }) => {
 	// SEC-06 + SEC-03 (Plan 03-08b atomic flip): tiered rate-limit using the
@@ -32,11 +33,19 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 
 	try {
 		const blockParam = url.searchParams.get('block');
+		const chainParam = url.searchParams.get('chainId');
+		const { networkCatalog } = await getServerApplicationCatalog();
+		if (!chainParam && networkCatalog.length !== 1) {
+			return json({ error: 'Missing chainId parameter' }, { status: 400 });
+		}
+		const chainId = chainParam ? Number(chainParam) : networkCatalog[0]?.chainId;
+		const network = networkCatalog.find((candidate) => candidate.chainId === chainId);
+		if (!network) return json({ error: 'Unsupported chainId parameter' }, { status: 400 });
 		const overallStart = Date.now();
 
 		console.log(`[Preview] Step 1/5: Getting current block number...`);
 		let stepStart = Date.now();
-		const targetBlock = blockParam ? parseInt(blockParam) : await getCurrentBlockNumber();
+		const targetBlock = blockParam ? parseInt(blockParam) : await getCurrentBlockNumber(network);
 		console.log(`[Preview] Step 1/5: Done (${Date.now() - stepStart}ms)`);
 
 		if (isNaN(targetBlock) || targetBlock <= 0) {
@@ -48,7 +57,7 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 		// Use the same core generator function as the cron job
 		console.log(`[Preview] Step 2/5: Generating token snapshots (transfers, prices, vaults)...`);
 		stepStart = Date.now();
-		const snapshots = await generateAllTokenSnapshots(targetBlock);
+		const snapshots = await generateAllTokenSnapshots(network, targetBlock);
 		console.log(
 			`[Preview] Step 2/5: Done - ${snapshots.length} tokens (${Date.now() - stepStart}ms)`
 		);
@@ -56,7 +65,7 @@ export const GET: RequestHandler = async ({ url, request, cookies }) => {
 		// Get timestamp and excluded wallets for response metadata
 		console.log(`[Preview] Step 3/5: Getting block timestamp...`);
 		stepStart = Date.now();
-		const timestamp = await getBlockTimestamp(targetBlock);
+		const timestamp = await getBlockTimestamp(network, targetBlock);
 		const blockDate = new Date(timestamp * 1000).toISOString();
 		console.log(`[Preview] Step 3/5: Done - ${blockDate} (${Date.now() - stepStart}ms)`);
 

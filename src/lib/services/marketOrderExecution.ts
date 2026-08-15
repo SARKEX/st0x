@@ -19,7 +19,7 @@ import {
 	type ApiTradesByTxResponse
 } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
-import { invalidateDashboardBalances } from '$lib/queries/balances';
+import { invalidateExecutedTradeQueries } from '$lib/queries/balances';
 import {
 	APPROVAL_TX_CONFIRMATIONS,
 	getSignerAddress,
@@ -105,6 +105,7 @@ export function buildMarketSwapQuoteRequest(
 
 	return {
 		...(taker ? { taker } : {}),
+		chainId: input.network.chainId,
 		inputToken: inputToken.address,
 		outputToken: outputToken.address,
 		mode: isOutputAnchored ? 'buyUpTo' : 'spendUpTo',
@@ -131,6 +132,7 @@ function buildApprovalRetryRequest(
 	}
 	return {
 		taker: request.taker,
+		chainId: request.chainId,
 		inputToken: request.inputToken,
 		outputToken: request.outputToken,
 		mode: request.mode,
@@ -201,9 +203,15 @@ async function submitApprovals(
 		transactionStoreInternal.awaitWalletConfirmation(
 			`Awaiting wallet confirmation to approve ${approval.symbol || 'token'}...`
 		);
-		const hash = await sendTransaction({ to: transaction.token, data: transaction.data });
+		const hash = await sendTransaction({
+			to: transaction.token,
+			data: transaction.data,
+			chainId: network.chainId
+		});
 		transactionStoreInternal.awaitApprovalTx(hash);
-		await waitForTransaction(hash, { confirmations: APPROVAL_TX_CONFIRMATIONS });
+		await waitForTransaction(hash, network.chainId, {
+			confirmations: APPROVAL_TX_CONFIRMATIONS
+		});
 	}
 }
 
@@ -306,10 +314,13 @@ function validateReadyCalldata(
 const TRADE_INDEX_MAX_ATTEMPTS = 60;
 const TRADE_INDEX_POLL_INTERVAL_MS = 5_000;
 
-async function pollForIndexedTrade(hash: string): Promise<ApiTradesByTxResponse | null> {
+async function pollForIndexedTrade(
+	hash: string,
+	chainId: number
+): Promise<ApiTradesByTxResponse | null> {
 	for (let attempt = 0; attempt < TRADE_INDEX_MAX_ATTEMPTS; attempt++) {
 		try {
-			const response = await apiGetTradesByTx(hash);
+			const response = await apiGetTradesByTx(hash, chainId);
 			if (response.trades.length > 0) return response;
 		} catch (error) {
 			if (attempt === TRADE_INDEX_MAX_ATTEMPTS - 1) {
@@ -487,7 +498,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			order_side: orderSide.toLowerCase() as 'buy' | 'sell'
 		});
 		transactionStoreInternal.awaitWalletConfirmation('Awaiting wallet confirmation...');
-		const hash = await sendTransaction(transaction);
+		const hash = await sendTransaction({ ...transaction, chainId: network.chainId });
 		activeTradeErrorStage = 'confirmation';
 		trackTradeEvent('broadcast', {
 			order_type: 'market',
@@ -495,7 +506,7 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			asset_symbol: assetToken.symbol,
 			payment_symbol: paymentToken.symbol
 		});
-		await waitForTransaction(hash);
+		await waitForTransaction(hash, network.chainId);
 		trackTradeEvent('confirmed', {
 			order_type: 'market',
 			order_side: orderSide.toLowerCase() as 'buy' | 'sell',
@@ -503,8 +514,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 			payment_symbol: paymentToken.symbol
 		});
 		addTradeFlowBreadcrumb(flowContext('submission', 'take_market_order'), 'completed');
-		invalidateDashboardBalances();
-		const indexedTrade = await pollForIndexedTrade(hash);
+		invalidateExecutedTradeQueries();
+		const indexedTrade = await pollForIndexedTrade(hash, network.chainId);
 		let metadata: { marketOrderSummary: ReturnType<typeof buildMarketOrderSummary> } | undefined;
 		if (indexedTrade) {
 			try {

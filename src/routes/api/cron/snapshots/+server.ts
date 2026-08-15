@@ -21,6 +21,7 @@ import {
 	type SnapshotBlockRecord,
 	type DailySnapshotRecord
 } from '$lib/server/kv';
+import { getServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 // Pick a random block within a range
 function pickRandomBlock(startBlock: number, endBlock: number): number {
@@ -67,54 +68,52 @@ export const GET: RequestHandler = async ({ request }) => {
 		console.log(`[Cron] Generating snapshots for ${dateStr}`);
 		console.log(`[Cron] Timestamp range: ${startTimestamp} - ${endTimestamp}`);
 
-		// Get block range for yesterday
-		const startBlock = await getBlockNumberForTimestamp(startTimestamp);
-		const endBlock = await getBlockNumberForTimestamp(endTimestamp);
+		const { networkCatalog } = await getServerApplicationCatalog();
+		const storedBlobs: { chainId: number; block: number; token: string; url: string }[] = [];
+		const blockRecords: SnapshotBlockRecord[] = [];
 
-		console.log(`[Cron] Block range: ${startBlock} - ${endBlock}`);
-
-		// Pick 2 random blocks - one from first half of day, one from second half
-		const [block1, block2] = pickRandomBlocksFromHalves(startBlock, endBlock);
-
-		console.log(`[Cron] Selected blocks: ${block1} (first half), ${block2} (second half)`);
-
-		const storedBlobs: { block: number; token: string; url: string }[] = [];
-
-		// Process a single block: generate snapshots, upload to blob.
-		// Per-wallet points calculation removed in Phase 1 (DEPR-02 D-03).
-		const processBlock = async (blockNumber: number) => {
-			const [snapshots, timestamp] = await Promise.all([
-				generateAllTokenSnapshots(blockNumber),
-				getBlockTimestamp(blockNumber)
+		for (const network of networkCatalog) {
+			const [startBlock, endBlock] = await Promise.all([
+				getBlockNumberForTimestamp(network, startTimestamp),
+				getBlockNumberForTimestamp(network, endTimestamp)
 			]);
-
-			console.log(`[Cron] Generated ${snapshots.length} token snapshots for block ${blockNumber}`);
-
-			// Upload all token snapshots in parallel
-			const blobResults = await Promise.all(
-				snapshots.map(async (snapshot) => {
-					const blobPath = `snapshots/${snapshot.tokenSymbol}/${blockNumber}.json`;
-					const blob = await put(blobPath, JSON.stringify(snapshot, null, 2), {
-						access: 'public',
-						contentType: 'application/json'
-					});
-					console.log(`[Cron] Stored ${snapshot.tokenSymbol} at block ${blockNumber}`);
-					return { block: blockNumber, token: snapshot.tokenSymbol, url: blob.url };
-				})
+			const [block1, block2] = pickRandomBlocksFromHalves(startBlock, endBlock);
+			console.log(
+				`[Cron] Chain ${network.chainId} selected blocks: ${block1} (first half), ${block2} (second half)`
 			);
 
-			storedBlobs.push(...blobResults);
+			const processBlock = async (blockNumber: number): Promise<SnapshotBlockRecord> => {
+				const [snapshots, timestamp] = await Promise.all([
+					generateAllTokenSnapshots(network, blockNumber),
+					getBlockTimestamp(network, blockNumber)
+				]);
+				const blobResults = await Promise.all(
+					snapshots.map(async (snapshot) => {
+						const blobPath = `snapshots/${network.chainId}/${snapshot.tokenSymbol}/${blockNumber}.json`;
+						const blob = await put(blobPath, JSON.stringify(snapshot, null, 2), {
+							access: 'public',
+							contentType: 'application/json'
+						});
+						return {
+							chainId: network.chainId,
+							block: blockNumber,
+							token: snapshot.tokenSymbol,
+							url: blob.url
+						};
+					})
+				);
+				storedBlobs.push(...blobResults);
+				return {
+					chainId: network.chainId,
+					blockNumber,
+					timestamp,
+					date: dateStr,
+					generatedAt: new Date().toISOString()
+				};
+			};
 
-			return {
-				blockNumber,
-				timestamp,
-				date: dateStr,
-				generatedAt: new Date().toISOString()
-			} satisfies SnapshotBlockRecord;
-		};
-
-		// Generate both blocks in parallel
-		const blockRecords = await Promise.all([processBlock(block1), processBlock(block2)]);
+			blockRecords.push(...(await Promise.all([processBlock(block1), processBlock(block2)])));
+		}
 
 		// Store block records in KV
 		const kv = await getKv();
@@ -132,8 +131,9 @@ export const GET: RequestHandler = async ({ request }) => {
 			const allBlocks = (await kvGet<SnapshotBlockRecord[]>(KV_KEYS.snapshotBlocks())) || [];
 			allBlocks.push(...blockRecords);
 
-			// Keep only last 365 days worth of blocks (730 records at 2 per day)
-			const trimmedBlocks = allBlocks.slice(-730);
+			// Retain a full year independently of how many networks are active.
+			const retentionCutoff = Math.floor(now.getTime() / 1000) - 365 * 24 * 60 * 60;
+			const trimmedBlocks = allBlocks.filter((record) => record.timestamp >= retentionCutoff);
 			await kvSet(KV_KEYS.snapshotBlocks(), trimmedBlocks);
 
 			console.log(`[Cron] Stored block records in KV`);

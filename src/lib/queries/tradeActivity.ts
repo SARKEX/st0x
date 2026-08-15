@@ -25,13 +25,13 @@ export function createTokenTradeActivityQuery(
 	// Resolve to wrapped (primary) address — the SFT subgraph returns the unwrapped
 	// vault address, but trades are indexed by the wrapped ERC20 token address.
 	const primaryAddress = tokenAddress
-		? (getTokenByAnyAddress(tokenAddress)?.address ?? tokenAddress).toLowerCase()
+		? (getTokenByAnyAddress(tokenAddress, network?.chainId)?.address ?? tokenAddress).toLowerCase()
 		: null;
 
 	return createQuery<TokenTradeActivityPayload>({
 		queryKey: ['tokenTradeActivity', network?.id, tokenAddress],
 		enabled: Boolean(network && primaryAddress),
-		staleTime: 600_000,
+		staleTime: Infinity,
 		refetchInterval: pollInterval,
 		// Don't retry on 429 — the next poll is the retry. Retrying here just piles more
 		// load onto an already-throttling upstream.
@@ -48,7 +48,14 @@ export function createTokenTradeActivityQuery(
 			let page = 1;
 
 			while (page <= 50) {
-				const response = await apiGetTradesByToken(primaryAddress!, page, PAGE_SIZE, from, now);
+				const response = await apiGetTradesByToken(
+					primaryAddress!,
+					network!.chainId,
+					page,
+					PAGE_SIZE,
+					from,
+					now
+				);
 				// `?? []` because the upstream REST API occasionally omits `trades`
 				// on a paginated response; `[].concat(undefined)` returns
 				// `[undefined]`, which then poisons every downstream consumer.
@@ -80,10 +87,10 @@ export function createBatchTradesQuery(
 	return createQuery<Map<string, ApiTradeByAddress[]>>({
 		queryKey: ['batchTrades', network?.id, sortedKey],
 		enabled: Boolean(network && orderHashes.length > 0),
-		staleTime: 600_000,
+		staleTime: Infinity,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
-			const response = await apiGetTradesBatch(orderHashes);
+			const response = await apiGetTradesBatch(orderHashes, network!.chainId);
 			const map = new Map<string, ApiTradeByAddress[]>();
 			for (const entry of response.tradesByOrderHash) {
 				map.set(entry.orderHash.toLowerCase(), entry.trades);
@@ -105,7 +112,7 @@ export function createTakerTradesQuery(
 	return createQuery<TakerTradesPayload>({
 		queryKey: ['takerTrades', network?.id, walletAddress],
 		enabled: Boolean(network && walletAddress),
-		staleTime: 600_000,
+		staleTime: Infinity,
 		refetchInterval: pollInterval,
 		retry: 2,
 		queryFn: async () => {
@@ -114,7 +121,10 @@ export function createTakerTradesQuery(
 			let page = 1;
 
 			while (page <= 10) {
-				const response = await apiGetTakerTrades(walletAddress!, { page, pageSize: PAGE_SIZE });
+				const response = await apiGetTakerTrades(walletAddress!, network!.chainId, {
+					page,
+					pageSize: PAGE_SIZE
+				});
 				allTrades = allTrades.concat(response.trades ?? []);
 				if (!response.pagination.hasMore) break;
 				page++;

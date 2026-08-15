@@ -1,8 +1,8 @@
 /**
- * Client-side Base RPC URL ordering for wagmi transports.
+ * Client-side registry RPC URL ordering for wagmi transports.
  *
  * svelte-wagmi's defaultConfig uses bare `http()`, which falls through to
- * public chain RPCs (e.g. mainnet.base.org) and rate-limits under load.
+ * public chain RPCs and rate-limits under load.
  * Use {@link getClientRpcUrls} with viem `fallback([...])` so the browser
  * follows the active registry's ordered RPC list.
  */

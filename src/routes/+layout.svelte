@@ -6,6 +6,28 @@
 	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
 	import { removeInjectedTradeSeoHead, syncTradeRobotsMeta } from '$lib/seo/trade';
+	import { replaceTokenCatalog, type CategorizedToken } from '$lib/config/tokens';
+	import type { Network } from '$lib/config/networks';
+	import { hydrateNetworkCatalog } from '$lib/stores';
+
+	export let data: {
+		tokenCatalog?: CategorizedToken[];
+		networkCatalog?: Network[];
+		catalogUnavailable?: boolean;
+	};
+
+	function hydrateCatalogs(tokens: CategorizedToken[], networkCatalog: Network[]): void {
+		replaceTokenCatalog(tokens);
+		hydrateNetworkCatalog(networkCatalog);
+		for (const chainId of new Set(tokens.map((token) => token.chainId))) {
+			queryClient.setQueryData(
+				['st0xApiTokens', chainId],
+				tokens.filter((token) => token.chainId === chainId)
+			);
+		}
+	}
+
+	$: hydrateCatalogs(data.tokenCatalog ?? [], data.networkCatalog ?? []);
 
 	// Site-wide SEO defaults. Pages override the title via their own <svelte:head>
 	// (Svelte keeps the last <title>), or by returning `title`/`description` from a
@@ -100,27 +122,21 @@
 	}
 
 	const initWallet = async () => {
-		// svelte-wagmi's defaultConfig uses bare `http()` → public Base RPCs that
-		// rate-limit under load. Build the same stores/modal setup with an explicit
-		// fallback transport using the active registry's ordered Base RPC list.
+		// Build wagmi from every network and ordered RPC list in the active registry.
 		const [
 			{ wagmiConfig, web3Modal, wagmiLoaded, configuredConnectors, init },
-			{ base },
 			{ injected, walletConnect },
 			{ createConfig, reconnect },
 			{ createWeb3Modal },
 			{ createClientRpcTransport },
-			{ getBrowserRaindexRpcUrls },
-			{ networks }
+			{ defineChain }
 		] = await Promise.all([
 			import('svelte-wagmi'),
-			import('@wagmi/core/chains'),
 			import('@wagmi/connectors'),
 			import('@wagmi/core'),
 			import('@web3modal/wagmi'),
 			import('$lib/config/clientRpc'),
-			import('$lib/clients/raindexSettings'),
-			import('$lib/config/networks')
+			import('viem')
 		]);
 
 		const projectId = publicEnv?.PUBLIC_WALLETCONNECT_ID || '';
@@ -132,27 +148,39 @@
 
 		configuredConnectors.set(connectorsList);
 
-		const configuredBaseNetwork = networks.find((network) => network.chainId === base.id);
-		const configuredBaseRpcUrls = configuredBaseNetwork
-			? [configuredBaseNetwork.rpcUrl, ...configuredBaseNetwork.fallbackRpcUrls]
-			: base.rpcUrls.default.http;
-		let rpcUrls: readonly string[];
-		try {
-			rpcUrls = await getBrowserRaindexRpcUrls(base.id);
-		} catch (error) {
-			// Wallet connectivity should survive a temporary registry outage.
-			// The statically configured list is an emergency fallback only; successful
-			// registry loads always use the complete operator-controlled list.
-			console.warn('[wallet] Failed to load registry RPCs; using configured Base RPCs:', error);
-			rpcUrls = configuredBaseRpcUrls;
+		const configuredNetworks = data.networkCatalog ?? [];
+		if (configuredNetworks.length === 0) {
+			console.error('[wallet] The application catalog contains no wallet networks');
+			return;
 		}
+		const chains = configuredNetworks.map((network) =>
+			defineChain({
+				id: network.chainId,
+				name: network.displayName,
+				nativeCurrency: {
+					name: network.currencySymbol,
+					symbol: network.currencySymbol,
+					decimals: 18
+				},
+				rpcUrls: {
+					default: { http: [network.rpcUrl, ...network.fallbackRpcUrls] }
+				},
+				blockExplorers: {
+					default: { name: 'Blockscan', url: network.blockExplorer }
+				}
+			})
+		);
+		const transports = Object.fromEntries(
+			configuredNetworks.map((network) => [
+				network.chainId,
+				createClientRpcTransport([network.rpcUrl, ...network.fallbackRpcUrls])
+			])
+		);
 
 		const config = createConfig({
-			chains: [base],
+			chains: chains as [(typeof chains)[number], ...typeof chains],
 			connectors: connectorsList,
-			transports: {
-				[base.id]: createClientRpcTransport(rpcUrls)
-			}
+			transports
 		});
 
 		wagmiConfig.set(config);
@@ -245,6 +273,14 @@
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>
+	{#if data.catalogUnavailable}
+		<div
+			class="border-b border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-center text-sm text-yellow-200"
+			role="alert"
+		>
+			Network data is temporarily unavailable. Trading and wallet actions are disabled.
+		</div>
+	{/if}
 	<!-- Dynamic SDK wrapper (invisible, handles auth state) -->
 	{#if DynamicSvelteWrapper}
 		<svelte:component this={DynamicSvelteWrapper} />

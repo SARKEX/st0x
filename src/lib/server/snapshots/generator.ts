@@ -2,22 +2,22 @@
 // Single source of truth for generating snapshots - used by both preview and cron
 
 import type { BlockSnapshot } from './types';
-import { fetchAllTransfers, ALL_TOKEN_ADDRESSES } from './scraper';
+import { fetchAllTransfers } from './scraper';
 import { generateSnapshot } from './processor';
 import { fetchAllVaultHoldings } from './vaults';
 import { fetchMarketPrices } from '$lib/server/marketPrices';
 import { getRewardsExcludedWalletsSet } from '$lib/server/kv';
-import { networks } from '$lib/config/networks';
-import { TOKENS, getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
+import type { Network } from '$lib/config/networks';
+import { getTokenAddressVariants, getTokenByAnyAddress } from '$lib/config/tokens';
 import { recordRpcAttempt, reportChainExhausted } from '$lib/server/rpcMetrics';
 import { withRetry } from '$lib/utils/retry';
-
-const RPC_URLS = [networks[0].rpcUrl, ...networks[0].fallbackRpcUrls];
+import { getServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 export async function fetchSnapshotPrices(
+	network: Network,
 	timestamp: number
 ): Promise<Map<string, Awaited<ReturnType<typeof fetchMarketPrices>>[number]>> {
-	const prices = await fetchMarketPrices(networks[0].chainId, { at: timestamp });
+	const prices = await fetchMarketPrices(network.chainId, { at: timestamp });
 	return new Map(prices.map((price) => [price.assetAddress.toLowerCase(), price]));
 }
 
@@ -77,9 +77,14 @@ export async function fetchOnce(
  * via dashboard latency; only the per-RPC summary line is needed for OBS-04
  * volume budgeting.
  */
-export async function callRpc(method: string, params: unknown[]): Promise<unknown> {
+export async function callRpc(
+	network: Network,
+	method: string,
+	params: unknown[]
+): Promise<unknown> {
+	const rpcUrls = [network.rpcUrl, ...network.fallbackRpcUrls];
 	const attempts: Array<{ rpc_url: string; status_or_error: string }> = [];
-	for (const rpcUrl of RPC_URLS) {
+	for (const rpcUrl of rpcUrls) {
 		const start = Date.now();
 		try {
 			const result = await withRetry(() => fetchOnce(rpcUrl, method, params), 2, 200);
@@ -106,19 +111,22 @@ export async function callRpc(method: string, params: unknown[]): Promise<unknow
 	// Chain exhausted — every RPC × every retry failed. Telegram alert path
 	// fires unchanged via Plan 01-06 surface.
 	await reportChainExhausted({ fn: `callRpc:${method}`, attempts });
-	throw new Error(`callRpc(${method}) — all ${RPC_URLS.length} RPCs exhausted (with retry)`);
+	throw new Error(`callRpc(${method}) — all ${rpcUrls.length} RPCs exhausted (with retry)`);
 }
 
-export async function getBlockTimestamp(blockNumber: number): Promise<number> {
-	const result = await callRpc('eth_getBlockByNumber', [`0x${blockNumber.toString(16)}`, false]);
+export async function getBlockTimestamp(network: Network, blockNumber: number): Promise<number> {
+	const result = await callRpc(network, 'eth_getBlockByNumber', [
+		`0x${blockNumber.toString(16)}`,
+		false
+	]);
 	if (result && typeof result === 'object' && 'timestamp' in result) {
 		return parseInt((result as { timestamp: string }).timestamp, 16);
 	}
 	throw new Error('Failed to get block timestamp from any RPC');
 }
 
-export async function getCurrentBlockNumber(): Promise<number> {
-	const result = await callRpc('eth_blockNumber', []);
+export async function getCurrentBlockNumber(network: Network): Promise<number> {
+	const result = await callRpc(network, 'eth_blockNumber', []);
 	if (typeof result === 'string') {
 		return parseInt(result, 16);
 	}
@@ -143,8 +151,11 @@ export async function getCurrentBlockNumber(): Promise<number> {
  * still converge on neighboring blocks. The function-boundary throw fires only
  * when NO probe ever succeeded (smallestDiff still Infinity).
  */
-export async function getBlockNumberForTimestamp(targetTimestamp: number): Promise<number> {
-	const latestBlock = await getCurrentBlockNumber();
+export async function getBlockNumberForTimestamp(
+	network: Network,
+	targetTimestamp: number
+): Promise<number> {
+	const latestBlock = await getCurrentBlockNumber(network);
 
 	let left = 0;
 	let right = latestBlock;
@@ -155,7 +166,7 @@ export async function getBlockNumberForTimestamp(targetTimestamp: number): Promi
 		const mid = Math.floor((left + right) / 2);
 		let block: unknown;
 		try {
-			block = await callRpc('eth_getBlockByNumber', [`0x${mid.toString(16)}`, false]);
+			block = await callRpc(network, 'eth_getBlockByNumber', [`0x${mid.toString(16)}`, false]);
 		} catch {
 			// Single-block lookup miss — let the binary search converge on neighbors.
 			right = mid - 1;
@@ -182,7 +193,9 @@ export async function getBlockNumberForTimestamp(targetTimestamp: number): Promi
 
 	if (smallestDiff === Infinity) {
 		throw new Error(
-			`getBlockNumberForTimestamp(${targetTimestamp}) — no block lookup succeeded after ${RPC_URLS.length} RPCs`
+			`getBlockNumberForTimestamp(${targetTimestamp}) — no block lookup succeeded after ${
+				1 + network.fallbackRpcUrls.length
+			} RPCs`
 		);
 	}
 
@@ -195,41 +208,48 @@ export async function getBlockNumberForTimestamp(targetTimestamp: number): Promi
  */
 export async function generateTokenSnapshot(
 	tokenAddress: string,
-	blockNumber: number
+	blockNumber: number,
+	chainId: number
 ): Promise<BlockSnapshot> {
+	const { networkCatalog } = await getServerApplicationCatalog();
+	const network = networkCatalog.find((candidate) => candidate.chainId === chainId);
+	if (!network) throw new Error(`Unknown chain ${chainId}`);
 	const normalizedToken = tokenAddress.toLowerCase();
 
 	// Find the parent token config to get all address variants
-	const parentToken = getTokenByAnyAddress(normalizedToken);
+	const parentToken = getTokenByAnyAddress(normalizedToken, chainId);
 	const allAddresses = parentToken ? getTokenAddressVariants(parentToken) : [normalizedToken];
 	const wrappedAddress = parentToken?.address.toLowerCase() ?? normalizedToken;
 
 	// Get block timestamp
-	const timestamp = await getBlockTimestamp(blockNumber);
+	const timestamp = await getBlockTimestamp(network, blockNumber);
 
 	// Fetch transfers for all address variants up to target block
-	const transfers = await fetchAllTransfers(blockNumber, allAddresses);
+	const transfers = await fetchAllTransfers(blockNumber, allAddresses, network);
 
 	// The API returns the nearest retained midpoint at or before the block time.
-	const price = (await fetchSnapshotPrices(timestamp)).get(wrappedAddress);
+	const price = (await fetchSnapshotPrices(network, timestamp)).get(wrappedAddress);
 
 	// Fetch vault holdings for all address variants at the specific block
-	const vaultHoldings = await fetchAllVaultHoldings(allAddresses, blockNumber);
+	const vaultHoldings = await fetchAllVaultHoldings(allAddresses, blockNumber, network);
 
 	// Fetch excluded + pool wallets (both excluded from rewards)
 	const excludedWallets = Array.from(await getRewardsExcludedWalletsSet());
 
 	// Generate snapshot combining all address variants into one
-	return generateSnapshot(
-		transfers,
-		blockNumber,
-		timestamp,
-		wrappedAddress,
-		price,
-		vaultHoldings,
-		excludedWallets,
-		allAddresses
-	);
+	return {
+		...generateSnapshot(
+			transfers,
+			blockNumber,
+			timestamp,
+			wrappedAddress,
+			price,
+			vaultHoldings,
+			excludedWallets,
+			allAddresses
+		),
+		chainId
+	};
 }
 
 /**
@@ -240,33 +260,44 @@ export async function generateTokenSnapshot(
  * Each token produces ONE snapshot combining holdings across
  * wrapped, unwrapped, and legacy addresses.
  */
-export async function generateAllTokenSnapshots(blockNumber: number): Promise<BlockSnapshot[]> {
+export async function generateAllTokenSnapshots(
+	network: Network,
+	blockNumber: number
+): Promise<BlockSnapshot[]> {
+	const { tokenCatalog } = await getServerApplicationCatalog();
+	const chainTokens = tokenCatalog.filter(
+		(token) => token.category === 'ST0x' && token.chainId === network.chainId
+	);
+	const allTokenAddresses = chainTokens.flatMap((token) => getTokenAddressVariants(token));
 	// Get block timestamp first (needed for retained price lookup)
-	const timestamp = await getBlockTimestamp(blockNumber);
+	const timestamp = await getBlockTimestamp(network, blockNumber);
 
 	// Fetch transfers, prices, vault holdings, and excluded/pool wallets in parallel
 	const [transfers, prices, vaultHoldings, excludedSet] = await Promise.all([
-		fetchAllTransfers(blockNumber, ALL_TOKEN_ADDRESSES),
-		fetchSnapshotPrices(timestamp),
-		fetchAllVaultHoldings(ALL_TOKEN_ADDRESSES, blockNumber),
+		fetchAllTransfers(blockNumber, allTokenAddresses, network),
+		fetchSnapshotPrices(network, timestamp),
+		fetchAllVaultHoldings(allTokenAddresses, blockNumber, network),
 		getRewardsExcludedWalletsSet()
 	]);
 	const excludedWallets = Array.from(excludedSet);
 
 	// Generate ONE snapshot per canonical token, combining all address variants
-	return TOKENS.map((token) => {
+	return chainTokens.map((token) => {
 		const wrappedAddr = token.address.toLowerCase();
 		const allAddrs = getTokenAddressVariants(token);
 
-		return generateSnapshot(
-			transfers,
-			blockNumber,
-			timestamp,
-			wrappedAddr,
-			prices.get(wrappedAddr),
-			vaultHoldings,
-			excludedWallets,
-			allAddrs
-		);
+		return {
+			...generateSnapshot(
+				transfers,
+				blockNumber,
+				timestamp,
+				wrappedAddr,
+				prices.get(wrappedAddr),
+				vaultHoldings,
+				excludedWallets,
+				allAddrs
+			),
+			chainId: network.chainId
+		};
 	});
 }

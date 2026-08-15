@@ -19,6 +19,10 @@ vi.mock('$lib/server/kv', () => ({
 	getKv: vi.fn(async () => null)
 }));
 
+vi.mock('$lib/server/applicationCatalog', () => ({
+	ensureServerApplicationCatalog: vi.fn(async () => undefined)
+}));
+
 import { env } from '$env/dynamic/private';
 import { PUBLIC_TRADE_ACTIVITY_REFRESH_TIMEOUT_MS } from '$lib/server/publicTradeActivity';
 import { clearPublicTradeActivityMemoryCache } from '$lib/server/publicTradeActivityCache';
@@ -67,7 +71,7 @@ describe('/api/public/trade-activity', () => {
 		expect(response.status).toBe(200);
 		expect(fetchMock).toHaveBeenCalled();
 		for (const [url, init] of fetchMock.mock.calls) {
-			expect(url).toBe('https://api.example.test/v1/trades/query');
+			expect(url).toBe('https://api.example.test/v2/trades/query');
 			if (!init) throw new Error('Expected batch request options');
 			const headers = init.headers as Record<string, string>;
 			expect(headers.Authorization).toBe('Basic YWN0aXZpdHkta2V5OmFjdGl2aXR5LXNlY3JldA==');

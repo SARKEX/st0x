@@ -109,7 +109,7 @@
 
 	// Get current mapping based on selection
 	$: currentMapping = selectedOldTokenAddress
-		? getMigrationMappingByAddress(selectedOldTokenAddress)
+		? getMigrationMappingByAddress(selectedOldTokenAddress, $currentNetwork?.chainId)
 		: null;
 
 	// Query to fetch all old token balances for the user
@@ -118,27 +118,33 @@
 		enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig && $showTokenSwapModal),
 		staleTime: 30_000,
 		queryFn: async () => {
-			if (!$walletAddress || !$wagmiConfig) return [];
+			if (!$walletAddress || !$currentNetwork || !$wagmiConfig) return [];
 
-			const contracts = TOKEN_MIGRATION_MAPPINGS.map((mapping) => ({
+			const mappings = TOKEN_MIGRATION_MAPPINGS.filter(
+				(mapping) => mapping.chainId === $currentNetwork.chainId
+			);
+			const contracts = mappings.map((mapping) => ({
 				abi: erc20Abi,
 				address: mapping.oldToken.address as `0x${string}`,
 				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`],
+				chainId: $currentNetwork.chainId
 			}));
 
 			try {
 				const results = await readContracts($wagmiConfig, { contracts });
 
-				return TOKEN_MIGRATION_MAPPINGS.map((mapping, index) => {
-					const result = results[index];
-					const balance = result.status === 'success' ? (result.result as bigint) : 0n;
-					return {
-						...mapping,
-						balance,
-						balanceFormatted: parseFloat(formatUnits(balance, mapping.oldToken.decimals))
-					};
-				}).filter((item) => item.balance > 0n);
+				return mappings
+					.map((mapping, index) => {
+						const result = results[index];
+						const balance = result.status === 'success' ? (result.result as bigint) : 0n;
+						return {
+							...mapping,
+							balance,
+							balanceFormatted: parseFloat(formatUnits(balance, mapping.oldToken.decimals))
+						};
+					})
+					.filter((item) => item.balance > 0n);
 			} catch (e) {
 				console.error('Failed to fetch old token balances:', e);
 				return [];
@@ -201,7 +207,7 @@
 		selectedOldTokenAddress = address;
 		swapAmount = '';
 		liquidityWarning = false;
-		const mapping = getMigrationMappingByAddress(address);
+		const mapping = getMigrationMappingByAddress(address, $currentNetwork?.chainId);
 		track('legacy_swap_token_selected', {
 			old_token_symbol: mapping?.oldToken.symbol,
 			new_token_symbol: mapping?.newToken.symbol

@@ -511,10 +511,11 @@ const RAINDEX_BASE_URL = 'https://v6.raindex.finance';
  * Generate a Raindex URL for an order
  */
 export function getRaindexOrderUrl(
-	chainId: number,
+	chainId: number | undefined,
 	orderbookId: string,
 	orderHash: string
 ): string {
+	if (chainId === undefined) return '#';
 	return `${RAINDEX_BASE_URL}/orders/${chainId}-${orderbookId}-${orderHash}`;
 }
 
@@ -522,15 +523,16 @@ export function getRaindexOrderUrl(
  * Generate a Raindex URL for a vault
  * Format: {chainId}-{orderbookId}-{vaultSubgraphId}
  *
- * @param chainId - Network chain ID (e.g., 8453 for Base)
+ * @param chainId - Network chain ID from the active registry
  * @param orderbookId - Orderbook contract address
  * @param vaultSubgraphId - The vault's unique subgraph identifier (vault.id), NOT the vault slot number (vault.vaultId)
  */
 export function getRaindexVaultUrl(
-	chainId: number,
+	chainId: number | undefined,
 	orderbookId: string,
 	vaultSubgraphId: string
 ): string {
+	if (chainId === undefined) return '#';
 	const normalizedId = vaultSubgraphId.startsWith('0x') ? vaultSubgraphId : `0x${vaultSubgraphId}`;
 	return `${RAINDEX_BASE_URL}/vaults/${chainId}-${orderbookId}-${normalizedId}`;
 }

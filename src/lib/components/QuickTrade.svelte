@@ -242,12 +242,13 @@
 	$: usdcBalanceQuery = createQuery({
 		queryKey: ['usdcBalance', $currentNetwork?.id, paymentToken?.address, $walletAddress],
 		queryFn: async () => {
-			if (!paymentToken?.address || !$walletAddress || !$wagmiConfig) return 0n;
+			if (!paymentToken?.address || !$walletAddress || !$currentNetwork || !$wagmiConfig) return 0n;
 			return (await readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: paymentToken.address as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$walletAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`],
+				chainId: $currentNetwork.chainId
 			})) as bigint;
 		},
 		enabled: Boolean(paymentToken?.address && $walletAddress && $wagmiConfig)
@@ -256,12 +257,13 @@
 	$: tokenBalanceQuery = createQuery({
 		queryKey: ['tokenBalance', $currentNetwork?.id, selectedTokenAddress, $walletAddress],
 		queryFn: async () => {
-			if (!selectedTokenAddress || !$walletAddress || !$wagmiConfig) return 0n;
+			if (!selectedTokenAddress || !$walletAddress || !$currentNetwork || !$wagmiConfig) return 0n;
 			return (await readContract($wagmiConfig, {
 				abi: erc20Abi,
 				address: selectedTokenAddress as `0x${string}`,
 				functionName: 'balanceOf',
-				args: [$walletAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`],
+				chainId: $currentNetwork.chainId
 			})) as bigint;
 		},
 		enabled: Boolean(selectedTokenAddress && $walletAddress && $wagmiConfig)
@@ -542,7 +544,7 @@
 		<!-- Card header -->
 		<div class="flex items-center justify-between text-xs text-text-2">
 			<span>Quick trade</span>
-			<span>Base · {paymentToken?.symbol ?? 'USDC'}</span>
+			<span>{$currentNetwork?.displayName ?? 'Network'} · {paymentToken?.symbol ?? 'Quote'}</span>
 		</div>
 
 		<!-- USDC section -->
@@ -769,8 +771,8 @@
 		<!-- Network info -->
 		<div class="flex items-center justify-center gap-2 text-xs text-text-3">
 			<span>Trading on</span>
-			<img src="/images/BASE.svg" alt="Base" class="h-4 w-4" />
-			<span class="text-text-2">{$currentNetwork?.displayName ?? 'Base'}</span>
+			<img src="/images/ETH.svg" alt="Network" class="h-4 w-4 rounded-full" />
+			<span class="text-text-2">{$currentNetwork?.displayName ?? 'Network'}</span>
 		</div>
 
 		<!-- Error display -->

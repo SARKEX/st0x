@@ -18,6 +18,7 @@ import {
 	St0xTradesRateLimitError
 } from '$lib/server/st0xTradesFetcher';
 import { getSt0xActivityApiConfig } from '$lib/server/st0xApiConfig';
+import { ensureServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 export type {
 	NetworkTradeStats,
@@ -69,6 +70,7 @@ export const GET: RequestHandler = async ({ request }) => {
 	}
 
 	try {
+		await ensureServerApplicationCatalog();
 		const data = await getCachedPublicTradeActivity(computeTradeActivity);
 		return json(data, {
 			headers: {

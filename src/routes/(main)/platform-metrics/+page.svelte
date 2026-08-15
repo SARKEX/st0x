@@ -8,6 +8,7 @@
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import InfoBlock from '$lib/components/ui/InfoBlock.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { derived } from 'svelte/store';
 	import { onMount, onDestroy } from 'svelte';
 	import { findQuoteForSymbol } from '$lib/utils/tradingViewSymbols';
@@ -29,6 +30,7 @@
 		latest: {
 			totalTvl: number;
 			tokenTvl: Record<string, number>;
+			networks: { chainId: number; blockNumber: number; totalTvl: number }[];
 		} | null;
 	}
 
@@ -59,7 +61,11 @@
 			);
 			return tokens.filter(
 				(token, index, self) =>
-					index === self.findIndex((t) => t.address.toLowerCase() === token.address.toLowerCase())
+					index ===
+					self.findIndex(
+						(t) =>
+							t.chainId === token.chainId && t.address.toLowerCase() === token.address.toLowerCase()
+					)
 			);
 		}
 	});
@@ -243,12 +249,27 @@
 	// Token metadata helpers
 	$: ALL_TOKENS = $apiTokensQuery.data ?? [];
 
-	let tokenLookup: TokenLookup<CategorizedToken> = createTokenLookup([]);
-	$: tokenLookup = createTokenLookup(ALL_TOKENS);
+	let tokenLookupsByNetwork = new Map<number, TokenLookup<CategorizedToken>>();
+	$: tokenLookupsByNetwork = new Map(
+		networks.map((network) => [
+			network.chainId,
+			createTokenLookup(ALL_TOKENS.filter((token) => token.chainId === network.chainId))
+		])
+	);
 
-	// Create canonical token set (both ST0x and Crypto tokens)
-	$: canonicalTokens = new Set<string>(
-		ALL_TOKENS.map((token) => normalizeAddress(token.address)).filter(Boolean) as string[]
+	function tokenForNetwork(chainId: number, address: string | null | undefined) {
+		return tokenLookupsByNetwork.get(chainId)?.(address);
+	}
+
+	$: canonicalTokensByNetwork = new Map(
+		networks.map((network) => [
+			network.chainId,
+			new Set(
+				ALL_TOKENS.filter((token) => token.chainId === network.chainId)
+					.map((token) => normalizeAddress(token.address))
+					.filter(Boolean) as string[]
+			)
+		])
 	);
 
 	// Map per-network server response by chainId for quick lookup
@@ -268,7 +289,8 @@
 
 		orderbookStates.forEach(({ network, query }) => {
 			const set = map.get(network.chainId);
-			if (!set) return;
+			const canonicalTokens = canonicalTokensByNetwork.get(network.chainId);
+			if (!set || !canonicalTokens) return;
 			const summary = query?.data?.summary ?? {};
 			Object.keys(summary).forEach((address) => {
 				const normalised = normalizeAddress(address);
@@ -281,10 +303,12 @@
 		// Add tokens that had trades (per-network) from the server aggregate
 		tradeActivityByChain.forEach((entry, chainId) => {
 			const set = map.get(chainId);
-			if (!set) return;
+			const canonicalTokens = canonicalTokensByNetwork.get(chainId);
+			if (!set || !canonicalTokens) return;
 			entry.tokens.forEach((row) => {
-				if (row.trades > 0 && canonicalTokens.has(row.address)) {
-					set.add(row.address);
+				const normalised = normalizeAddress(row.address);
+				if (row.trades > 0 && normalised && canonicalTokens.has(normalised)) {
+					set.add(normalised);
 				}
 			});
 		});
@@ -306,10 +330,13 @@
 	): number | null {
 		const restPrice = symbol ? findNetworkQuote(symbol, networkId)?.close ?? null : null;
 		if (restPrice != null) return restPrice;
+		const configuredToken = tokenAddress ? tokenForNetwork(networkId, tokenAddress) : undefined;
+		if (configuredToken?.fallbackPrice != null && configuredToken.fallbackPrice > 0) {
+			return configuredToken.fallbackPrice;
+		}
+		if (symbol && ['USD', 'USDC', 'USDT'].includes(symbol.toUpperCase())) return 1;
 
-		const network = networks.find((candidate) => candidate.chainId === networkId);
-		const paymentTokenAddress = normalizeAddress(network?.defaultPaymentToken?.address);
-		return tokenAddress && normalizeAddress(tokenAddress) === paymentTokenAddress ? 1 : null;
+		return null;
 	}
 
 	function vaultBalanceToNumber(vault: RaindexVault): number {
@@ -321,17 +348,27 @@
 	$: totalTrades = tradeActivity?.totals.totalTrades ?? 0;
 
 	// Build a set of tStock addresses for identification
-	$: tStockAddresses = new Set<string>(
-		ALL_TOKENS.filter((t) => t.category === 'ST0x')
-			.map((t) => normalizeAddress(t.address))
-			.filter(Boolean) as string[]
+	$: tStockAddressesByNetwork = new Map(
+		networks.map((network) => [
+			network.chainId,
+			new Set(
+				ALL_TOKENS.filter((token) => token.chainId === network.chainId && token.category === 'ST0x')
+					.map((token) => normalizeAddress(token.address))
+					.filter(Boolean) as string[]
+			)
+		])
 	);
 
 	// Build payment token addresses for each network
-	$: paymentTokenAddresses = new Set<string>(
-		networks
-			.map((n) => normalizeAddress(n.defaultPaymentToken?.address))
-			.filter(Boolean) as string[]
+	$: paymentTokenAddressesByNetwork = new Map(
+		networks.map((network) => [
+			network.chainId,
+			new Set(
+				network.paymentTokens
+					.map((token) => normalizeAddress(token.address))
+					.filter(Boolean) as string[]
+			)
+		])
 	);
 
 	// Calculate DEX Liquidity:
@@ -344,7 +381,8 @@
 		// First, build a map of orderHash -> whether order has a tStock as input
 		// This is done by looking at all vaults' ordersAsInput
 		const orderHashHasTStockInput = new Map<string, boolean>();
-		vaultsByNetwork.forEach((vaults) => {
+		vaultsByNetwork.forEach((vaults, networkId) => {
+			const tStockAddresses = tStockAddressesByNetwork.get(networkId) ?? new Set<string>();
 			vaults.forEach((vault) => {
 				const address = normalizeAddress(vault.token.address);
 				const isTStock = address ? tStockAddresses.has(address) : false;
@@ -362,6 +400,9 @@
 
 		// Now calculate DEX liquidity
 		vaultsByNetwork.forEach((vaults, networkId) => {
+			const tStockAddresses = tStockAddressesByNetwork.get(networkId) ?? new Set<string>();
+			const paymentTokenAddresses =
+				paymentTokenAddressesByNetwork.get(networkId) ?? new Set<string>();
 			vaults.forEach((vault) => {
 				const address = normalizeAddress(vault.token.address);
 				if (!address) return;
@@ -376,7 +417,7 @@
 
 				if (isTStock) {
 					// Part 1: tStock in output vaults - get USDC value
-					const tokenInfo = tokenLookup(address);
+					const tokenInfo = tokenForNetwork(networkId, address);
 					const symbol = tokenInfo?.symbol ?? vault.token.symbol;
 					const price = getNetworkPrice(networkId, address, symbol) ?? 0;
 					total += balance * price;
@@ -388,7 +429,13 @@
 						return hash ? orderHashHasTStockInput.get(hash) === true : false;
 					});
 					if (hasTStockInputOrder) {
-						total += balance; // USDC value is 1:1
+						const tokenInfo = tokenForNetwork(networkId, address);
+						const price = getNetworkPrice(
+							networkId,
+							address,
+							tokenInfo?.symbol ?? vault.token.symbol
+						);
+						if (price != null) total += balance * price;
 					}
 				}
 			});
@@ -410,6 +457,7 @@
 	}
 
 	$: networkStats = networks.map<NetworkStat>((network) => {
+		const tStockAddresses = tStockAddressesByNetwork.get(network.chainId) ?? new Set<string>();
 		const vaults = getActiveVaultsForNetwork(network.chainId);
 		const allNetworkVaults = vaultsByNetwork.get(network.chainId) ?? [];
 
@@ -430,7 +478,7 @@
 		// Calculate TVL using aggregated balances - one price lookup per token
 		let tvl = 0;
 		tokenBalances.forEach((balance, address) => {
-			const tokenInfo = tokenLookup(address);
+			const tokenInfo = tokenForNetwork(network.chainId, address);
 			const symbol = tokenInfo?.symbol;
 			const price = getNetworkPrice(network.chainId, address, symbol) ?? 0;
 			tvl += balance * price;
@@ -468,7 +516,7 @@
 			if (!hasOrdersAsOutput) return;
 
 			if (isTStock) {
-				const tokenInfo = tokenLookup(address);
+				const tokenInfo = tokenForNetwork(network.chainId, address);
 				const symbol = tokenInfo?.symbol ?? vault.token.symbol;
 				const price = getNetworkPrice(network.chainId, address, symbol) ?? 0;
 				networkDexLiquidity += balance * price;
@@ -499,7 +547,7 @@
 		let networkTvl = 0;
 		ALL_TOKENS.filter((t) => t.chainId === network.chainId && t.category === 'ST0x').forEach(
 			(token) => {
-				const tokenTvl = adminTokenTvl[token.symbol] ?? 0;
+				const tokenTvl = adminTokenTvl[`${network.chainId}:${token.symbol}`] ?? 0;
 				networkTvl += tokenTvl;
 			}
 		);
@@ -562,8 +610,8 @@
 	// header "Live · N markets" pill. Derived from existing per-network active sets.
 	$: liveMarketCount = (() => {
 		const markets = new Set<string>();
-		activeTokensByNetwork.forEach((set) => {
-			set.forEach((address) => markets.add(address));
+		activeTokensByNetwork.forEach((set, chainId) => {
+			set.forEach((address) => markets.add(`${chainId}:${address}`));
 		});
 		return markets.size;
 	})();
@@ -587,8 +635,8 @@
 						Platform metrics
 					</h1>
 					<p class="mt-2 max-w-xl text-[15px] text-text-2">
-						Onchain activity across st0x — every figure is read from Base mainnet and refreshes each
-						block.
+						Onchain activity across st0x — every figure is read from the active registry networks
+						and refreshes each block.
 					</p>
 				</div>
 				<div
@@ -715,15 +763,15 @@
 							<tr class="hover:bg-overlay-hover">
 								<td class="sticky left-0 p-2 sm:p-3 sm:text-sm">
 									<div class="flex items-center gap-2 sm:gap-3">
-										<img
-											src={stats.network.chainId === 42161
-												? '/images/ARB.svg'
-												: stats.network.chainId === 8453
-													? '/images/BASE.svg'
-													: '/images/ETH.svg'}
-											alt={stats.network.displayName}
-											class="h-8 w-8 rounded-full sm:h-10 sm:w-10"
-										/>
+										{#if stats.network.icon.startsWith('/')}
+											<img
+												src={stats.network.icon}
+												alt={stats.network.displayName}
+												class="h-8 w-8 rounded-full sm:h-10 sm:w-10"
+											/>
+										{:else}
+											<Icon name="blocks" className="h-8 w-8 text-text-3 sm:h-10 sm:w-10" />
+										{/if}
 										<div class="min-w-0">
 											<div class="truncate font-medium">{stats.network.displayName}</div>
 											<div class="hidden text-xs text-text-2 sm:block">{stats.network.name}</div>

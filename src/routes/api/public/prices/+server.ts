@@ -20,6 +20,7 @@ import {
 } from '$lib/server/marketPrices';
 import type { MidpointPrice } from '$lib/utils/midpointPrice';
 import { logQueryFailure, errorMessage } from '$lib/utils/monitoring';
+import { ensureServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
 export type PublicPricesResponse =
 	| PublicPricesSnapshot
@@ -68,6 +69,7 @@ export const GET: RequestHandler = async ({ request }) => {
 	}
 
 	try {
+		await ensureServerApplicationCatalog();
 		const cached = await getCachedPublicPrices(computePrices);
 
 		return json(cached.value, {

@@ -20,13 +20,20 @@
 		enabled: !!($isAuthenticated && $walletAddress && $wagmiConfig),
 		staleTime: 60_000, // Check every minute
 		queryFn: async () => {
-			if (!$walletAddress || !$wagmiConfig) return { hasOldTokens: false, count: 0 };
+			if (!$walletAddress || !$wagmiConfig || !$currentNetwork) {
+				return { hasOldTokens: false, count: 0 };
+			}
 
-			const contracts = TOKEN_MIGRATION_MAPPINGS.map((mapping) => ({
+			const mappings = TOKEN_MIGRATION_MAPPINGS.filter(
+				(mapping) => mapping.chainId === $currentNetwork.chainId
+			);
+
+			const contracts = mappings.map((mapping) => ({
 				abi: erc20Abi,
 				address: mapping.oldToken.address as `0x${string}`,
 				functionName: 'balanceOf' as const,
-				args: [$walletAddress as `0x${string}`]
+				args: [$walletAddress as `0x${string}`],
+				chainId: $currentNetwork.chainId
 			}));
 
 			try {
@@ -37,7 +44,7 @@
 					const result = results[i];
 					if (result.status === 'success') {
 						const balance = result.result as bigint;
-						const decimals = TOKEN_MIGRATION_MAPPINGS[i]?.oldToken.decimals ?? 18;
+						const decimals = mappings[i]?.oldToken.decimals ?? 18;
 						const balanceNum = parseFloat(formatUnits(balance, decimals));
 						if (balanceNum >= DUST_THRESHOLD) {
 							count++;

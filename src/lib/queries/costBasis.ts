@@ -68,7 +68,7 @@ function takerTradeToCostBasis(trade: ApiTradeByAddress, userAddress: string): C
  * Fetch all trades for a user from the REST API (paginated).
  * Combines maker trades (user's orders were filled) and taker trades (user executed market orders).
  */
-async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]> {
+async function fetchAllUserTrades(userAddress: string, chainId: number): Promise<CostBasisTrade[]> {
 	const PAGE_SIZE = 50;
 	const trades: CostBasisTrade[] = [];
 	const seen = new Set<string>();
@@ -77,7 +77,7 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 	let makerPage = 1;
 	let makerHasMore = true;
 	while (makerHasMore) {
-		const response = await apiGetTradesByAddress(userAddress, {
+		const response = await apiGetTradesByAddress(userAddress, chainId, {
 			page: makerPage,
 			pageSize: PAGE_SIZE
 		});
@@ -97,7 +97,7 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 	let takerPage = 1;
 	let takerHasMore = true;
 	while (takerHasMore) {
-		const response = await apiGetTakerTrades(userAddress, {
+		const response = await apiGetTakerTrades(userAddress, chainId, {
 			page: takerPage,
 			pageSize: PAGE_SIZE
 		});
@@ -125,23 +125,22 @@ export function createCostBasisQuery(network: Network | null, userAddress: strin
 	return createQuery<Map<string, CostBasisData>>({
 		queryKey: ['costBasis', network?.id, userAddress],
 		enabled: Boolean(network && userAddress),
-		staleTime: 600_000, // 10 minutes - only refetch when stale
+		staleTime: Infinity,
 		refetchInterval: false, // No polling - fetch once on mount
-		refetchOnWindowFocus: true, // Refresh when user returns to tab (only if stale)
 		queryFn: async () => {
 			if (!network || !userAddress) {
 				return new Map();
 			}
 
 			// Fetch all trades for the user via REST API
-			const trades = await fetchAllUserTrades(userAddress);
+			const trades = await fetchAllUserTrades(userAddress, network.chainId);
 
 			// Get payment token addresses for this network
 			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[network.chainId] ?? [];
 			const paymentTokenAddresses = new Set(paymentTokens.map((t) => t.address.toLowerCase()));
 
 			// Calculate cost basis for all traded tokens
-			return calculateAllCostBases(trades, paymentTokenAddresses, userAddress);
+			return calculateAllCostBases(trades, paymentTokenAddresses, userAddress, network.chainId);
 		}
 	});
 }

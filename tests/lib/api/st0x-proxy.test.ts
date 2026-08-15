@@ -35,7 +35,7 @@ describe('/api/st0x proxy', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('edge-caches the stable GET /v1/tokens metadata response', async () => {
+	it('edge-caches the stable GET /v2/tokens metadata response', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify([{ address: '0xToken', symbol: 'TOK', decimals: 18 }]), {
 				status: 200,
@@ -44,14 +44,14 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe(
 			'public, s-maxage=300, stale-while-revalidate=3600'
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens?page=1',
+			'https://api.example.test/v2/tokens?page=1',
 			expect.objectContaining({
 				method: 'GET',
 				headers: expect.any(Headers)
@@ -72,13 +72,13 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 	});
 
-	it('allows POST /v1/swap/quote and forwards the JSON body without caching', async () => {
+	it('allows POST /v2/swap/quote and forwards the JSON body without caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ estimatedInput: '100' }), {
 				status: 200,
@@ -92,19 +92,19 @@ describe('/api/st0x proxy', () => {
 			outputAmount: '1'
 		});
 
-		const response = await POST(proxyEvent('POST', 'v1/swap/quote', body));
+		const response = await POST(proxyEvent('POST', 'v2/swap/quote', body));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/swap/quote?page=1',
+			'https://api.example.test/v2/swap/quote?page=1',
 			expect.objectContaining({ method: 'POST' })
 		);
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
-	it('allows POST /v1/orders/query without unsafe URI-only shared caching', async () => {
+	it('allows POST /v2/orders/query without unsafe URI-only shared caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(
 				JSON.stringify({
@@ -131,19 +131,19 @@ describe('/api/st0x proxy', () => {
 			pageSize: 50
 		});
 
-		const response = await POST(proxyEvent('POST', 'v1/orders/query', body));
+		const response = await POST(proxyEvent('POST', 'v2/orders/query', body));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/orders/query?page=1',
+			'https://api.example.test/v2/orders/query?page=1',
 			expect.objectContaining({ method: 'POST' })
 		);
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
-	it('allows POST /v1/trades/query without unsafe URI-only shared caching', async () => {
+	it('allows POST /v2/trades/query without unsafe URI-only shared caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(
 				JSON.stringify({
@@ -172,19 +172,19 @@ describe('/api/st0x proxy', () => {
 			pageSize: 50
 		});
 
-		const response = await POST(proxyEvent('POST', 'v1/trades/query', body));
+		const response = await POST(proxyEvent('POST', 'v2/trades/query', body));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/trades/query?page=1',
+			'https://api.example.test/v2/trades/query?page=1',
 			expect.objectContaining({ method: 'POST' })
 		);
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
-	it('allows POST /v1/swap/calldata without caching', async () => {
+	it('allows POST /v2/swap/calldata without caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ to: '0xOrderbook', data: '0x', value: '0', approvals: [] }), {
 				status: 200,
@@ -193,12 +193,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await POST(proxyEvent('POST', 'v1/swap/calldata', '{}'));
+		const response = await POST(proxyEvent('POST', 'v2/swap/calldata', '{}'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/swap/calldata?page=1',
+			'https://api.example.test/v2/swap/calldata?page=1',
 			expect.objectContaining({ method: 'POST' })
 		);
 	});
@@ -280,7 +280,7 @@ describe('/api/st0x proxy', () => {
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
-	it('allows GET /v1/trades/tx/:hash without caching', async () => {
+	it('allows GET /v2/trades/tx/:hash without caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ txHash: '0x1234', trades: [], totals: {} }), {
 				status: 200,
@@ -289,12 +289,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/trades/tx/0x1234'));
+		const response = await GET(proxyEvent('GET', 'v2/trades/tx/0x1234'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/trades/tx/0x1234?page=1',
+			'https://api.example.test/v2/trades/tx/0x1234?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -308,14 +308,14 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/wrap-ratio'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/wrap-ratio'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe(
 			'public, s-maxage=60, stale-while-revalidate=300'
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens/wrap-ratio?page=1',
+			'https://api.example.test/v2/tokens/wrap-ratio?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -343,14 +343,14 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/wrap-ratio/0xShare/history'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/wrap-ratio/0xShare/history'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe(
 			'public, s-maxage=60, stale-while-revalidate=300'
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens/wrap-ratio/0xShare/history?page=1',
+			'https://api.example.test/v2/tokens/wrap-ratio/0xShare/history?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -364,14 +364,14 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/details'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe(
 			'public, s-maxage=60, stale-while-revalidate=300'
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens/details?page=1',
+			'https://api.example.test/v2/tokens/details?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -391,7 +391,7 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/details'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
@@ -411,7 +411,7 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/details'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
@@ -434,14 +434,14 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/0xToken/details'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe(
 			'public, s-maxage=60, stale-while-revalidate=300'
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens/0xToken/details?page=1',
+			'https://api.example.test/v2/tokens/0xToken/details?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -466,7 +466,7 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const response = await GET(
-			proxyEvent('GET', 'v1/orders/token/0xToken', undefined, {
+			proxyEvent('GET', 'v2/orders/token/0xToken', undefined, {
 				'X-Request-Id': 'web-request-123'
 			})
 		);
@@ -501,7 +501,7 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const response = await GET(
-			proxyEvent('GET', 'v1/orders/token/0xToken', undefined, {
+			proxyEvent('GET', 'v2/orders/token/0xToken', undefined, {
 				'X-Request-Id': incomingId
 			})
 		);
@@ -518,7 +518,7 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('private DNS detail')));
 
 		const response = await GET(
-			proxyEvent('GET', 'v1/orders/token/0xToken', undefined, {
+			proxyEvent('GET', 'v2/orders/token/0xToken', undefined, {
 				'X-Request-Id': 'web-request-503'
 			})
 		);

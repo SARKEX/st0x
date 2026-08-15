@@ -10,6 +10,15 @@ import { queryClient } from '$lib/clients/queryClient';
 export function invalidateDashboardBalances() {
 	// Invalidate all balance-related queries
 	queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
-	queryClient.invalidateQueries({ queryKey: ['usdcWalletBalance'] });
-	queryClient.invalidateQueries({ queryKey: ['ethWalletBalance'] });
+	queryClient.invalidateQueries({ queryKey: ['paymentTokenWalletBalance'] });
+	queryClient.invalidateQueries({ queryKey: ['nativeWalletBalance'] });
+}
+
+/** Refresh balances and trade-derived data after a confirmed market execution. */
+export function invalidateExecutedTradeQueries() {
+	invalidateDashboardBalances();
+	queryClient.invalidateQueries({ queryKey: ['tokenTradeActivity'] });
+	queryClient.invalidateQueries({ queryKey: ['takerTrades'] });
+	queryClient.invalidateQueries({ queryKey: ['batchTrades'] });
+	queryClient.invalidateQueries({ queryKey: ['costBasis'] });
 }

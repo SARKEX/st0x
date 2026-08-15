@@ -39,7 +39,7 @@ describe('createServerTradesQueryFetcher', () => {
 		await expect(fetchTrades(request)).resolves.toEqual(responseBody);
 		expect(fetchMock).toHaveBeenCalledOnce();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/trades/query',
+			'https://api.example.test/v2/trades/query',
 			expect.objectContaining({
 				method: 'POST',
 				headers: {

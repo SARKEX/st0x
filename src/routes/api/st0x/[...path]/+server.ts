@@ -11,8 +11,8 @@ import { getLogger, getRequestContext, requestIdOrUuid } from '$lib/server/logge
 import { logSt0xRequestBudget } from '$lib/server/st0xBudgetTelemetry';
 import type { RequestEvent, RequestHandler } from './$types';
 
-const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
-const TOKEN_LIST_PATH = 'v1/tokens';
+const TOKEN_DETAILS_LIST_PATH = 'v2/tokens/details';
+const TOKEN_LIST_PATH = 'v2/tokens';
 
 function errorResponse(requestId: string, status: number, code: string, message: string): Response {
 	return new Response(
@@ -53,59 +53,57 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	{ method: 'GET', pattern: /^health$/ },
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens$/,
+		pattern: /^v2\/tokens$/,
 		cache: 'public, s-maxage=300, stale-while-revalidate=3600'
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/details$/,
+		pattern: /^v2\/tokens\/details$/,
 		cache: 'public, s-maxage=60, stale-while-revalidate=300'
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/[^/]+\/details$/,
+		pattern: /^v2\/tokens\/[^/]+\/details$/,
 		cache: 'public, s-maxage=60, stale-while-revalidate=300'
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/wrap-ratio$/,
+		pattern: /^v2\/tokens\/wrap-ratio$/,
 		cache: 'public, s-maxage=60, stale-while-revalidate=300'
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/wrap-ratio\/[^/]+$/,
+		pattern: /^v2\/tokens\/wrap-ratio\/[^/]+$/,
 		cache: 'public, s-maxage=60, stale-while-revalidate=300'
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/wrap-ratio\/[^/]+\/history$/,
+		pattern: /^v2\/tokens\/wrap-ratio\/[^/]+\/history$/,
 		cache: 'public, s-maxage=60, stale-while-revalidate=300'
 	},
 	{
 		method: 'GET',
-		pattern: /^v1\/tokens\/[^/]+\/proofs$/,
+		pattern: /^v2\/tokens\/[^/]+\/proofs$/,
 		cache: 'public, s-maxage=60, stale-while-revalidate=300'
 	},
 	// Shared endpoints — same response for all users, cache at Vercel edge
 	{
 		method: 'GET',
-		pattern: /^v1\/orders\/token\/[^/]+$/,
+		pattern: /^v2\/orders\/token\/[^/]+$/,
 		cache: 'public, s-maxage=5, stale-while-revalidate=120'
 	},
-	{ method: 'POST', pattern: /^v1\/orders\/query$/ },
+	{ method: 'POST', pattern: /^v2\/orders\/query$/ },
 	{
 		method: 'GET',
-		pattern: /^v1\/trades\/token\/[^/]+$/,
+		pattern: /^v2\/trades\/token\/[^/]+$/,
 		cache: 'public, s-maxage=5, stale-while-revalidate=120'
 	},
 	// Per-user endpoints — no shared caching
-	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/tx\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|query$)[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
-	{ method: 'POST', pattern: /^v1\/trades\/query$/ },
-	{ method: 'POST', pattern: /^v1\/swap\/quote$/ },
-	{ method: 'POST', pattern: /^v1\/swap\/calldata$/ },
+	{ method: 'GET', pattern: /^v2\/orders\/owner\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v2\/trades\/tx\/[^/]+$/ },
+	{ method: 'GET', pattern: /^v2\/trades\/(?!taker\/|query$)[^/]+$/ },
+	{ method: 'GET', pattern: /^v2\/trades\/taker\/[^/]+$/ },
+	{ method: 'POST', pattern: /^v2\/trades\/query$/ },
 	{ method: 'POST', pattern: /^v2\/swap\/quote$/ },
 	{ method: 'POST', pattern: /^v2\/swap\/calldata$/ }
 ];

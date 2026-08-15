@@ -16,7 +16,8 @@
 		return value.length <= h + t ? value : `${value.slice(0, h)}...${value.slice(-t)}`;
 	}
 
-	$: url = href ?? (hash ? `${$currentNetwork.blockExplorer}/tx/${hash}` : undefined);
+	$: url =
+		href ?? (hash && $currentNetwork ? `${$currentNetwork.blockExplorer}/tx/${hash}` : undefined);
 	$: fullValue = label ?? hash ?? '';
 	$: desktopText = truncate(fullValue);
 	$: mobileText = fullValue ? `…${fullValue.slice(-6)}` : '';
