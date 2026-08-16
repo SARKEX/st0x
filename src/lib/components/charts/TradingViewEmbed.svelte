@@ -59,4 +59,28 @@
 	});
 </script>
 
-<div bind:this={container} class={`h-full w-full ${containerClass}`} />
+<div
+	bind:this={container}
+	class={`tradingview-embed h-full w-full overflow-hidden ${containerClass}`}
+/>
+
+<style>
+	/*
+	 * TradingView occasionally gives its generated iframe an intrinsic width a
+	 * pixel or two wider than the host. That exposed isolated border fragments
+	 * and pushed the corner attribution mark outside narrow cards.
+	 */
+	.tradingview-embed :global(.tradingview-widget-container),
+	.tradingview-embed :global(.tradingview-widget-container__widget),
+	.tradingview-embed :global(iframe) {
+		box-sizing: border-box;
+		max-width: 100% !important;
+		width: 100% !important;
+	}
+
+	.tradingview-embed :global(iframe) {
+		display: block;
+		border: 0 !important;
+		clip-path: inset(1px);
+	}
+</style>

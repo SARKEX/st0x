@@ -1761,7 +1761,9 @@
 					</div>
 					{#if activeAssetTab === 'company'}
 						{#if tradingViewSymbol}
-							<div class="hidden overflow-hidden sm:block">
+							<div
+								class="hidden overflow-hidden rounded-2xl border border-line bg-overlay-1 sm:block"
+							>
 								<TradingViewWidget
 									widgetType="symbol-profile"
 									symbol={tradingViewSymbol}
@@ -1769,7 +1771,7 @@
 									isTransparent={true}
 								/>
 							</div>
-							<div class="overflow-hidden sm:hidden">
+							<div class="overflow-hidden rounded-2xl border border-line bg-overlay-1 sm:hidden">
 								<TradingViewWidget
 									widgetType="symbol-profile"
 									symbol={tradingViewSymbol}
@@ -1784,7 +1786,9 @@
 						{/if}
 					{:else if activeAssetTab === 'fundamentals'}
 						{#if tradingViewSymbol}
-							<div class="hidden overflow-hidden sm:block">
+							<div
+								class="hidden overflow-hidden rounded-2xl border border-line bg-overlay-1 sm:block"
+							>
 								<TradingViewWidget
 									widgetType="financials"
 									symbol={tradingViewSymbol}
@@ -1792,7 +1796,7 @@
 									isTransparent={true}
 								/>
 							</div>
-							<div class="overflow-hidden sm:hidden">
+							<div class="overflow-hidden rounded-2xl border border-line bg-overlay-1 sm:hidden">
 								<TradingViewWidget
 									widgetType="financials"
 									symbol={tradingViewSymbol}
@@ -1807,7 +1811,9 @@
 						{/if}
 					{:else if activeAssetTab === 'technical'}
 						{#if tradingViewSymbol}
-							<div class="hidden overflow-hidden sm:block">
+							<div
+								class="hidden overflow-hidden rounded-2xl border border-line bg-overlay-1 sm:block"
+							>
 								<TradingViewWidget
 									widgetType="technical-analysis"
 									symbol={tradingViewSymbol}
@@ -1815,7 +1821,7 @@
 									isTransparent={true}
 								/>
 							</div>
-							<div class="overflow-hidden sm:hidden">
+							<div class="overflow-hidden rounded-2xl border border-line bg-overlay-1 sm:hidden">
 								<TradingViewWidget
 									widgetType="technical-analysis"
 									symbol={tradingViewSymbol}
@@ -1829,7 +1835,9 @@
 							</div>
 						{/if}
 					{:else if tradingViewSymbol}
-						<div class="hidden overflow-hidden sm:block">
+						<div
+							class="hidden overflow-hidden rounded-2xl border border-line bg-overlay-1 sm:block"
+						>
 							<TradingViewWidget
 								widgetType="timeline"
 								symbol={tradingViewSymbol}
@@ -1837,7 +1845,7 @@
 								isTransparent={true}
 							/>
 						</div>
-						<div class="overflow-hidden sm:hidden">
+						<div class="overflow-hidden rounded-2xl border border-line bg-overlay-1 sm:hidden">
 							<TradingViewWidget
 								widgetType="timeline"
 								symbol={tradingViewSymbol}
