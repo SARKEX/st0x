@@ -19,7 +19,7 @@ import { get } from 'svelte/store';
 import { decodeFunctionData, erc20Abi, type Hash, type Hex } from 'viem';
 import { readContract as wagmiReadContract } from '@wagmi/core';
 import { wagmiConfig } from 'svelte-wagmi';
-import { type DeploymentTransactionArgs, type RaindexVault } from '@rainlanguage/raindex';
+import { Float, type DeploymentTransactionArgs, type RaindexVault } from '@rainlanguage/raindex';
 import {
 	sendTransaction as walletServiceSendTransaction,
 	waitForTransaction as walletServiceWaitForTransaction
@@ -54,7 +54,7 @@ import { invalidateDashboardBalances } from '$lib/queries/balances';
 import { walletAddress } from '$lib/stores/authStore';
 import { currentNetwork } from '$lib/stores';
 import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
-import { getRaindexOrderUrl, getRaindexVaultUrl, isPaymentToken, toTokenDecimalFloat } from '$lib/utils/tokenMath';
+import { getRaindexOrderUrl, getRaindexVaultUrl, isPaymentToken } from '$lib/utils/tokenMath';
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
 import { getMakerOutputTokenAddress, getMakerInputTokenAddress } from '$lib/types/orderPerspective';
 import { TransactionErrorMessage } from '$lib/types/errors';
@@ -623,12 +623,22 @@ export const handleLimitDeploy = async (
 	await showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo, eventContext);
 };
 
-/** Floor a vault Float to token decimals so Raindex can encode withdraw calldata. */
+/**
+ * Floor a vault Float to token decimals, then rebuild a Raindex `_Float`.
+ * `@rainlanguage/float` is a separate WASM class — passing it to getCalldatas
+ * throws "expected instance of _Float".
+ */
 function withdrawCalldataAmount(vault: RaindexVault) {
-	return toTokenDecimalFloat(
-		vault.balance,
-		Number(vault.token.decimals)
-	) as Parameters<RaindexVault['getCalldatas']>[0];
+	const decimals = Number(vault.token.decimals);
+	const fixed = vault.balance.toFixedDecimalLossy(decimals);
+	if (fixed.error || !fixed.value) {
+		throw new Error(fixed.error?.readableMsg ?? 'Failed to convert vault balance');
+	}
+	const rebuilt = Float.fromFixedDecimalLossy(BigInt(fixed.value.value), decimals);
+	if (!rebuilt.float) {
+		throw new Error('Failed to encode vault balance');
+	}
+	return rebuilt.float;
 }
 
 export const handleWithdraw = async (vault: RaindexVault) => {

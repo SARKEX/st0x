@@ -54,6 +54,10 @@ export function parseFloatHex(hexAmount: string, decimals: number, useAbsolute =
  * `LossyConversionFromFloat` for those values. Flooring to `decimals` then
  * rebuilding the Float produces an amount the SDK can encode, without
  * requesting more than the vault holds.
+ *
+ * Returns `@rainlanguage/float`'s Float, which is a different WASM class than
+ * raindex's `_Float`. Do not pass this into `vault.getCalldatas` — rebuild with
+ * `@rainlanguage/raindex`'s `Float.fromFixedDecimalLossy` instead.
  */
 export function toTokenDecimalFloat(balance: Float, decimals: number): Float {
 	const fixed = balance.toFixedDecimalLossy(decimals);
