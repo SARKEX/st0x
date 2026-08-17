@@ -12,7 +12,12 @@
 	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { createQuery, type CreateQueryResult } from '@tanstack/svelte-query';
-	import { apiGetSwapQuoteV2, type ApiSwapQuoteV2Response } from '$lib/api/st0xApi';
+	import {
+		apiGetSwapQuoteV2,
+		type ApiSwapQuoteV2Request,
+		type ApiSwapQuoteV2Response
+	} from '$lib/api/st0xApi';
+	import { createDebouncedValue } from '$lib/stores/debouncedValue';
 	import {
 		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
@@ -212,6 +217,7 @@
 	// Cleanup interval on component destroy
 	import { onDestroy } from 'svelte';
 	onDestroy(() => {
+		debouncedMarketQuoteRequest.destroy();
 		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
 
 		// Track abandonment if user had entered values but didn't complete trade
@@ -370,6 +376,7 @@
 		? getMidpointPrice($midpointPricesQuery?.data, assetToken.address)?.price
 		: undefined;
 	$: quoteReferenceIoRatio = toReferenceIoRatio(orderSide, quoteReferencePrice);
+	let marketQuoteRequest: ApiSwapQuoteV2Request | null;
 	$: marketQuoteRequest =
 		selectedAmount > 0n && assetToken && paymentToken && $currentNetwork
 			? buildMarketSwapQuoteRequest(
@@ -386,19 +393,25 @@
 					$walletAddress ?? undefined
 				)
 			: null;
+	const debouncedMarketQuoteRequest = createDebouncedValue<ApiSwapQuoteV2Request | null>(null, 300);
+	$: if (marketQuoteRequest) {
+		debouncedMarketQuoteRequest.set(marketQuoteRequest);
+	} else {
+		debouncedMarketQuoteRequest.setImmediately(null);
+	}
 	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['marketSwapQuoteV2', undefined, null],
 		enabled: false,
 		queryFn: () => Promise.reject(new Error('Missing market quote request'))
 	});
 	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
-		queryKey: ['marketSwapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
-		enabled: Boolean(marketQuoteRequest),
+		queryKey: ['marketSwapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest],
+		enabled: Boolean($debouncedMarketQuoteRequest),
 		staleTime: 5_000,
 		retry: shouldRetryTradeQuery,
-		queryFn: () => {
-			if (!marketQuoteRequest) throw new Error('Missing market quote request');
-			return apiGetSwapQuoteV2(marketQuoteRequest);
+		queryFn: ({ signal }) => {
+			if (!$debouncedMarketQuoteRequest) throw new Error('Missing swap quote request');
+			return apiGetSwapQuoteV2($debouncedMarketQuoteRequest, signal);
 		}
 	});
 	$: marketQuote = $marketQuoteQuery?.data;

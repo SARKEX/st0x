@@ -86,14 +86,16 @@ describe('st0x API client', () => {
 			slippageBps: 100,
 			referenceIoRatio: '2.5'
 		};
-		const result = await apiGetSwapQuoteV2(request);
+		const signal = new AbortController().signal;
+		const result = await apiGetSwapQuoteV2(request, signal);
 
 		expect(result).toEqual(responseBody);
 		expect(fetchMock).toHaveBeenCalledWith(
 			'/api/st0x/v2/swap/quote',
 			expect.objectContaining({
 				method: 'POST',
-				body: JSON.stringify(request)
+				body: JSON.stringify(request),
+				signal
 			})
 		);
 	});

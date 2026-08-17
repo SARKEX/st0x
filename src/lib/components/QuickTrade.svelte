@@ -25,7 +25,12 @@
 	import Icon from './ui/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { resolveMarketOrderAnchor } from '$lib/utils/marketOrderInput';
-	import { apiGetSwapQuoteV2, type ApiSwapQuoteV2Response } from '$lib/api/st0xApi';
+	import {
+		apiGetSwapQuoteV2,
+		type ApiSwapQuoteV2Request,
+		type ApiSwapQuoteV2Response
+	} from '$lib/api/st0xApi';
+	import { createDebouncedValue } from '$lib/stores/debouncedValue';
 	import {
 		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS
@@ -175,6 +180,7 @@
 		}
 	});
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
+	let marketQuoteRequest: ApiSwapQuoteV2Request | null;
 	$: marketQuoteRequest =
 		tradeAnchor && selectedToken && paymentToken && $currentNetwork
 			? buildMarketSwapQuoteRequest(
@@ -190,19 +196,25 @@
 					$walletAddress ?? undefined
 				)
 			: null;
+	const debouncedMarketQuoteRequest = createDebouncedValue<ApiSwapQuoteV2Request | null>(null, 300);
+	$: if (marketQuoteRequest) {
+		debouncedMarketQuoteRequest.set(marketQuoteRequest);
+	} else {
+		debouncedMarketQuoteRequest.setImmediately(null);
+	}
 	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['swapQuoteV2', undefined, null],
 		enabled: false,
 		queryFn: () => Promise.reject(new Error('Missing swap quote request'))
 	});
 	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
-		queryKey: ['swapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
-		enabled: browser && Boolean(marketQuoteRequest),
+		queryKey: ['swapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest],
+		enabled: browser && Boolean($debouncedMarketQuoteRequest),
 		staleTime: 5_000,
 		retry: shouldRetryTradeQuery,
-		queryFn: () => {
-			if (!marketQuoteRequest) throw new Error('Missing swap quote request');
-			return apiGetSwapQuoteV2(marketQuoteRequest);
+		queryFn: ({ signal }) => {
+			if (!$debouncedMarketQuoteRequest) throw new Error('Missing swap quote request');
+			return apiGetSwapQuoteV2($debouncedMarketQuoteRequest, signal);
 		}
 	});
 	$: quoteTradeError =
@@ -224,6 +236,7 @@
 
 	// Track abandonment on unmount
 	onDestroy(() => {
+		debouncedMarketQuoteRequest.destroy();
 		if (!tradeSubmittedSuccessfully && (topAmount || bottomAmount)) {
 			track('quick_trade_abandoned', {
 				token_symbol: selectedToken?.symbol,
