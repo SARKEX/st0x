@@ -140,7 +140,9 @@ export function createCostBasisQuery(network: Network | null, userAddress: strin
 		enabled: Boolean(network && userAddress),
 		staleTime: Infinity,
 		refetchInterval: false, // No polling - fetch once on mount
-		refetchOnWindowFocus: false,
+		// Successful all-history data stays fresh until a market-order invalidation.
+		// A failed initial walk may recover when the user later returns to the tab.
+		refetchOnWindowFocus: (query) => query.state.status === 'error',
 		// fetchJson already retries transient failures. Replaying this multi-page query
 		// from page one would duplicate every completed request and can create a retry storm.
 		retry: false,

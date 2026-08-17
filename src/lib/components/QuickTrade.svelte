@@ -204,7 +204,7 @@
 		queryFn: () => Promise.reject(new Error('Missing swap quote request'))
 	});
 	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
-		queryKey: ['swapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest.revision],
+		queryKey: ['swapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest.fingerprint],
 		enabled: browser && Boolean($debouncedMarketQuoteRequest.request),
 		staleTime: 5_000,
 		retry: shouldRetryTradeQuery,

@@ -18,3 +18,8 @@ export function invalidateDashboardBalances() {
 export function invalidateCostBasis() {
 	queryClient.invalidateQueries({ queryKey: ['costBasis'] });
 }
+
+/** Refresh the bounded recent market-order list after a confirmed market order. */
+export function invalidateTakerTrades() {
+	queryClient.invalidateQueries({ queryKey: ['takerTrades'] });
+}

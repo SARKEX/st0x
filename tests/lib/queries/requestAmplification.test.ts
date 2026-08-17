@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { ApiTradeByAddress } from '$lib/api/st0xApi';
+import type { Network } from '$lib/config/network';
 
 const apiMocks = vi.hoisted(() => ({
 	apiGetTradesByAddress: vi.fn(),
@@ -7,10 +10,14 @@ const apiMocks = vi.hoisted(() => ({
 	apiGetTradesByToken: vi.fn(),
 	apiGetTradesBatch: vi.fn()
 }));
+const queryMocks = vi.hoisted(() => ({
+	createQuery: vi.fn((options: unknown) => options)
+}));
 
 vi.mock('$lib/api/st0xApi', () => apiMocks);
+vi.mock('@tanstack/svelte-query', () => queryMocks);
 
-import { fetchAllUserTrades } from '$lib/queries/costBasis';
+import { createCostBasisQuery, fetchAllUserTrades } from '$lib/queries/costBasis';
 import { fetchRecentTakerTrades } from '$lib/queries/tradeActivity';
 
 function trade(id: string): ApiTradeByAddress {
@@ -82,5 +89,36 @@ describe('trade history request amplification', () => {
 			page: 1,
 			pageSize: 500
 		});
+	});
+
+	it('retries a failed cost-basis walk on focus without refetching successful data', () => {
+		const options = createCostBasisQuery(
+			{ id: 8453, chainId: 8453 } as Network,
+			'0xuser'
+		) as unknown as {
+			staleTime: number;
+			retry: boolean;
+			refetchOnWindowFocus: (query: { state: { status: string } }) => boolean;
+		};
+
+		expect(options.staleTime).toBe(Infinity);
+		expect(options.retry).toBe(false);
+		expect(options.refetchOnWindowFocus({ state: { status: 'error' } })).toBe(true);
+		expect(options.refetchOnWindowFocus({ state: { status: 'success' } })).toBe(false);
+	});
+
+	it('keeps recent market orders independent from the all-history cost-basis walk', () => {
+		const source = readFileSync(
+			resolve(process.cwd(), 'src/routes/(main)/dashboard/+page.svelte'),
+			'utf8'
+		);
+		const marketOrdersTransform = source.slice(
+			source.indexOf('// Transform taker trades into display orders'),
+			source.indexOf('// Extract user\'s order hashes')
+		);
+
+		expect(source).toContain('createTakerTradesQuery($currentNetwork, $walletAddress, 600_000)');
+		expect(marketOrdersTransform).toContain('$takerTradesQuery?.data?.trades');
+		expect(marketOrdersTransform).not.toContain('$costBasisQuery');
 	});
 });

@@ -3,6 +3,7 @@ import { writable, type Readable } from 'svelte/store';
 export type DebouncedRequestState<T> = {
 	request: T | null;
 	revision: number;
+	fingerprint: string | null;
 };
 
 export type DebouncedRequest<T> = Readable<DebouncedRequestState<T>> & {
@@ -15,7 +16,11 @@ export type DebouncedRequest<T> = Readable<DebouncedRequestState<T>> & {
  * Semantically identical JSON payloads retain their revision and active request.
  */
 export function createDebouncedRequest<T>(delayMs: number): DebouncedRequest<T> {
-	const store = writable<DebouncedRequestState<T>>({ request: null, revision: 0 });
+	const store = writable<DebouncedRequestState<T>>({
+		request: null,
+		revision: 0,
+		fingerprint: null
+	});
 	let timeout: ReturnType<typeof setTimeout> | null = null;
 	let revision = 0;
 	let fingerprint: string | null = null;
@@ -36,14 +41,15 @@ export function createDebouncedRequest<T>(delayMs: number): DebouncedRequest<T> 
 			clearPending();
 			fingerprint = nextFingerprint;
 			revision += 1;
-			// Changing the revision detaches the query observer from the previous
-			// request immediately, before the next request finishes debouncing.
-			store.set({ request: null, revision });
+			// Changing the fingerprint detaches the query observer from the previous
+			// request immediately, before the next request finishes debouncing. Unlike
+			// the component-local revision, it also stays unique across remounts.
+			store.set({ request: null, revision, fingerprint });
 			if (request === null) return;
 
 			timeout = setTimeout(() => {
 				timeout = null;
-				store.set({ request, revision });
+				store.set({ request, revision, fingerprint: nextFingerprint });
 			}, delayMs);
 		},
 		destroy: clearPending

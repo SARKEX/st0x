@@ -38,7 +38,7 @@
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createOwnerOrdersQuery } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
-	import { createBatchTradesQuery } from '$lib/queries/tradeActivity';
+	import { createBatchTradesQuery, createTakerTradesQuery } from '$lib/queries/tradeActivity';
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
 	import { calculatePnL } from '$lib/utils/costBasis';
 	import { createExchangeRatesQuery, resolveRatio } from '$lib/queries/exchangeRates';
@@ -923,8 +923,11 @@
 	// never needs the rest of the book, and the full fan-out was a rate-limit amplifier
 	$: ownerOrdersQuery = createOwnerOrdersQuery($currentNetwork, $walletAddress, 15_000);
 
-	// Cost basis and taker history share one paginated request so the dashboard does not
-	// fetch the same taker trades twice. Successful market orders invalidate this query.
+	// Keep the bounded recent-order request independent from the all-history cost-basis
+	// walk so a later-page history failure cannot blank the market-order list.
+	$: takerTradesQuery = createTakerTradesQuery($currentNetwork, $walletAddress, 600_000);
+
+	// Cost basis is an all-history query refreshed after successful market orders.
 	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress);
 
 	// Wrap-ratio lookup so the Holdings table can flip wt↔t when the user
@@ -942,7 +945,7 @@
 
 	// Transform taker trades into display orders
 	$: userMarketOrders = (() => {
-		const trades = $costBasisQuery?.data?.takerTrades;
+		const trades = $takerTradesQuery?.data?.trades;
 		if (!trades?.length || !$currentNetwork) return [];
 		return transformApiTakerTradesToDisplay(trades, $currentNetwork.chainId);
 	})();

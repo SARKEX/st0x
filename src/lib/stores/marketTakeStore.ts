@@ -34,7 +34,11 @@ import { detectPartialFill } from './partialFillDetection';
 import { ensureAllowance } from './approvalStore';
 import { parseFloatHex, getRaindexOrderUrl } from '$lib/utils/tokenMath';
 import { createRaindexClient } from '$lib/clients/raindex';
-import { invalidateCostBasis, invalidateDashboardBalances } from '$lib/queries/balances';
+import {
+	invalidateCostBasis,
+	invalidateDashboardBalances,
+	invalidateTakerTrades
+} from '$lib/queries/balances';
 import { walletAddress, authMethod } from '$lib/stores/authStore';
 import { currentNetwork } from '$lib/stores';
 import { getTrades } from '$lib/api/subgraph';
@@ -435,6 +439,7 @@ export const pollAndFinalizeTakeOrders = async (
 	// the cache hasn't seen yet).
 	invalidateDashboardBalances();
 	invalidateCostBasis();
+	invalidateTakerTrades();
 
 	// Partial-fill detection anchors on whichever side the user typed their amount.
 	// For spend modes (Sell-by-asset, Buy-by-spend) the anchor is the pays side; for
