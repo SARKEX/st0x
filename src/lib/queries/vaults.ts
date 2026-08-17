@@ -301,35 +301,53 @@ export function transformVault(vault: RaindexVault, subgraphName: string): UserV
 	};
 }
 
+const VAULTS_PAGE_SIZE = 100;
+const MAX_VAULT_PAGES = 50;
+
 /**
- * Fetch a page of user vaults from the API.
+ * Fetch every page of user vaults from Raindex.
  * Shared by query and prefetch functions.
+ *
+ * Raindex defaults to 100 vaults per page and returns `hasMore`. The dashboard
+ * never calls `fetchNextPage`, and the previous `length === 1000` check never
+ * fired, so funded vaults past page 1 were dropped.
  */
 export async function fetchUserVaultsPage(
 	networkId: number,
 	signerAddress: string,
-	pageParam: number,
+	_pageParam: number,
 	subgraphName: string
 ): Promise<UserVaultsPage> {
 	const client = await createRaindexClient();
-	const vaultsResult = await client.getVaults(
-		[networkId],
-		{
-			owners: [signerAddress.toLowerCase() as `0x${string}`],
-			hideZeroBalance: false
-		},
-		pageParam + 1
-	);
+	const vaults: UserVaultData[] = [];
+	let page = 1;
 
-	if (vaultsResult.error) {
-		throw new Error(vaultsResult.error.readableMsg);
+	while (page <= MAX_VAULT_PAGES) {
+		const vaultsResult = await client.getVaults(
+			[networkId],
+			{
+				owners: [signerAddress.toLowerCase() as `0x${string}`],
+				hideZeroBalance: false
+			},
+			page,
+			VAULTS_PAGE_SIZE
+		);
+
+		if (vaultsResult.error) {
+			throw new Error(vaultsResult.error.readableMsg);
+		}
+
+		const items: RaindexVault[] = vaultsResult.value?.items || [];
+		vaults.push(...items.map((v) => transformVault(v, subgraphName)));
+
+		if (!vaultsResult.value?.hasMore || items.length === 0) {
+			break;
+		}
+		page += 1;
 	}
-
-	const vaultsArray: RaindexVault[] = vaultsResult.value.items || [];
-	const vaults = vaultsArray.map((v) => transformVault(v, subgraphName));
 
 	return {
 		vaults,
-		hasMore: vaults.length === 1000
+		hasMore: false
 	};
 }
