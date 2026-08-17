@@ -54,7 +54,7 @@ import { invalidateDashboardBalances } from '$lib/queries/balances';
 import { walletAddress } from '$lib/stores/authStore';
 import { currentNetwork } from '$lib/stores';
 import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
-import { getRaindexOrderUrl, getRaindexVaultUrl, isPaymentToken } from '$lib/utils/tokenMath';
+import { getRaindexOrderUrl, getRaindexVaultUrl, isPaymentToken, toTokenDecimalFloat } from '$lib/utils/tokenMath';
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
 import { getMakerOutputTokenAddress, getMakerInputTokenAddress } from '$lib/types/orderPerspective';
 import { TransactionErrorMessage } from '$lib/types/errors';
@@ -623,17 +623,27 @@ export const handleLimitDeploy = async (
 	await showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo, eventContext);
 };
 
+/** Floor a vault Float to token decimals so Raindex can encode withdraw calldata. */
+function withdrawCalldataAmount(vault: RaindexVault) {
+	return toTokenDecimalFloat(
+		vault.balance,
+		Number(vault.token.decimals)
+	) as Parameters<RaindexVault['getCalldatas']>[0];
+}
+
 export const handleWithdraw = async (vault: RaindexVault) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
 
-	// vault.balance is already a Float instance, use it directly
-	const vaultCalldatas = await vault.getCalldatas(vault.balance);
-	if (vaultCalldatas.error || !vaultCalldatas.value) {
-		throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
-	}
 	let hash: Hash;
 	try {
+		// Raindex encodes this amount as Decimal exactly; quantize to token
+		// decimals so leftover fill dust does not throw LossyConversionFromFloat.
+		const vaultCalldatas = await vault.getCalldatas(withdrawCalldataAmount(vault));
+		if (vaultCalldatas.error || !vaultCalldatas.value) {
+			throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
+		}
+
 		// Security: Validate orderbook address is trusted before sending transaction
 		const network = get(currentNetwork);
 		validateOrderbookAddress(vault.raindex, network);
@@ -882,7 +892,7 @@ export const handleRemoveOrder = async (quote: {
 				// Security: Validate orderbook address is trusted
 				validateOrderbookAddress(vault.raindex, network);
 
-				const vaultCalldatas = await vault.getCalldatas(vault.balance);
+				const vaultCalldatas = await vault.getCalldatas(withdrawCalldataAmount(vault));
 				if (vaultCalldatas.error || !vaultCalldatas.value) {
 					throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
 				}
@@ -1145,7 +1155,7 @@ export const handleWithdrawFromOrder = async (quote: {
 			// Security: Validate orderbook address is trusted
 			validateOrderbookAddress(vault.raindex, network);
 
-			const vaultCalldatas = await vault.getCalldatas(vault.balance);
+			const vaultCalldatas = await vault.getCalldatas(withdrawCalldataAmount(vault));
 			if (vaultCalldatas.error || !vaultCalldatas.value) {
 				throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
 			}
