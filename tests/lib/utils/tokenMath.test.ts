@@ -6,6 +6,7 @@ import {
 	toBigInt,
 	absBigInt,
 	toDecimal,
+	toTokenDecimalFloat,
 	computePrice,
 	classifyFlow,
 	parseTradeAmounts,
@@ -426,6 +427,30 @@ describe('tokenMath', () => {
 			};
 
 			expect(analyzeTrade(trade, quoteToken)).toBeNull();
+		});
+	});
+
+	describe('toTokenDecimalFloat', () => {
+		it('quantizes a repeating Float so exact token-decimal conversion succeeds', () => {
+			const one = Float.parse('1').value;
+			const three = Float.parse('3').value;
+			if (!one || !three) throw new Error('Failed to parse test floats');
+			const third = one.div(three).value;
+			if (!third) throw new Error('Failed to divide test floats');
+
+			expect(third.toFixedDecimal(6).error).toBeTruthy();
+
+			const quantized = toTokenDecimalFloat(third, 6);
+			expect(quantized.toFixedDecimal(6).error).toBeUndefined();
+			expect(quantized.toFixedDecimal(6).value).toBe(333333n);
+			expect(quantized.format().value).toBe('0.333333');
+		});
+
+		it('preserves an already exact USDC amount', () => {
+			const amount = Float.parse('0.9191').value;
+			if (!amount) throw new Error('Failed to parse USDC amount');
+			const quantized = toTokenDecimalFloat(amount, 6);
+			expect(quantized.toFixedDecimal(6).value).toBe(919100n);
 		});
 	});
 });

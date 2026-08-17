@@ -19,7 +19,7 @@ import { get } from 'svelte/store';
 import { decodeFunctionData, erc20Abi, type Hash, type Hex } from 'viem';
 import { readContract as wagmiReadContract } from '@wagmi/core';
 import { wagmiConfig } from 'svelte-wagmi';
-import { type DeploymentTransactionArgs, type RaindexVault } from '@rainlanguage/raindex';
+import { Float, type DeploymentTransactionArgs, type RaindexVault } from '@rainlanguage/raindex';
 import {
 	sendTransaction as walletServiceSendTransaction,
 	waitForTransaction as walletServiceWaitForTransaction
@@ -623,17 +623,37 @@ export const handleLimitDeploy = async (
 	await showRainlangConfirmation(composedRainlang, deploymentArgs, assetTokenInfo, eventContext);
 };
 
+/**
+ * Floor a vault Float to token decimals, then rebuild a Raindex `_Float`.
+ * `@rainlanguage/float` is a separate WASM class — passing it to getCalldatas
+ * throws "expected instance of _Float".
+ */
+function withdrawCalldataAmount(vault: RaindexVault) {
+	const decimals = Number(vault.token.decimals);
+	const fixed = vault.balance.toFixedDecimalLossy(decimals);
+	if (fixed.error || !fixed.value) {
+		throw new Error(fixed.error?.readableMsg ?? 'Failed to convert vault balance');
+	}
+	const rebuilt = Float.fromFixedDecimalLossy(BigInt(fixed.value.value), decimals);
+	if (!rebuilt.float) {
+		throw new Error('Failed to encode vault balance');
+	}
+	return rebuilt.float;
+}
+
 export const handleWithdraw = async (vault: RaindexVault) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
 
-	// vault.balance is already a Float instance, use it directly
-	const vaultCalldatas = await vault.getCalldatas(vault.balance);
-	if (vaultCalldatas.error || !vaultCalldatas.value) {
-		throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
-	}
 	let hash: Hash;
 	try {
+		// Raindex encodes this amount as Decimal exactly; quantize to token
+		// decimals so leftover fill dust does not throw LossyConversionFromFloat.
+		const vaultCalldatas = await vault.getCalldatas(withdrawCalldataAmount(vault));
+		if (vaultCalldatas.error || !vaultCalldatas.value) {
+			throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
+		}
+
 		// Security: Validate orderbook address is trusted before sending transaction
 		const network = get(currentNetwork);
 		validateOrderbookAddress(vault.raindex, network);
@@ -882,7 +902,7 @@ export const handleRemoveOrder = async (quote: {
 				// Security: Validate orderbook address is trusted
 				validateOrderbookAddress(vault.raindex, network);
 
-				const vaultCalldatas = await vault.getCalldatas(vault.balance);
+				const vaultCalldatas = await vault.getCalldatas(withdrawCalldataAmount(vault));
 				if (vaultCalldatas.error || !vaultCalldatas.value) {
 					throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
 				}
@@ -1145,7 +1165,7 @@ export const handleWithdrawFromOrder = async (quote: {
 			// Security: Validate orderbook address is trusted
 			validateOrderbookAddress(vault.raindex, network);
 
-			const vaultCalldatas = await vault.getCalldatas(vault.balance);
+			const vaultCalldatas = await vault.getCalldatas(withdrawCalldataAmount(vault));
 			if (vaultCalldatas.error || !vaultCalldatas.value) {
 				throw new Error(vaultCalldatas.error?.readableMsg ?? 'Failed to prepare withdrawal');
 			}

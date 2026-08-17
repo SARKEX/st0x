@@ -46,6 +46,27 @@ export function parseFloatHex(hexAmount: string, decimals: number, useAbsolute =
 	}
 }
 
+/**
+ * Quantize a Rain Float to an exact token-decimal amount.
+ *
+ * Vault balances from on-chain fills are often repeating Floats. Raindex
+ * `getCalldatas` converts the amount to Decimal exactly and throws
+ * `LossyConversionFromFloat` for those values. Flooring to `decimals` then
+ * rebuilding the Float produces an amount the SDK can encode, without
+ * requesting more than the vault holds.
+ *
+ * Returns `@rainlanguage/float`'s Float, which is a different WASM class than
+ * raindex's `_Float`. Do not pass this into `vault.getCalldatas` — rebuild with
+ * `@rainlanguage/raindex`'s `Float.fromFixedDecimalLossy` instead.
+ */
+export function toTokenDecimalFloat(balance: Float, decimals: number): Float {
+	const fixed = balance.toFixedDecimalLossy(decimals);
+	if (fixed.error || !fixed.value) {
+		throw new Error(fixed.error?.readableMsg ?? 'Failed to convert vault balance');
+	}
+	return Float.fromFixedDecimalLossy(BigInt(fixed.value.value), decimals).float;
+}
+
 export function normalizeAddress(value: string | null | undefined): string | null {
 	if (!value) return null;
 	const trimmed = value.trim();
