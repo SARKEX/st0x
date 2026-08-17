@@ -115,7 +115,7 @@ export async function fetchAllUserTrades(userAddress: string): Promise<UserTrade
 		});
 
 		for (const trade of response.trades ?? []) {
-			takerTrades.push(trade);
+			if (takerPage === 1) takerTrades.push(trade);
 			const key = `${trade.txHash}:${trade.orderHash ?? ''}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
@@ -132,15 +132,15 @@ export async function fetchAllUserTrades(userAddress: string): Promise<UserTrade
 /**
  * Query for calculating cost basis from all-time trade history.
  * Fetches both maker fills and taker market orders from the REST API.
- * One-shot query: fetches once on mount, refreshes on window focus only.
+ * Fetches once and refreshes only when a successful market order invalidates it.
  */
 export function createCostBasisQuery(network: Network | null, userAddress: string | null) {
 	return createQuery<CostBasisPayload>({
 		queryKey: ['costBasis', network?.id, userAddress],
 		enabled: Boolean(network && userAddress),
-		staleTime: 600_000, // 10 minutes - only refetch when stale
+		staleTime: Infinity,
 		refetchInterval: false, // No polling - fetch once on mount
-		refetchOnWindowFocus: true, // Refresh when user returns to tab (only if stale)
+		refetchOnWindowFocus: false,
 		// fetchJson already retries transient failures. Replaying this multi-page query
 		// from page one would duplicate every completed request and can create a retry storm.
 		retry: false,

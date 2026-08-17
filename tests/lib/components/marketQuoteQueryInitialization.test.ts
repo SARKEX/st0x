@@ -34,4 +34,12 @@ describe.each(componentSources)('$name REST quote query initialization', ({ sour
 		expect(source).toContain('$marketQuoteQuery?.data');
 		expect(source).not.toContain('$marketQuoteQuery.data');
 	});
+
+	it('changes query revision and disables rendering while a new request debounces', () => {
+		expect(source).toContain('$debouncedMarketQuoteRequest.revision');
+		expect(source).toContain('Boolean($debouncedMarketQuoteRequest.request)');
+		expect(source).toMatch(
+			/\$debouncedMarketQuoteRequest\.request\s*\?\s*\$marketQuoteQuery\?\.data/
+		);
+	});
 });

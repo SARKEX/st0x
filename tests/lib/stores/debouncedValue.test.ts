@@ -1,34 +1,52 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDebouncedValue } from '$lib/stores/debouncedValue';
+import { createDebouncedRequest } from '$lib/stores/debouncedValue';
 
-describe('createDebouncedValue', () => {
+describe('createDebouncedRequest', () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
 	it('publishes only the final value in a burst', () => {
 		vi.useFakeTimers();
-		const value = createDebouncedValue('initial', 300);
+		const value = createDebouncedRequest<{ amount: string }>(300);
 
-		value.set('first');
+		value.set({ amount: 'first' });
 		vi.advanceTimersByTime(200);
-		value.set('second');
+		value.set({ amount: 'second' });
 		vi.advanceTimersByTime(299);
 
-		expect(get(value)).toBe('initial');
+		expect(get(value)).toEqual({ request: null, revision: 2 });
 		vi.advanceTimersByTime(1);
-		expect(get(value)).toBe('second');
+		expect(get(value)).toEqual({ request: { amount: 'second' }, revision: 2 });
 	});
 
-	it('cancels a pending value when cleared immediately', () => {
+	it('invalidates request A immediately so its late response cannot render for B', () => {
 		vi.useFakeTimers();
-		const value = createDebouncedValue<string | null>(null, 300);
+		const value = createDebouncedRequest<{ amount: string }>(300);
 
-		value.set('quote');
-		value.setImmediately(null);
-		vi.runAllTimers();
+		value.set({ amount: 'A' });
+		vi.advanceTimersByTime(300);
+		const requestA = get(value);
+		expect(requestA).toEqual({ request: { amount: 'A' }, revision: 1 });
 
-		expect(get(value)).toBeNull();
+		value.set({ amount: 'B' });
+		const whileAResolves = get(value);
+		expect(whileAResolves).toEqual({ request: null, revision: 2 });
+		expect(whileAResolves.revision).not.toBe(requestA.revision);
+
+		vi.advanceTimersByTime(300);
+		expect(get(value)).toEqual({ request: { amount: 'B' }, revision: 2 });
+	});
+
+	it('keeps the active revision for a semantically identical payload', () => {
+		vi.useFakeTimers();
+		const value = createDebouncedRequest<{ amount: string }>(300);
+
+		value.set({ amount: '1' });
+		vi.advanceTimersByTime(300);
+		value.set({ amount: '1' });
+
+		expect(get(value)).toEqual({ request: { amount: '1' }, revision: 1 });
 	});
 });

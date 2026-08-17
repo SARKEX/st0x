@@ -30,7 +30,7 @@
 		type ApiSwapQuoteV2Request,
 		type ApiSwapQuoteV2Response
 	} from '$lib/api/st0xApi';
-	import { createDebouncedValue } from '$lib/stores/debouncedValue';
+	import { createDebouncedRequest } from '$lib/stores/debouncedValue';
 	import {
 		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS
@@ -196,25 +196,22 @@
 					$walletAddress ?? undefined
 				)
 			: null;
-	const debouncedMarketQuoteRequest = createDebouncedValue<ApiSwapQuoteV2Request | null>(null, 300);
-	$: if (marketQuoteRequest) {
-		debouncedMarketQuoteRequest.set(marketQuoteRequest);
-	} else {
-		debouncedMarketQuoteRequest.setImmediately(null);
-	}
+	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(300);
+	$: debouncedMarketQuoteRequest.set(marketQuoteRequest);
 	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['swapQuoteV2', undefined, null],
 		enabled: false,
 		queryFn: () => Promise.reject(new Error('Missing swap quote request'))
 	});
 	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
-		queryKey: ['swapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest],
-		enabled: browser && Boolean($debouncedMarketQuoteRequest),
+		queryKey: ['swapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest.revision],
+		enabled: browser && Boolean($debouncedMarketQuoteRequest.request),
 		staleTime: 5_000,
 		retry: shouldRetryTradeQuery,
 		queryFn: ({ signal }) => {
-			if (!$debouncedMarketQuoteRequest) throw new Error('Missing swap quote request');
-			return apiGetSwapQuoteV2($debouncedMarketQuoteRequest, signal);
+			const request = $debouncedMarketQuoteRequest.request;
+			if (!request) throw new Error('Missing swap quote request');
+			return apiGetSwapQuoteV2(request, signal);
 		}
 	});
 	$: quoteTradeError =
@@ -336,7 +333,11 @@
 	$: bestBidPrice = bidQuotes.length > 0 ? bidQuotes[0].quotePerAsset : null;
 
 	// ============ AUTHORITATIVE REST QUOTE ============
-	$: quote = toDisplayQuote($marketQuoteQuery?.data, isBuying, lastEditedField);
+	$: quote = toDisplayQuote(
+		$debouncedMarketQuoteRequest.request ? $marketQuoteQuery?.data : undefined,
+		isBuying,
+		lastEditedField
+	);
 
 	$: syncOtherField(quote, lastEditedField);
 

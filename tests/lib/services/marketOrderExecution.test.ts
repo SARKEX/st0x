@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 	transactionSuccess: vi.fn(),
 	update: vi.fn(),
 	invalidateDashboardBalances: vi.fn(),
+	invalidateCostBasis: vi.fn(),
 	trackTradeEvent: vi.fn(),
 	captureTradeFlowError: vi.fn()
 }));
@@ -30,7 +31,8 @@ vi.mock('$lib/services/walletService', () => ({
 	waitForTransaction: mocks.waitForTransaction
 }));
 vi.mock('$lib/queries/balances', () => ({
-	invalidateDashboardBalances: mocks.invalidateDashboardBalances
+	invalidateDashboardBalances: mocks.invalidateDashboardBalances,
+	invalidateCostBasis: mocks.invalidateCostBasis
 }));
 vi.mock('$lib/stores/transactionShared', async (importOriginal) => {
 	const actual = (await importOriginal()) as object;
@@ -297,6 +299,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 			value: 0n
 		});
 		expect(mocks.apiGetTradesByTx).toHaveBeenCalledWith(TRADE_HASH);
+		expect(mocks.invalidateCostBasis).toHaveBeenCalledOnce();
 		expect(mocks.transactionSuccess).toHaveBeenCalledWith(TRADE_HASH, 'Market order confirmed', {
 			marketOrderSummary: expect.objectContaining({
 				inputAmount: 2_000_000_000_000_000_000n,

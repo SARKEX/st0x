@@ -2,6 +2,7 @@ import { createQuery } from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
 import { getTokenByAnyAddress } from '$lib/config/network';
 import { isRateLimitError } from '$lib/clients/http';
+import { shouldRetryTradeQuery } from '$lib/services/tradeError';
 import {
 	apiGetTradesByToken,
 	apiGetTakerTrades,
@@ -114,7 +115,7 @@ export function createTakerTradesQuery(
 		enabled: Boolean(network && walletAddress),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
-		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 1,
+		retry: shouldRetryTradeQuery,
 		queryFn: () => fetchRecentTakerTrades(walletAddress!)
 	});
 }

@@ -924,7 +924,7 @@
 	$: ownerOrdersQuery = createOwnerOrdersQuery($currentNetwork, $walletAddress, 15_000);
 
 	// Cost basis and taker history share one paginated request so the dashboard does not
-	// fetch the same taker trades twice. It refreshes on focus when older than 10 minutes.
+	// fetch the same taker trades twice. Successful market orders invalidate this query.
 	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress);
 
 	// Wrap-ratio lookup so the Holdings table can flip wt↔t when the user

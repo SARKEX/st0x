@@ -1,4 +1,4 @@
-import { isHttpError } from '$lib/clients/http';
+import { isHttpError, isRateLimitError } from '$lib/clients/http';
 import type { ErrorClass } from '$lib/services/observability/tradeEvents';
 
 export type TradeErrorStage =
@@ -255,6 +255,7 @@ const STAGE_FALLBACK: Record<TradeErrorStage, string> = {
 /** Avoid retrying client failures; changing the request is the only useful recovery. */
 export function shouldRetryTradeQuery(failureCount: number, error: unknown): boolean {
 	if (failureCount >= 1) return false;
+	if (isRateLimitError(error)) return false;
 	if (!isHttpError(error)) return true;
 	return error.status === 408 || (error.status >= 500 && error.status !== 503);
 }

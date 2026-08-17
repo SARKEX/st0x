@@ -40,11 +40,14 @@ describe('trade history request amplification', () => {
 	it('loads cost-basis history in 500-trade pages and exposes fetched taker trades', async () => {
 		const makerOne = trade('maker-1');
 		const makerTwo = trade('maker-2');
-		const taker = trade('taker-1');
+		const takerOne = trade('taker-1');
+		const takerTwo = trade('taker-2');
 		apiMocks.apiGetTradesByAddress
 			.mockResolvedValueOnce(page([makerOne], true))
 			.mockResolvedValueOnce(page([makerTwo], false));
-		apiMocks.apiGetTakerTrades.mockResolvedValueOnce(page([taker], false));
+		apiMocks.apiGetTakerTrades
+			.mockResolvedValueOnce(page([takerOne], true))
+			.mockResolvedValueOnce(page([takerTwo], false));
 
 		const result = await fetchAllUserTrades('0xuser');
 
@@ -56,13 +59,17 @@ describe('trade history request amplification', () => {
 			page: 2,
 			pageSize: 500
 		});
-		expect(apiMocks.apiGetTakerTrades).toHaveBeenCalledOnce();
-		expect(apiMocks.apiGetTakerTrades).toHaveBeenCalledWith('0xuser', {
+		expect(apiMocks.apiGetTakerTrades).toHaveBeenCalledTimes(2);
+		expect(apiMocks.apiGetTakerTrades).toHaveBeenNthCalledWith(1, '0xuser', {
 			page: 1,
 			pageSize: 500
 		});
-		expect(result.costBasisTrades).toHaveLength(3);
-		expect(result.takerTrades).toEqual([taker]);
+		expect(apiMocks.apiGetTakerTrades).toHaveBeenNthCalledWith(2, '0xuser', {
+			page: 2,
+			pageSize: 500
+		});
+		expect(result.costBasisTrades).toHaveLength(4);
+		expect(result.takerTrades).toEqual([takerOne]);
 	});
 
 	it('loads the 500 most recent display trades in one request', async () => {

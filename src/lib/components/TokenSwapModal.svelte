@@ -431,7 +431,6 @@
 			queryClient.invalidateQueries({ queryKey: ['oldTokenBalances'] });
 			queryClient.invalidateQueries({ queryKey: ['dashboardOldTokenBalances'] });
 			queryClient.invalidateQueries({ queryKey: ['dashboardUnwrappedTokenBalances'] });
-			queryClient.invalidateQueries({ queryKey: ['costBasis'] });
 			queryClient.invalidateQueries({ queryKey: ['hasOldTokens'] });
 		} catch (error) {
 			console.error('Swap failed:', error);

@@ -17,7 +17,7 @@
 		type ApiSwapQuoteV2Request,
 		type ApiSwapQuoteV2Response
 	} from '$lib/api/st0xApi';
-	import { createDebouncedValue } from '$lib/stores/debouncedValue';
+	import { createDebouncedRequest } from '$lib/stores/debouncedValue';
 	import {
 		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
@@ -393,28 +393,25 @@
 					$walletAddress ?? undefined
 				)
 			: null;
-	const debouncedMarketQuoteRequest = createDebouncedValue<ApiSwapQuoteV2Request | null>(null, 300);
-	$: if (marketQuoteRequest) {
-		debouncedMarketQuoteRequest.set(marketQuoteRequest);
-	} else {
-		debouncedMarketQuoteRequest.setImmediately(null);
-	}
+	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(300);
+	$: debouncedMarketQuoteRequest.set(marketQuoteRequest);
 	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['marketSwapQuoteV2', undefined, null],
 		enabled: false,
 		queryFn: () => Promise.reject(new Error('Missing market quote request'))
 	});
 	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
-		queryKey: ['marketSwapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest],
-		enabled: Boolean($debouncedMarketQuoteRequest),
+		queryKey: ['marketSwapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest.revision],
+		enabled: Boolean($debouncedMarketQuoteRequest.request),
 		staleTime: 5_000,
 		retry: shouldRetryTradeQuery,
 		queryFn: ({ signal }) => {
-			if (!$debouncedMarketQuoteRequest) throw new Error('Missing swap quote request');
-			return apiGetSwapQuoteV2($debouncedMarketQuoteRequest, signal);
+			const request = $debouncedMarketQuoteRequest.request;
+			if (!request) throw new Error('Missing swap quote request');
+			return apiGetSwapQuoteV2(request, signal);
 		}
 	});
-	$: marketQuote = $marketQuoteQuery?.data;
+	$: marketQuote = $debouncedMarketQuoteRequest.request ? $marketQuoteQuery?.data : undefined;
 	$: {
 		insufficientLiquidityWarning = Boolean(
 			selectedAmount > 0n && marketQuote && !marketQuote.fullyFilled
