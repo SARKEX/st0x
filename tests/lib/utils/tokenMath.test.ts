@@ -14,6 +14,8 @@ import {
 	describeQuote,
 	analyzeTrade,
 	createTokenLookup,
+	encodeRaindexVaultPageId,
+	getRaindexVaultUrl,
 	type PairDescriptor,
 	type TokenDescriptor
 } from '$lib/utils/tokenMath';
@@ -451,6 +453,38 @@ describe('tokenMath', () => {
 			if (!amount) throw new Error('Failed to parse USDC amount');
 			const quantized = toTokenDecimalFloat(amount, 6);
 			expect(quantized.toFixedDecimal(6).value).toBe(919100n);
+		});
+	});
+
+	describe('getRaindexVaultUrl', () => {
+		const orderbook = '0xe522cB4a5fCb2eb31a52Ff41a4653d85A4fd7C9D';
+		const owner = '0xD2843D9E7738d46D90CB6Dff8D6C83db58B9c165';
+		const usdc = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+
+		it('packs orderbook + owner + token + little-endian vaultId for Raindex v6', () => {
+			const pageId = encodeRaindexVaultPageId(orderbook, owner, usdc, 1n);
+			expect(pageId).toBe(
+				'0xe522cb4a5fcb2eb31a52ff41a4653d85a4fd7c9dd2843d9e7738d46d90cb6dff8d6c83db58b9c165833589fcd6edb6e08f4c7c32d4f71b54bda029130100000000000000000000000000000000000000000000000000000000000000'
+			);
+			expect(
+				getRaindexVaultUrl(8453, orderbook, owner, usdc, 1n)
+			).toBe(
+				`https://v6.raindex.finance/vaults/8453-${orderbook}-${pageId}`
+			);
+		});
+
+		it('accepts a big-endian subgraph vaultId hex string', () => {
+			const vaultIdHex = `0x${1n.toString(16).padStart(64, '0')}`;
+			expect(encodeRaindexVaultPageId(orderbook, owner, usdc, vaultIdHex)).toBe(
+				encodeRaindexVaultPageId(orderbook, owner, usdc, 1n)
+			);
+		});
+
+		it('does not use the subgraph keccak vault.id', () => {
+			const url = getRaindexVaultUrl(8453, orderbook, owner, usdc, 1n);
+			expect(url).not.toContain(
+				'0x295b3dc1630a6e873c5550d02f276d250db39a4bd47cb0af96e0a01ca10b5439'
+			);
 		});
 	});
 });

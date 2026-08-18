@@ -1816,7 +1816,9 @@
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
 																	vault.raindex.id,
-																	vault.id
+																	vault.owner,
+																	vault.token.address ?? vault.token.id,
+																	vault.vaultId
 																)}
 																target="_blank"
 																rel="noopener noreferrer"
@@ -1927,7 +1929,9 @@
 																href={getRaindexVaultUrl(
 																	$currentNetwork?.chainId ?? 8453,
 																	vault.raindex.id,
-																	vault.id
+																	vault.owner,
+																	vault.token.address ?? vault.token.id,
+																	vault.vaultId
 																)}
 																target="_blank"
 																rel="noopener noreferrer"

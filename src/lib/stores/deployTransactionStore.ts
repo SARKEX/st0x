@@ -670,7 +670,13 @@ export const handleWithdraw = async (vault: RaindexVault) => {
 
 		const $signer = get(walletAddress);
 		const raindexLink = {
-			url: getRaindexVaultUrl(network.id, vault.raindex, vault.id),
+			url: getRaindexVaultUrl(
+				network.id,
+				vault.raindex,
+				vault.owner,
+				vault.token.address ?? vault.token.id,
+				vault.vaultId
+			),
 			text: 'Manage your vault on Raindex'
 		};
 
