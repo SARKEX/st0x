@@ -32,6 +32,10 @@ test.describe('TEST-08 — Save & Earn deposit via UI (Path-B)', () => {
 		tokens,
 		fundedAccount
 	}) => {
+		// Save & Earn intentionally follows NYSE hours. Keep this money-moving test
+		// deterministic instead of depending on the CI runner's wall clock.
+		await page.clock.install({ time: new Date('2026-08-18T15:00:00Z') });
+
 		// 180s budget: maker deploy (approve+addOrder multicall) + UI cache build
 		// (getQuotes against synth orders) + take-orders multicall + receipt wait
 		// + on-chain assertion polling.
@@ -64,9 +68,8 @@ test.describe('TEST-08 — Save & Earn deposit via UI (Path-B)', () => {
 		});
 
 		// 2) Deploy maker ask at 100 USDC/wtSGOV via the production SDK path. The
-		//    SaveEarnModal does NOT apply MarketOrder.svelte's oracle price-guard
-		//    band (it filters by side only), so any reasonable SGOV price fills —
-		//    $100 sits at the tokenized 0-3M T-bill ETF's ~$100 NAV.
+		//    SaveEarnModal previews and executes through the same guarded REST quote
+		//    path as MarketOrder, so $100 sits near the tokenized ETF's expected NAV.
 		const maker = await deployMakerLimitOrder({
 			testClient,
 			makerPrivateKey: MAKER_ACCOUNT.privateKey,
@@ -108,9 +111,8 @@ test.describe('TEST-08 — Save & Earn deposit via UI (Path-B)', () => {
 
 		await page.locator('[data-testid="save-earn-amount"]').fill('10');
 
-		// Wait for the orderbook quote to surface the maker ask — the "You receive"
-		// estimate flips from "—" to a wtSGOV figure once bestAskPrice resolves,
-		// which also means `quotes` is populated for the take.
+		// Wait for the authoritative REST quote to surface the maker ask. The
+		// receive estimate only appears after a fully-filled guarded quote resolves.
 		await expect(page.locator('[data-testid="save-earn-receive"]')).toContainText(/[0-9]/, {
 			timeout: 60_000
 		});

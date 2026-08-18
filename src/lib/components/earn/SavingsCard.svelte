@@ -11,14 +11,20 @@
 	import ApyChip from './ApyChip.svelte';
 
 	export let balance: number;
-	export let earnedToDate: number;
+	export let tokenBalance: number;
+	export let unrealizedPnl: number | null;
 	export let navSeries: number[] = SGOV_SERIES;
 
-	function fmt(n: number): string {
-		return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	function fmt(n: number, decimals = 2): string {
+		return n.toLocaleString('en-US', {
+			minimumFractionDigits: decimals,
+			maximumFractionDigits: decimals
+		});
 	}
 
 	$: monthly = (balance * SGOV_APY) / 100 / 12;
+	$: pnlPrefix = (unrealizedPnl ?? 0) >= 0 ? '+$' : '-$';
+	$: pnlClass = (unrealizedPnl ?? 0) >= 0 ? 'text-accent' : 'text-down';
 </script>
 
 <div
@@ -41,15 +47,22 @@
 			<div class="mt-5 flex flex-wrap items-end gap-x-8 gap-y-3">
 				<div>
 					<div class="text-[11px] uppercase tracking-wider text-text-3">Balance</div>
-					<div class="font-mono text-3xl font-bold text-text">${fmt(balance)}</div>
+					<div class="font-mono text-3xl font-bold text-text">
+						{balance > 0 ? `$${fmt(balance)}` : 'Price unavailable'}
+					</div>
+					<div class="mt-1 font-mono text-xs text-text-3">{fmt(tokenBalance, 4)} wtSGOV</div>
 				</div>
 				<div>
-					<div class="text-[11px] uppercase tracking-wider text-text-3">Earned to date</div>
-					<CountUp
-						value={earnedToDate}
-						live
-						className="block font-mono text-3xl font-bold text-accent"
-					/>
+					<div class="text-[11px] uppercase tracking-wider text-text-3">Unrealized P&amp;L</div>
+					{#if unrealizedPnl === null}
+						<div class="font-mono text-3xl font-bold text-text-3">—</div>
+					{:else}
+						<CountUp
+							value={Math.abs(unrealizedPnl)}
+							prefix={pnlPrefix}
+							className="block font-mono text-3xl font-bold {pnlClass}"
+						/>
+					{/if}
 				</div>
 			</div>
 			<div class="mt-5 flex gap-2.5">
@@ -66,6 +79,7 @@
 					<EarnIcon name="minus" className="h-4 w-4" />Withdraw
 				</button>
 			</div>
+			<p class="mt-2 text-[11px] text-text-3">Withdrawals sell wtSGOV held in your wallet.</p>
 		</div>
 		<div class="flex flex-col justify-between rounded-xl border border-line bg-surface-2 p-4">
 			<div class="flex items-center justify-between text-xs text-text-2">

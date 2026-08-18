@@ -4,6 +4,7 @@
 	// idle-vs-SGOV proof. Ported from the React prototype (Home.jsx SaveEarnCard).
 	import { goto } from '$app/navigation';
 	import { formatApy, SGOV_SERIES } from '$lib/config/earn';
+	import { projectedYearlyYield } from '$lib/services/saveEarn';
 	import { openSaveEarn } from '$lib/stores/saveEarnStore';
 	import EarnIcon from './EarnIcon.svelte';
 	import TokenDisc from './TokenDisc.svelte';
@@ -11,6 +12,7 @@
 	import CountUp from './CountUp.svelte';
 
 	export let className = '';
+	const exampleYearlyYield = projectedYearlyYield(10_000);
 </script>
 
 <div
@@ -81,7 +83,7 @@
 						<TokenDisc token="wtsgov" size={22} ring /> SGOV
 					</div>
 					<CountUp
-						value={353}
+						value={exampleYearlyYield}
 						prefix="+$"
 						decimals={0}
 						className="font-mono text-sm font-bold text-accent"

@@ -11,7 +11,6 @@
 	export let className = '';
 
 	let displayed = value;
-	let from = 0;
 	let raf: number | null = null;
 	let liveTimer: ReturnType<typeof setInterval> | null = null;
 	let reduceMotion = false;
@@ -30,13 +29,16 @@
 	function animateTo(target: number): void {
 		if (!browser || reduceMotion) {
 			displayed = target;
-			from = target;
 			return;
 		}
 		if (raf) cancelAnimationFrame(raf);
+		if (liveTimer) {
+			clearInterval(liveTimer);
+			liveTimer = null;
+		}
 		const start = performance.now();
 		const duration = 900;
-		const origin = from;
+		const origin = displayed;
 		const tick = (t: number) => {
 			const k = Math.min(1, (t - start) / duration);
 			const eased = 1 - Math.pow(1 - k, 3);
@@ -44,8 +46,12 @@
 			if (k < 1) {
 				raf = requestAnimationFrame(tick);
 			} else {
-				from = target;
 				raf = null;
+				if (live && !reduceMotion) {
+					liveTimer = setInterval(() => {
+						displayed += target * 0.0000004;
+					}, 80);
+				}
 			}
 		};
 		raf = requestAnimationFrame(tick);
@@ -53,14 +59,8 @@
 
 	onMount(() => {
 		reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-		from = 0;
+		displayed = 0;
 		started = true;
-		// Optional slow "alive" drip once the count-up has settled.
-		if (live && !reduceMotion) {
-			liveTimer = setInterval(() => {
-				displayed += value * 0.0000004;
-			}, 80);
-		}
 		return () => {
 			if (raf) cancelAnimationFrame(raf);
 			if (liveTimer) clearInterval(liveTimer);

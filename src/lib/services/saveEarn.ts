@@ -33,6 +33,11 @@ export interface SaveEarnOrderParams {
 	paymentToken: TokenInfo;
 }
 
+/** Keep the displayed and submitted USDC amount on the same whole-dollar value. */
+export function normalizeSaveEarnDeposit(usdc: number): number {
+	return Math.floor(Math.max(0, usdc));
+}
+
 // Build the market-order params for a deposit or withdrawal. The result is
 // spread directly into executeMarketOrder() alongside the active network.
 export function buildSaveEarnOrder(input: SaveEarnOrderInput): SaveEarnOrderParams {
@@ -41,7 +46,7 @@ export function buildSaveEarnOrder(input: SaveEarnOrderInput): SaveEarnOrderPara
 	if (mode === 'deposit') {
 		// Spend exactly N whole USDC — floor so we never request more than the
 		// integer the user sees, and parseUnits gets a clean integer string.
-		const dollars = Math.floor(Math.max(0, depositUsdc));
+		const dollars = normalizeSaveEarnDeposit(depositUsdc);
 		return {
 			orderSide: 'Buy',
 			amount: parseUnits(dollars.toString(), paymentToken.decimals),

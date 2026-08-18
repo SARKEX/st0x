@@ -13,6 +13,7 @@
 import { getTokenByAnyAddress } from '$lib/config/network';
 
 export const SGOV_APY = 3;
+export const SGOV_CHAIN_ID = 8453;
 
 // Canonical SGOV addresses on Base (mirror src/lib/config/tokens.ts → wtSGOV).
 export const SGOV_WRAPPED_ADDRESS = '0x78c31580c97101694C70022c83D570150c11e935';
@@ -148,7 +149,7 @@ export const PILLARS: Pillar[] = [
 	{
 		icon: 'bank',
 		title: 'Redeemable Treasuries',
-		body: "Backed 1:1 by SGOV — BlackRock's $85B T-bill ETF. Redeem to actual SGOV shares in under 10s, 24/7. Not an IOU."
+		body: "Backed 1:1 by SGOV — BlackRock's $85B T-bill ETF. Primary redemption is available through the S01 / Alpaca bridge; st0x DEX swaps follow NYSE market hours."
 	},
 	{
 		icon: 'bolt',
@@ -187,7 +188,7 @@ export const HOW_IT_WORKS: HowStep[] = [
 	{
 		n: 4,
 		t: 'Redeem anytime',
-		d: 'Unwrap, swap, or redeem to underlying SGOV shares in under 10s, 24/7. No lockup, no NAV window.'
+		d: 'Unwrap or redeem through the S01 / Alpaca bridge without a lockup. Swaps between wtSGOV and USDC on st0x are available during NYSE market hours.'
 	}
 ];
 
@@ -211,7 +212,7 @@ export const EARN_FAQ: FaqItem[] = [
 	},
 	{
 		q: 'How do I get my dollars back?',
-		a: 'Swap back to USDC on st0x, or redeem to the actual underlying SGOV shares — both in under 10 seconds, 24/7 via the S01 / Alpaca bridge. No lockup, no withdrawal queue.'
+		a: 'Swap back to USDC on st0x during NYSE market hours, or use the S01 / Alpaca bridge for primary redemption to the underlying SGOV shares. There is no st0x lockup or withdrawal queue.'
 	}
 ];
 

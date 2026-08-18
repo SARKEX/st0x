@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseUnits } from 'viem';
 import {
 	buildSaveEarnOrder,
+	normalizeSaveEarnDeposit,
 	projectedYearlyYield,
 	estimateSaveEarnReceive
 } from '$lib/services/saveEarn';
@@ -91,6 +92,14 @@ describe('buildSaveEarnOrder', () => {
 			});
 			expect(params.amount).toBe(0n);
 		});
+	});
+});
+
+describe('normalizeSaveEarnDeposit', () => {
+	it('keeps displayed and submitted deposits on the same whole-dollar amount', () => {
+		expect(normalizeSaveEarnDeposit(100.99)).toBe(100);
+		expect(normalizeSaveEarnDeposit(0.99)).toBe(0);
+		expect(normalizeSaveEarnDeposit(-1)).toBe(0);
 	});
 });
 

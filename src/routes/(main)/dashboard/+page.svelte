@@ -1116,7 +1116,8 @@
 	// Save & Earn (SGOV) — surface savings derived from the SGOV holding and idle USDC.
 	$: savingsHolding = assetHoldings.find((h) => isSgov(h.address)) ?? null;
 	$: savingsValue = savingsHolding?.value ?? 0;
-	$: savingsEarned = savingsHolding?.unrealizedPnL ?? 0;
+	$: savingsQuantity = savingsHolding?.totalBalance ?? 0;
+	$: savingsUnrealizedPnl = savingsHolding?.unrealizedPnL ?? null;
 	$: idleUsdc = fundsHoldings.find((h) => h.symbol === 'USDC')?.walletBalanceNum ?? 0;
 </script>
 
@@ -1295,18 +1296,20 @@
 						Hide dust
 					</label>
 				</div>
+				{#if savingsHolding && savingsQuantity > 0}
+					<Section>
+						<SavingsCard
+							balance={savingsValue}
+							tokenBalance={savingsQuantity}
+							unrealizedPnl={savingsUnrealizedPnl}
+						/>
+					</Section>
+				{/if}
 				{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $usdcBalanceQuery.isLoading}
 					<Section>
 						<LoadingSpinner variant="inline" size="md" text="Loading portfolio..." />
 					</Section>
 				{:else}
-					<!-- Savings card (SGOV) — pinned at the top of the portfolio. Wrapped in
-					     Section so its width matches the Funds/Holdings cards below it. -->
-					{#if savingsValue > 0}
-						<Section>
-							<SavingsCard balance={savingsValue} earnedToDate={savingsEarned} />
-						</Section>
-					{/if}
 					<!-- Funds Section (Payment Tokens) -->
 					<Section>
 						<h2 class="mb-3 text-base font-semibold sm:mb-4 sm:text-lg">Funds</h2>

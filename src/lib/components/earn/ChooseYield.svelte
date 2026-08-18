@@ -2,12 +2,18 @@
 	// "Choose your yield" — tSGOV (dividends) vs wtSGOV (auto-compound), same SGOV
 	// backing.
 	import { TWO_TOKEN } from '$lib/config/earn';
+	import { SGOV_UNWRAPPED_ADDRESS } from '$lib/config/earn';
 	import { openSaveEarn } from '$lib/stores/saveEarnStore';
+	import { goto } from '$app/navigation';
 	import EarnIcon from './EarnIcon.svelte';
 	import TokenDisc from './TokenDisc.svelte';
 
-	function startEarning(): void {
-		openSaveEarn();
+	function chooseYield(mode: 'dividends' | 'compound'): void {
+		if (mode === 'compound') {
+			openSaveEarn({ mode: 'deposit' });
+			return;
+		}
+		goto(`/trade/${SGOV_UNWRAPPED_ADDRESS}`);
 	}
 </script>
 
@@ -46,7 +52,7 @@
 					<EarnIcon name="check" className="h-3.5 w-3.5 text-accent" />Best for: {t.best}
 				</div>
 				<button
-					on:click={startEarning}
+					on:click={() => chooseYield(t.mode)}
 					class="mt-4 rounded-lg py-2 text-sm font-semibold {t.recommended
 						? 'bg-emerald-500 text-[#05241a] hover:bg-emerald-400'
 						: 'border border-line-strong text-text-2 hover:bg-overlay-hover'}"

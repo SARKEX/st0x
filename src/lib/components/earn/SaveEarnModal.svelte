@@ -6,6 +6,8 @@
 	// mounted once globally in (main)/+layout.svelte.
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { derived } from 'svelte/store';
 	import { currentNetwork } from '$lib/stores';
 	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
 	import { promptWalletConnection } from '$lib/stores/accessStore';
@@ -17,22 +19,30 @@
 		type SaveEarnMode
 	} from '$lib/stores/saveEarnStore';
 	import { setSheetOpen } from '$lib/stores/uiStore';
-	import { SGOV_WRAPPED_ADDRESS, formatApy } from '$lib/config/earn';
+	import { SGOV_CHAIN_ID, SGOV_WRAPPED_ADDRESS, formatApy } from '$lib/config/earn';
 	import {
 		buildSaveEarnOrder,
-		projectedYearlyYield,
-		estimateSaveEarnReceive
+		normalizeSaveEarnDeposit,
+		projectedYearlyYield
 	} from '$lib/services/saveEarn';
-	import { getTokenByAnyAddress } from '$lib/config/network';
+	import { getNetworkByChainId, getTokenByAnyAddress } from '$lib/config/network';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { wagmiConfig } from 'svelte-wagmi';
 	import { readContract } from '@wagmi/core';
 	import { erc20Abi, formatUnits } from 'viem';
-	import type { ProcessedQuote } from '$lib/utils/orderbook';
 	import {
-		getMakerInputTokenAddress,
-		getMakerOutputTokenAddress
-	} from '$lib/types/orderPerspective';
+		apiGetSwapQuoteV2,
+		type ApiSwapQuoteV2Request,
+		type ApiSwapQuoteV2Response
+	} from '$lib/api/st0xApi';
+	import {
+		buildMarketSwapQuoteRequest,
+		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
+		toReferenceIoRatio
+	} from '$lib/services/marketOrderExecution';
+	import { createDebouncedRequest } from '$lib/stores/debouncedValue';
+	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
+	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
 	import TokenDisc from './TokenDisc.svelte';
 	import ApyChip from './ApyChip.svelte';
@@ -41,16 +51,17 @@
 	function fmt(n: number, d = 2): string {
 		return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 	}
-	function normalizeAddress(value: string | null | undefined): string | null {
-		const trimmed = value?.trim();
-		return trimmed ? trimmed.toLowerCase() : null;
+	// Save & Earn is a Base-only product because both SGOV variants are deployed there.
+	const configuredSaveEarnNetwork = getNetworkByChainId(SGOV_CHAIN_ID);
+	if (!configuredSaveEarnNetwork) {
+		throw new Error('Save & Earn network configuration is missing');
 	}
-
-	// Tokens: wtSGOV (asset) + the network's settlement token (USDC).
+	const saveEarnNetwork = configuredSaveEarnNetwork;
 	const sgovToken = getTokenByAnyAddress(SGOV_WRAPPED_ADDRESS);
-	$: paymentToken = $currentNetwork?.defaultPaymentToken ?? null;
-	$: sgovAddress = sgovToken?.address ?? SGOV_WRAPPED_ADDRESS;
-	$: sgovDecimals = sgovToken?.decimals ?? 18;
+	const paymentToken = saveEarnNetwork.defaultPaymentToken;
+	const sgovAddress = sgovToken?.address ?? SGOV_WRAPPED_ADDRESS;
+	const sgovDecimals = sgovToken?.decimals ?? 18;
+	$: isSaveEarnNetwork = $currentNetwork?.id === saveEarnNetwork.id;
 
 	// ── State ───────────────────────────────────────────────────────────────
 	// Two steps only: 0 = amount entry (executes directly), 1 = success.
@@ -61,95 +72,113 @@
 	let isExecuting = false;
 	let errorMessage: string | null = null;
 	let wasOpen = false;
+	let depositInitialized = false;
+	let withdrawInitialized = false;
+	let marketClock = Date.now();
 
-	// ── Orderbook quotes for wtSGOV (price estimate + execution) ──────────────
-	$: quotesQuery = createQuery({
-		queryKey: ['tokenOrderbookQuotes', $currentNetwork?.id, sgovAddress],
-		enabled: browser && Boolean($showSaveEarnModal && $currentNetwork && sgovAddress),
-		staleTime: 30_000,
-		refetchInterval: 15_000,
-		queryFn: async () => {
-			if (!$currentNetwork) return { summary: {}, quotes: [] };
-			const { refreshTokenQuotes } = await import('$lib/queries/orderbook');
-			return refreshTokenQuotes($currentNetwork.id, sgovAddress);
+	const midpointPricesQuery = createMidpointPricesQuery(saveEarnNetwork);
+	$: referencePrice = getMidpointPrice($midpointPricesQuery?.data, sgovAddress)?.price;
+	$: referenceIoRatio = toReferenceIoRatio(mode === 'deposit' ? 'Buy' : 'Sell', referencePrice);
+
+	// ── Authoritative REST quote used for both display and execution guard ────
+	$: orderParams = buildSaveEarnOrder({
+		mode,
+		depositUsdc,
+		withdrawWtsgov,
+		sgovToken: { address: sgovAddress, decimals: sgovDecimals, symbol: 'wtSGOV' },
+		paymentToken: {
+			address: paymentToken.address,
+			decimals: paymentToken.decimals,
+			symbol: paymentToken.symbol
 		}
 	});
-	$: quotes = ($quotesQuery.data?.quotes ?? []) as ProcessedQuote[];
-
-	// Best ask (USD per wtSGOV when buying) and best bid (when selling).
-	$: bestAskPrice = (() => {
-		const asset = normalizeAddress(sgovAddress);
-		const quote = normalizeAddress(paymentToken?.address);
-		const asks = quotes
-			.filter(
-				(q) =>
-					normalizeAddress(getMakerInputTokenAddress(q)) === quote &&
-					normalizeAddress(getMakerOutputTokenAddress(q)) === asset &&
-					q.side === 'ask' &&
-					typeof q.quotePerAsset === 'number' &&
-					Number.isFinite(q.quotePerAsset) &&
-					(q.quotePerAsset ?? 0) > 0
-			)
-			.map((q) => q.quotePerAsset as number);
-		return asks.length ? Math.min(...asks) : null;
-	})();
-	$: bestBidPrice = (() => {
-		const asset = normalizeAddress(sgovAddress);
-		const quote = normalizeAddress(paymentToken?.address);
-		const bids = quotes
-			.filter(
-				(q) =>
-					normalizeAddress(getMakerInputTokenAddress(q)) === asset &&
-					normalizeAddress(getMakerOutputTokenAddress(q)) === quote &&
-					q.side === 'bid' &&
-					typeof q.quotePerAsset === 'number' &&
-					Number.isFinite(q.quotePerAsset) &&
-					(q.quotePerAsset ?? 0) > 0
-			)
-			.map((q) => q.quotePerAsset as number);
-		return bids.length ? Math.max(...bids) : null;
-	})();
+	let marketQuoteRequest: ApiSwapQuoteV2Request | null = null;
+	$: marketQuoteRequest =
+		orderParams.amount > 0n && referenceIoRatio && isSaveEarnNetwork
+			? buildMarketSwapQuoteRequest(
+					{
+						...orderParams,
+						slippageBps: DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
+						referenceIoRatio,
+						network: saveEarnNetwork
+					},
+					$walletAddress ?? undefined
+				)
+			: null;
+	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(300);
+	$: debouncedMarketQuoteRequest.set(marketQuoteRequest);
+	const marketQuoteOptions = derived(
+		[showSaveEarnModal, currentNetwork, debouncedMarketQuoteRequest],
+		([$showModal, $network, $request]) => ({
+			queryKey: ['saveEarnSwapQuoteV2', saveEarnNetwork.id, $request.fingerprint],
+			enabled:
+				browser && $showModal && $network?.id === saveEarnNetwork.id && Boolean($request.request),
+			staleTime: 5_000,
+			queryFn: ({ signal }: { signal: AbortSignal }) => {
+				if (!$request.request) throw new Error('Missing Save & Earn quote request');
+				return apiGetSwapQuoteV2($request.request, signal);
+			}
+		})
+	);
+	const marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>(marketQuoteOptions);
+	$: marketQuote = $debouncedMarketQuoteRequest.request ? $marketQuoteQuery.data : undefined;
 
 	// ── Balances ──────────────────────────────────────────────────────────────
-	$: usdcBalanceQuery = createQuery({
-		queryKey: ['usdcBalance', $currentNetwork?.id, paymentToken?.address, $walletAddress],
-		enabled: Boolean(paymentToken?.address && $walletAddress && $wagmiConfig),
-		queryFn: async () => {
-			if (!paymentToken?.address || !$walletAddress || !$wagmiConfig) return 0n;
-			return (await readContract($wagmiConfig, {
-				abi: erc20Abi,
-				address: paymentToken.address as `0x${string}`,
-				functionName: 'balanceOf',
-				args: [$walletAddress as `0x${string}`]
-			})) as bigint;
-		}
-	});
-	$: wtsgovBalanceQuery = createQuery({
-		queryKey: ['tokenBalance', $currentNetwork?.id, sgovAddress, $walletAddress],
-		enabled: Boolean(sgovAddress && $walletAddress && $wagmiConfig),
-		queryFn: async () => {
-			if (!$walletAddress || !$wagmiConfig) return 0n;
-			return (await readContract($wagmiConfig, {
-				abi: erc20Abi,
-				address: sgovAddress as `0x${string}`,
-				functionName: 'balanceOf',
-				args: [$walletAddress as `0x${string}`]
-			})) as bigint;
-		}
-	});
-	$: usdcBalance = Number(formatUnits($usdcBalanceQuery.data ?? 0n, paymentToken?.decimals ?? 6));
+	const usdcBalanceOptions = derived(
+		[walletAddress, wagmiConfig, showSaveEarnModal, currentNetwork],
+		([$address, $config, $showModal, $network]) => ({
+			queryKey: ['usdcBalance', saveEarnNetwork.id, paymentToken.address, $address],
+			enabled: Boolean($showModal && $network?.id === saveEarnNetwork.id && $address && $config),
+			queryFn: async () => {
+				if (!$address || !$config) return 0n;
+				return (await readContract($config, {
+					abi: erc20Abi,
+					address: paymentToken.address as `0x${string}`,
+					functionName: 'balanceOf',
+					args: [$address as `0x${string}`],
+					chainId: saveEarnNetwork.chainId
+				})) as bigint;
+			}
+		})
+	);
+	const usdcBalanceQuery = createQuery<bigint>(usdcBalanceOptions);
+	const wtsgovBalanceOptions = derived(
+		[walletAddress, wagmiConfig, showSaveEarnModal, currentNetwork],
+		([$address, $config, $showModal, $network]) => ({
+			queryKey: ['tokenBalance', saveEarnNetwork.id, sgovAddress, $address],
+			enabled: Boolean($showModal && $network?.id === saveEarnNetwork.id && $address && $config),
+			queryFn: async () => {
+				if (!$address || !$config) return 0n;
+				return (await readContract($config, {
+					abi: erc20Abi,
+					address: sgovAddress as `0x${string}`,
+					functionName: 'balanceOf',
+					args: [$address as `0x${string}`],
+					chainId: saveEarnNetwork.chainId
+				})) as bigint;
+			}
+		})
+	);
+	const wtsgovBalanceQuery = createQuery<bigint>(wtsgovBalanceOptions);
+	$: usdcBalance = Number(formatUnits($usdcBalanceQuery.data ?? 0n, paymentToken.decimals));
 	$: wtsgovBalance = Number(formatUnits($wtsgovBalanceQuery.data ?? 0n, sgovDecimals));
 
 	// ── Derived figures ───────────────────────────────────────────────────────
 	$: projectedYearly = projectedYearlyYield(depositUsdc);
-	$: receiveWtsgov = estimateSaveEarnReceive('deposit', depositUsdc, bestAskPrice);
-	$: receiveUsdc = estimateSaveEarnReceive('withdraw', withdrawWtsgov, bestBidPrice);
+	$: quotedReceive = marketQuote?.fullyFilled ? Number(marketQuote.estimatedOutput) : null;
+	$: receiveWtsgov = mode === 'deposit' && Number.isFinite(quotedReceive) ? quotedReceive : null;
+	$: receiveUsdc = mode === 'withdraw' && Number.isFinite(quotedReceive) ? quotedReceive : null;
 	$: maxUsdc = usdcBalance;
 	$: maxWtsgov = wtsgovBalance;
+	$: marketClosed = checkMarketClosed(marketClock);
+	$: quoteReady = Boolean(marketQuote?.fullyFilled && quotedReceive && quotedReceive > 0);
 	$: canSubmit =
-		mode === 'deposit'
+		isSaveEarnNetwork &&
+		!marketClosed &&
+		quoteReady &&
+		(mode === 'deposit'
 			? depositUsdc > 0 && depositUsdc <= maxUsdc + 1e-9
-			: withdrawWtsgov > 0 && withdrawWtsgov <= maxWtsgov + 1e-9;
+			: withdrawWtsgov > 0 && withdrawWtsgov <= maxWtsgov + 1e-9);
 
 	// Reset + prefill when the modal opens.
 	$: {
@@ -157,20 +186,43 @@
 			step = 0;
 			errorMessage = null;
 			mode = $saveEarnMode;
-			depositUsdc = $saveEarnPrefillUsdc ?? Math.floor(usdcBalance);
-			withdrawWtsgov = wtsgovBalance;
+			depositInitialized = $saveEarnPrefillUsdc !== null;
+			withdrawInitialized = false;
+			depositUsdc = normalizeSaveEarnDeposit($saveEarnPrefillUsdc ?? 0);
+			withdrawWtsgov = 0;
 		}
 		wasOpen = $showSaveEarnModal;
+	}
+	$: if ($showSaveEarnModal && !depositInitialized && $usdcBalanceQuery.isSuccess) {
+		depositUsdc = normalizeSaveEarnDeposit(usdcBalance);
+		depositInitialized = true;
+	}
+	$: if ($showSaveEarnModal && !withdrawInitialized && $wtsgovBalanceQuery.isSuccess) {
+		withdrawWtsgov = wtsgovBalance;
+		withdrawInitialized = true;
 	}
 
 	function setDepositFromInput(raw: string): void {
 		const n = parseInt(raw.replace(/[^0-9]/g, ''), 10);
-		depositUsdc = Math.max(0, Number.isFinite(n) ? n : 0);
+		depositUsdc = normalizeSaveEarnDeposit(Number.isFinite(n) ? n : 0);
+		depositInitialized = true;
 	}
 	function setWithdrawFromInput(raw: string): void {
 		const cleaned = raw.replace(/[^0-9.]/g, '');
 		const n = parseFloat(cleaned);
 		withdrawWtsgov = Math.max(0, Number.isFinite(n) ? n : 0);
+		withdrawInitialized = true;
+	}
+	function useMaxDeposit(): void {
+		depositUsdc = normalizeSaveEarnDeposit(maxUsdc);
+		depositInitialized = true;
+	}
+	function useMaxWithdrawal(): void {
+		withdrawWtsgov = maxWtsgov;
+		withdrawInitialized = true;
+	}
+	function checkMarketClosed(_clock: number): boolean {
+		return isOutsideMarketHours();
 	}
 
 	async function confirm(): Promise<void> {
@@ -178,32 +230,36 @@
 			promptWalletConnection();
 			return;
 		}
-		if (!paymentToken || !$currentNetwork || isExecuting || !canSubmit) return;
+		if (!isSaveEarnNetwork) {
+			errorMessage = 'Save & Earn is only available on Base Mainnet.';
+			return;
+		}
+		if (isOutsideMarketHours()) {
+			errorMessage = 'This market is currently closed. Try again during NYSE market hours.';
+			return;
+		}
+		if (!marketQuote?.fullyFilled || !referenceIoRatio) {
+			errorMessage = 'Wait for a complete price quote before submitting.';
+			return;
+		}
+		if (isExecuting || !canSubmit) return;
 
 		isExecuting = true;
 		errorMessage = null;
-		const params = buildSaveEarnOrder({
-			mode,
-			depositUsdc,
-			withdrawWtsgov,
-			sgovToken: { address: sgovAddress, decimals: sgovDecimals, symbol: 'wtSGOV' },
-			paymentToken: {
-				address: paymentToken.address,
-				decimals: paymentToken.decimals,
-				symbol: paymentToken.symbol
-			}
-		});
+		const params = orderParams;
 		track('save_earn_confirm', { mode, usdc: depositUsdc, wtsgov: withdrawWtsgov });
 
 		try {
 			const { executeMarketOrder } = await import('$lib/services/marketOrderExecution');
 			const result = await executeMarketOrder({
 				...params,
-				network: $currentNetwork
+				slippageBps: DEFAULT_MARKET_ORDER_SLIPPAGE_BPS,
+				referenceIoRatio,
+				network: saveEarnNetwork
 			});
 
 			if (!result.success) {
-				errorMessage = result.error || 'Transaction failed';
+				errorMessage = result.tradeError?.message || result.error || 'Transaction failed';
 				track('save_earn_failed', { mode, error: errorMessage });
 				return;
 			}
@@ -225,6 +281,14 @@
 	function handleKeydown(event: KeyboardEvent): void {
 		if (event.key === 'Escape' && $showSaveEarnModal) closeSaveEarn();
 	}
+
+	onMount(() => {
+		const clock = setInterval(() => (marketClock = Date.now()), 60_000);
+		return () => {
+			clearInterval(clock);
+			debouncedMarketQuoteRequest.destroy();
+		};
+	});
 
 	$: isDeposit = mode === 'deposit';
 	$: title = isDeposit ? 'Start earning' : 'Withdraw savings';
@@ -296,7 +360,7 @@
 							{#if isDeposit}
 								<button
 									type="button"
-									on:click={() => (depositUsdc = Math.floor(maxUsdc))}
+									on:click={useMaxDeposit}
 									class="whitespace-nowrap text-accent hover:underline"
 								>
 									Max {fmt(maxUsdc)} USDC
@@ -304,10 +368,10 @@
 							{:else}
 								<button
 									type="button"
-									on:click={() => (withdrawWtsgov = maxWtsgov)}
+									on:click={useMaxWithdrawal}
 									class="whitespace-nowrap text-accent hover:underline"
 								>
-									Max {fmt(maxWtsgov, 3)} wtSGOV
+									Wallet max {fmt(maxWtsgov, 3)} wtSGOV
 								</button>
 							{/if}
 						</div>
@@ -318,7 +382,7 @@
 									type="text"
 									inputmode="numeric"
 									data-testid="save-earn-amount"
-									value={Math.round(depositUsdc).toLocaleString('en-US')}
+									value={depositUsdc.toLocaleString('en-US')}
 									on:input={(e) => setDepositFromInput(e.currentTarget.value)}
 									class="w-full bg-transparent text-2xl font-bold text-text outline-none"
 								/>
@@ -379,6 +443,25 @@
 							</div>
 						{/if}
 					</div>
+					{#if !isSaveEarnNetwork}
+						<p class="mt-2 text-center text-[11px] text-down">
+							Save &amp; Earn is only available on Base Mainnet.
+						</p>
+					{:else if marketClosed}
+						<p class="mt-2 text-center text-[11px] text-text-2">
+							SGOV swaps are available during NYSE market hours.
+						</p>
+					{:else if orderParams.amount > 0n && $marketQuoteQuery.isFetching}
+						<p class="mt-2 text-center text-[11px] text-text-2">Fetching executable quote…</p>
+					{:else if orderParams.amount > 0n && $marketQuoteQuery.isError}
+						<p class="mt-2 text-center text-[11px] text-down">
+							A price quote is unavailable right now. Try again shortly.
+						</p>
+					{:else if marketQuote && !marketQuote.fullyFilled}
+						<p class="mt-2 text-center text-[11px] text-down">
+							There is not enough liquidity for this amount.
+						</p>
+					{/if}
 
 					{#if isDeposit}
 						<div class="mt-4 flex items-center justify-between rounded-lg bg-overlay-1 px-4 py-3">
@@ -418,7 +501,15 @@
 							{/if}
 						</button>
 					{/if}
-					<p class="mt-2 text-center text-[11px] text-text-3">No KYC · no lockup</p>
+					<p class="mt-2 text-center text-[11px] text-text-3">
+						No KYC · no lockup · DEX swaps during NYSE hours
+					</p>
+					{#if !isDeposit}
+						<p class="mx-auto mt-1.5 max-w-xs text-center text-[10px] text-text-muted">
+							Only wtSGOV held in your wallet can be sold here. Withdraw vaulted wtSGOV to your
+							wallet first.
+						</p>
+					{/if}
 					{#if isDeposit}
 						<p
 							class="mx-auto mt-1.5 max-w-xs text-center text-[10px] leading-relaxed text-text-muted"
