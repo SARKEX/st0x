@@ -567,7 +567,9 @@ export function encodeRaindexVaultPageId(
 	token: string,
 	vaultId: bigint | string
 ): `0x${string}` {
-	return `0x${addressHex(orderbook)}${addressHex(owner)}${addressHex(token)}${vaultIdToLittleEndianHex(vaultId)}`;
+	return `0x${addressHex(orderbook)}${addressHex(owner)}${addressHex(
+		token
+	)}${vaultIdToLittleEndianHex(vaultId)}`;
 }
 
 /**
