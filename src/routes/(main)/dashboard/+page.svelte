@@ -38,7 +38,7 @@
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { createOwnerOrdersQuery } from '$lib/queries/orderbook';
 	import { createUserVaultsQuery } from '$lib/queries/vaults';
-	import { createTakerTradesQuery, createBatchTradesQuery } from '$lib/queries/tradeActivity';
+	import { createBatchTradesQuery, createTakerTradesQuery } from '$lib/queries/tradeActivity';
 	import { createCostBasisQuery } from '$lib/queries/costBasis';
 	import { calculatePnL } from '$lib/utils/costBasis';
 	import { createExchangeRatesQuery, resolveRatio } from '$lib/queries/exchangeRates';
@@ -700,7 +700,7 @@
 		}
 
 		// Convert to array with prices, filtering to only valid tokens
-		const costBasisMap = $costBasisQuery?.data ?? new Map();
+		const costBasisMap = $costBasisQuery?.data?.costBasis ?? new Map();
 		const manualEntries = $manualCostBasisStore;
 
 		const result = Array.from(holdingsMap.values())
@@ -923,10 +923,11 @@
 	// never needs the rest of the book, and the full fan-out was a rate-limit amplifier
 	$: ownerOrdersQuery = createOwnerOrdersQuery($currentNetwork, $walletAddress, 15_000);
 
-	// Taker trades for market orders - poll every 10 minutes
+	// Keep the bounded recent-order request independent from the all-history cost-basis
+	// walk so a later-page history failure cannot blank the market-order list.
 	$: takerTradesQuery = createTakerTradesQuery($currentNetwork, $walletAddress, 600_000);
 
-	// Cost basis query for P&L calculation - one-shot (no polling, refreshes on window focus)
+	// Cost basis is an all-history query refreshed after successful market orders.
 	$: costBasisQuery = createCostBasisQuery($currentNetwork, $walletAddress);
 
 	// Wrap-ratio lookup so the Holdings table can flip wt↔t when the user

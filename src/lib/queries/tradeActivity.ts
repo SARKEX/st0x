@@ -2,6 +2,7 @@ import { createQuery } from '@tanstack/svelte-query';
 import type { Network } from '$lib/config/network';
 import { getTokenByAnyAddress } from '$lib/config/network';
 import { isRateLimitError } from '$lib/clients/http';
+import { shouldRetryTradeQuery } from '$lib/services/tradeError';
 import {
 	apiGetTradesByToken,
 	apiGetTakerTrades,
@@ -97,6 +98,13 @@ export type TakerTradesPayload = {
 	trades: ApiTradeByAddress[];
 };
 
+export async function fetchRecentTakerTrades(walletAddress: string): Promise<TakerTradesPayload> {
+	// Preserve the existing 500-trade display limit in one REST request instead of
+	// ten sequential 50-trade requests.
+	const response = await apiGetTakerTrades(walletAddress, { page: 1, pageSize: 500 });
+	return { trades: response.trades ?? [] };
+}
+
 export function createTakerTradesQuery(
 	network: Network | null,
 	walletAddress: string | null,
@@ -107,20 +115,7 @@ export function createTakerTradesQuery(
 		enabled: Boolean(network && walletAddress),
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
-		retry: 2,
-		queryFn: async () => {
-			const PAGE_SIZE = 50;
-			let allTrades: ApiTradeByAddress[] = [];
-			let page = 1;
-
-			while (page <= 10) {
-				const response = await apiGetTakerTrades(walletAddress!, { page, pageSize: PAGE_SIZE });
-				allTrades = allTrades.concat(response.trades ?? []);
-				if (!response.pagination.hasMore) break;
-				page++;
-			}
-
-			return { trades: allTrades };
-		}
+		retry: shouldRetryTradeQuery,
+		queryFn: () => fetchRecentTakerTrades(walletAddress!)
 	});
 }

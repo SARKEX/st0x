@@ -561,13 +561,15 @@ export async function apiGetSwapQuote(request: ApiSwapQuoteRequest): Promise<Api
  * v2 calldata. This is the authoritative market-order display quote.
  */
 export async function apiGetSwapQuoteV2(
-	request: ApiSwapQuoteV2Request
+	request: ApiSwapQuoteV2Request,
+	signal?: AbortSignal
 ): Promise<ApiSwapQuoteV2Response> {
 	assertBrowser('apiGetSwapQuoteV2');
 	return fetchJson<ApiSwapQuoteV2Response>(apiUrl('/v2/swap/quote'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(request)
+		body: JSON.stringify(request),
+		signal
 	});
 }
 

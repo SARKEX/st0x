@@ -19,7 +19,11 @@ import {
 	type ApiTradesByTxResponse
 } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
-import { invalidateDashboardBalances } from '$lib/queries/balances';
+import {
+	invalidateCostBasis,
+	invalidateDashboardBalances,
+	invalidateTakerTrades
+} from '$lib/queries/balances';
 import {
 	APPROVAL_TX_CONFIRMATIONS,
 	getSignerAddress,
@@ -516,6 +520,8 @@ export async function executeMarketOrder(input: MarketOrderInput): Promise<Marke
 				captureTradeFlowError(error, flowContext('confirmation', 'build_market_order_summary'));
 			}
 		}
+		invalidateCostBasis();
+		invalidateTakerTrades();
 		transactionStoreInternal.transactionSuccess(hash, 'Market order confirmed', metadata);
 		return { success: true };
 	} catch (error) {

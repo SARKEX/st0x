@@ -8,6 +8,18 @@ import {
 import { PAYMENT_TOKENS_BY_NETWORK } from '$lib/config/tokens';
 import { apiGetTradesByAddress, apiGetTakerTrades, type ApiTradeByAddress } from '$lib/api/st0xApi';
 
+const TRADE_HISTORY_PAGE_SIZE = 500;
+
+export type CostBasisPayload = {
+	costBasis: Map<string, CostBasisData>;
+	takerTrades: ApiTradeByAddress[];
+};
+
+export type UserTradeHistory = {
+	costBasisTrades: CostBasisTrade[];
+	takerTrades: ApiTradeByAddress[];
+};
+
 /**
  * Ensure an amount string contains a decimal point so toDecimal()
  * treats it as a pre-formatted decimal rather than a wei-scaled bigint.
@@ -68,9 +80,9 @@ function takerTradeToCostBasis(trade: ApiTradeByAddress, userAddress: string): C
  * Fetch all trades for a user from the REST API (paginated).
  * Combines maker trades (user's orders were filled) and taker trades (user executed market orders).
  */
-async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]> {
-	const PAGE_SIZE = 50;
-	const trades: CostBasisTrade[] = [];
+export async function fetchAllUserTrades(userAddress: string): Promise<UserTradeHistory> {
+	const costBasisTrades: CostBasisTrade[] = [];
+	const takerTrades: ApiTradeByAddress[] = [];
 	const seen = new Set<string>();
 
 	// Fetch all maker trades (paginated)
@@ -79,14 +91,14 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 	while (makerHasMore) {
 		const response = await apiGetTradesByAddress(userAddress, {
 			page: makerPage,
-			pageSize: PAGE_SIZE
+			pageSize: TRADE_HISTORY_PAGE_SIZE
 		});
 
 		for (const trade of response.trades ?? []) {
 			const key = `${trade.txHash}:${trade.orderHash ?? ''}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
-			trades.push(makerTradeToCostBasis(trade, userAddress));
+			costBasisTrades.push(makerTradeToCostBasis(trade, userAddress));
 		}
 
 		makerHasMore = response.pagination.hasMore;
@@ -99,49 +111,58 @@ async function fetchAllUserTrades(userAddress: string): Promise<CostBasisTrade[]
 	while (takerHasMore) {
 		const response = await apiGetTakerTrades(userAddress, {
 			page: takerPage,
-			pageSize: PAGE_SIZE
+			pageSize: TRADE_HISTORY_PAGE_SIZE
 		});
 
 		for (const trade of response.trades ?? []) {
+			if (takerPage === 1) takerTrades.push(trade);
 			const key = `${trade.txHash}:${trade.orderHash ?? ''}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
-			trades.push(takerTradeToCostBasis(trade, userAddress));
+			costBasisTrades.push(takerTradeToCostBasis(trade, userAddress));
 		}
 
 		takerHasMore = response.pagination.hasMore;
 		takerPage++;
 	}
 
-	return trades;
+	return { costBasisTrades, takerTrades };
 }
 
 /**
  * Query for calculating cost basis from all-time trade history.
  * Fetches both maker fills and taker market orders from the REST API.
- * One-shot query: fetches once on mount, refreshes on window focus only.
+ * Fetches once and refreshes only when a successful market order invalidates it.
  */
 export function createCostBasisQuery(network: Network | null, userAddress: string | null) {
-	return createQuery<Map<string, CostBasisData>>({
+	return createQuery<CostBasisPayload>({
 		queryKey: ['costBasis', network?.id, userAddress],
 		enabled: Boolean(network && userAddress),
-		staleTime: 600_000, // 10 minutes - only refetch when stale
+		staleTime: Infinity,
 		refetchInterval: false, // No polling - fetch once on mount
-		refetchOnWindowFocus: true, // Refresh when user returns to tab (only if stale)
+		// Successful all-history data stays fresh until a market-order invalidation.
+		// A failed initial walk may recover when the user later returns to the tab.
+		refetchOnWindowFocus: (query) => query.state.status === 'error',
+		// fetchJson already retries transient failures. Replaying this multi-page query
+		// from page one would duplicate every completed request and can create a retry storm.
+		retry: false,
 		queryFn: async () => {
 			if (!network || !userAddress) {
-				return new Map();
+				return { costBasis: new Map(), takerTrades: [] };
 			}
 
 			// Fetch all trades for the user via REST API
-			const trades = await fetchAllUserTrades(userAddress);
+			const { costBasisTrades, takerTrades } = await fetchAllUserTrades(userAddress);
 
 			// Get payment token addresses for this network
 			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[network.chainId] ?? [];
 			const paymentTokenAddresses = new Set(paymentTokens.map((t) => t.address.toLowerCase()));
 
 			// Calculate cost basis for all traded tokens
-			return calculateAllCostBases(trades, paymentTokenAddresses, userAddress);
+			return {
+				costBasis: calculateAllCostBases(costBasisTrades, paymentTokenAddresses, userAddress),
+				takerTrades
+			};
 		}
 	});
 }

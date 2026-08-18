@@ -75,7 +75,10 @@ describe('tradeError', () => {
 			});
 
 		expect(shouldRetryTradeQuery(0, httpError(429))).toBe(false);
+		expect(shouldRetryTradeQuery(0, new Error('HTTP 429 Too Many Requests'))).toBe(false);
+		expect(shouldRetryTradeQuery(0, httpError(404))).toBe(false);
 		expect(shouldRetryTradeQuery(0, httpError(503))).toBe(false);
+		expect(shouldRetryTradeQuery(0, httpError(408))).toBe(true);
 		expect(shouldRetryTradeQuery(0, httpError(502))).toBe(true);
 		expect(shouldRetryTradeQuery(1, new Error('network failed'))).toBe(false);
 	});

@@ -25,7 +25,12 @@
 	import Icon from './ui/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { resolveMarketOrderAnchor } from '$lib/utils/marketOrderInput';
-	import { apiGetSwapQuoteV2, type ApiSwapQuoteV2Response } from '$lib/api/st0xApi';
+	import {
+		apiGetSwapQuoteV2,
+		type ApiSwapQuoteV2Request,
+		type ApiSwapQuoteV2Response
+	} from '$lib/api/st0xApi';
+	import { createDebouncedRequest } from '$lib/stores/debouncedValue';
 	import {
 		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS
@@ -175,6 +180,7 @@
 		}
 	});
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
+	let marketQuoteRequest: ApiSwapQuoteV2Request | null;
 	$: marketQuoteRequest =
 		tradeAnchor && selectedToken && paymentToken && $currentNetwork
 			? buildMarketSwapQuoteRequest(
@@ -190,19 +196,22 @@
 					$walletAddress ?? undefined
 				)
 			: null;
+	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(300);
+	$: debouncedMarketQuoteRequest.set(marketQuoteRequest);
 	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['swapQuoteV2', undefined, null],
 		enabled: false,
 		queryFn: () => Promise.reject(new Error('Missing swap quote request'))
 	});
 	$: marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
-		queryKey: ['swapQuoteV2', $currentNetwork?.id, marketQuoteRequest],
-		enabled: browser && Boolean(marketQuoteRequest),
+		queryKey: ['swapQuoteV2', $currentNetwork?.id, $debouncedMarketQuoteRequest.fingerprint],
+		enabled: browser && Boolean($debouncedMarketQuoteRequest.request),
 		staleTime: 5_000,
 		retry: shouldRetryTradeQuery,
-		queryFn: () => {
-			if (!marketQuoteRequest) throw new Error('Missing swap quote request');
-			return apiGetSwapQuoteV2(marketQuoteRequest);
+		queryFn: ({ signal }) => {
+			const request = $debouncedMarketQuoteRequest.request;
+			if (!request) throw new Error('Missing swap quote request');
+			return apiGetSwapQuoteV2(request, signal);
 		}
 	});
 	$: quoteTradeError =
@@ -224,6 +233,7 @@
 
 	// Track abandonment on unmount
 	onDestroy(() => {
+		debouncedMarketQuoteRequest.destroy();
 		if (!tradeSubmittedSuccessfully && (topAmount || bottomAmount)) {
 			track('quick_trade_abandoned', {
 				token_symbol: selectedToken?.symbol,
@@ -323,7 +333,11 @@
 	$: bestBidPrice = bidQuotes.length > 0 ? bidQuotes[0].quotePerAsset : null;
 
 	// ============ AUTHORITATIVE REST QUOTE ============
-	$: quote = toDisplayQuote($marketQuoteQuery?.data, isBuying, lastEditedField);
+	$: quote = toDisplayQuote(
+		$debouncedMarketQuoteRequest.request ? $marketQuoteQuery?.data : undefined,
+		isBuying,
+		lastEditedField
+	);
 
 	$: syncOtherField(quote, lastEditedField);
 
