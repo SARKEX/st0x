@@ -1406,7 +1406,9 @@
 														{@const raindexUrl = getRaindexVaultUrl(
 															$currentNetwork?.chainId ?? 8453,
 															vault.raindex,
-															vault.id
+															vault.owner,
+															vault.token.address ?? vault.token.id,
+															vault.vaultId
 														)}
 														<div
 															class="flex items-center justify-between rounded-xl border border-line bg-overlay-1 p-2 text-sm"

@@ -539,19 +539,50 @@ export function getRaindexOrderUrl(
 	return `${RAINDEX_BASE_URL}/orders/${chainId}-${orderbookId}-${orderHash}`;
 }
 
+function hexNoPrefix(value: string): string {
+	return value.startsWith('0x') || value.startsWith('0X') ? value.slice(2) : value;
+}
+
+function addressHex(value: string): string {
+	return hexNoPrefix(value).toLowerCase().padStart(40, '0');
+}
+
 /**
- * Generate a Raindex URL for a vault
- * Format: {chainId}-{orderbookId}-{vaultSubgraphId}
- *
- * @param chainId - Network chain ID (e.g., 8453 for Base)
- * @param orderbookId - Orderbook contract address
- * @param vaultSubgraphId - The vault's unique subgraph identifier (vault.id), NOT the vault slot number (vault.vaultId)
+ * 32-byte little-endian encoding of a uint256 vault slot.
+ * Matches Raindex local-DB page IDs (`vault_id.to_le_bytes::<32>()`).
+ */
+export function vaultIdToLittleEndianHex(vaultId: bigint | string): string {
+	const value = (typeof vaultId === 'bigint' ? vaultId : BigInt(vaultId)) & ((1n << 256n) - 1n);
+	const be = value.toString(16).padStart(64, '0');
+	return (be.match(/.{2}/g) ?? []).reverse().join('');
+}
+
+/**
+ * Raindex v6 vault page id: orderbook || owner || token || vaultId (LE 32 bytes).
+ * Subgraph `vault.id` is a keccak hash and does not resolve on v6.raindex.finance.
+ */
+export function encodeRaindexVaultPageId(
+	orderbook: string,
+	owner: string,
+	token: string,
+	vaultId: bigint | string
+): `0x${string}` {
+	return `0x${addressHex(orderbook)}${addressHex(owner)}${addressHex(
+		token
+	)}${vaultIdToLittleEndianHex(vaultId)}`;
+}
+
+/**
+ * Generate a Raindex URL for a vault.
+ * Format: {chainId}-{orderbook}-{packedId}
  */
 export function getRaindexVaultUrl(
 	chainId: number,
-	orderbookId: string,
-	vaultSubgraphId: string
+	orderbook: string,
+	owner: string,
+	token: string,
+	vaultId: bigint | string
 ): string {
-	const normalizedId = vaultSubgraphId.startsWith('0x') ? vaultSubgraphId : `0x${vaultSubgraphId}`;
-	return `${RAINDEX_BASE_URL}/vaults/${chainId}-${orderbookId}-${normalizedId}`;
+	const pageId = encodeRaindexVaultPageId(orderbook, owner, token, vaultId);
+	return `${RAINDEX_BASE_URL}/vaults/${chainId}-${orderbook}-${pageId}`;
 }
