@@ -15,8 +15,10 @@
 		if (!information) {
 			return { ...metaV1, information: [{}], schema: null };
 		}
-		let schemaHash = information[0].get(MAGIC_NUMBERS.OA_SCHEMA);
-		let assetClass = schemas.find((s) => s.hash === schemaHash.toString());
+		// Not all tokens embed an OA_SCHEMA key — guard before calling toString()
+		const schemaHash = information[0].get(MAGIC_NUMBERS.OA_SCHEMA);
+		const assetClass =
+			schemaHash != null ? schemas.find((s) => s.hash === schemaHash.toString()) ?? null : null;
 
 		return { ...metaV1, information, schema: assetClass };
 	};
@@ -25,9 +27,20 @@
 	let mappedMetaV1: any[] = [];
 
 	$: if (vault && $sftMetadata?.length) {
-		mappedMetaV1 = $sftMetadata.slice(0, 1).map((metaV1) => {
-			return getReceiptSchema(metaV1);
-		});
+		// Show only the latest (first) metadata entry. If it fails to decode,
+		// walk forward until one succeeds so the page never crashes.
+		const decoded = $sftMetadata.reduce<ReturnType<typeof getReceiptSchema> | null>(
+			(found, metaV1) => {
+				if (found !== null) return found;
+				try {
+					return getReceiptSchema(metaV1);
+				} catch {
+					return null;
+				}
+			},
+			null
+		);
+		mappedMetaV1 = decoded !== null ? [decoded] : [];
 	} else {
 		mappedMetaV1 = [];
 	}
