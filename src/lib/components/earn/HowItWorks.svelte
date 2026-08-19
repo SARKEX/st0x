@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Four-step "how Save & Earn works" — deposit → earn → compound → redeem.
+	// Four-step "how Save & Earn works" — buy → earn → compound → exit.
 	import { HOW_IT_WORKS } from '$lib/config/earn';
 	import EarnIcon from './EarnIcon.svelte';
 </script>

@@ -76,10 +76,12 @@
 					on:click={() => openSaveEarn({ mode: 'withdraw' })}
 					class="flex items-center gap-1.5 rounded-lg border border-line-strong px-4 py-2 text-sm font-medium text-text-2 hover:bg-surface-2"
 				>
-					<EarnIcon name="minus" className="h-4 w-4" />Withdraw
+					<EarnIcon name="minus" className="h-4 w-4" />Sell to USDC
 				</button>
 			</div>
-			<p class="mt-2 text-[11px] text-text-3">Withdrawals sell wtSGOV held in your wallet.</p>
+			<p class="mt-2 text-[11px] text-text-3">
+				Selling uses a st0x market order. Primary redemption uses the S01 / Alpaca bridge.
+			</p>
 		</div>
 		<div class="flex flex-col justify-between rounded-xl border border-line bg-surface-2 p-4">
 			<div class="flex items-center justify-between text-xs text-text-2">

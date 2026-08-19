@@ -19,7 +19,13 @@
 		type SaveEarnMode
 	} from '$lib/stores/saveEarnStore';
 	import { setSheetOpen } from '$lib/stores/uiStore';
-	import { SGOV_CHAIN_ID, SGOV_WRAPPED_ADDRESS, formatApy } from '$lib/config/earn';
+	import {
+		SGOV_CHAIN_ID,
+		SGOV_MARKET_CLOSED_MESSAGE,
+		SGOV_TRADING_SCHEDULE,
+		SGOV_WRAPPED_ADDRESS,
+		formatApy
+	} from '$lib/config/earn';
 	import {
 		buildSaveEarnOrder,
 		normalizeSaveEarnDeposit,
@@ -68,7 +74,7 @@
 	let step: 0 | 1 = 0;
 	let mode: SaveEarnMode = 'deposit';
 	let depositUsdc = 0; // USDC to spend
-	let withdrawWtsgov = 0; // wtSGOV to redeem
+	let withdrawWtsgov = 0; // wtSGOV to sell for USDC
 	let isExecuting = false;
 	let errorMessage: string | null = null;
 	let wasOpen = false;
@@ -235,7 +241,7 @@
 			return;
 		}
 		if (isOutsideMarketHours()) {
-			errorMessage = 'This market is currently closed. Try again during NYSE market hours.';
+			errorMessage = SGOV_MARKET_CLOSED_MESSAGE;
 			return;
 		}
 		if (!marketQuote?.fullyFilled || !referenceIoRatio) {
@@ -291,7 +297,7 @@
 	});
 
 	$: isDeposit = mode === 'deposit';
-	$: title = isDeposit ? 'Start earning' : 'Withdraw savings';
+	$: title = isDeposit ? 'Start earning' : 'Sell savings';
 
 	// Hide the bottom tab bar while this sheet is open (mobile).
 	$: setSheetOpen('saveEarn', $showSaveEarnModal);
@@ -337,7 +343,7 @@
 							{#if isDeposit}<ApyChip />{/if}
 						</div>
 						<div class="text-[11px] text-text-2">
-							{isDeposit ? 'Move USDC into Savings · SGOV' : 'Redeem wtSGOV back to USDC'}
+							{isDeposit ? 'Buy wtSGOV with USDC' : 'Sell wtSGOV for USDC'}
 						</div>
 					</div>
 				</div>
@@ -356,7 +362,7 @@
 					<!-- amount entry -->
 					<div class="rounded-xl border border-line-strong bg-overlay-strong px-4 py-3">
 						<div class="flex items-center justify-between text-xs text-text-2">
-							<span class="whitespace-nowrap">{isDeposit ? 'You save' : 'You withdraw'}</span>
+							<span class="whitespace-nowrap">{isDeposit ? 'You spend' : 'You sell'}</span>
 							{#if isDeposit}
 								<button
 									type="button"
@@ -448,8 +454,11 @@
 							Save &amp; Earn is only available on Base Mainnet.
 						</p>
 					{:else if marketClosed}
-						<p class="mt-2 text-center text-[11px] text-text-2">
-							SGOV swaps are available during NYSE market hours.
+						<p
+							class="mt-2 text-center text-[11px] leading-relaxed text-text-2"
+							data-testid="save-earn-market-closed"
+						>
+							{SGOV_MARKET_CLOSED_MESSAGE}
 						</p>
 					{:else if orderParams.amount > 0n && $marketQuoteQuery.isFetching}
 						<p class="mt-2 text-center text-[11px] text-text-2">Fetching executable quote…</p>
@@ -494,15 +503,17 @@
 						>
 							{#if isExecuting}
 								Processing…
+							{:else if marketClosed}
+								Market closed
 							{:else if isDeposit}
 								Start earning
 							{:else}
-								Withdraw
+								Sell to USDC
 							{/if}
 						</button>
 					{/if}
 					<p class="mt-2 text-center text-[11px] text-text-3">
-						No KYC · no lockup · DEX swaps during NYSE hours
+						No KYC · no lockup · Trading {SGOV_TRADING_SCHEDULE}
 					</p>
 					{#if !isDeposit}
 						<p class="mx-auto mt-1.5 max-w-xs text-center text-[10px] text-text-muted">
@@ -527,13 +538,13 @@
 							<EarnIcon name="check" className="h-8 w-8" stroke={2.2} />
 						</div>
 						<h3 class="mt-4 text-lg font-bold text-text">
-							{#if isDeposit}You're earning {formatApy()}%{:else}Withdrawal submitted{/if}
+							{#if isDeposit}You're earning {formatApy()}%{:else}Sale submitted{/if}
 						</h3>
 						<p class="mx-auto mt-1.5 max-w-xs text-sm text-text-2">
 							{#if isDeposit}
 								{fmt(depositUsdc)} USDC is now wtSGOV and compounding monthly. Track it in your portfolio.
 							{:else}
-								Your wtSGOV is being redeemed to USDC. Track it in your portfolio.
+								Your wtSGOV is being sold for USDC. Track it in your portfolio.
 							{/if}
 						</p>
 						{#if isDeposit}

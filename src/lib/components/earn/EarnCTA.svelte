@@ -19,7 +19,7 @@
 		<div class="relative">
 			<h2 class="text-2xl font-bold text-text">Your USDC is on a coffee break.</h2>
 			<p class="mx-auto mt-2 max-w-md text-[15px] text-text-2">
-				Put it to work in 30 seconds. Earn {formatApy()}%, no KYC, redeem whenever.
+				Put it to work with wtSGOV. Earn {formatApy()}%, no KYC, no lockup.
 			</p>
 			<button
 				on:click={startEarning}

@@ -8,6 +8,9 @@ function source(path: string): string {
 
 describe('Save & Earn review safeguards', () => {
 	const modal = source('src/lib/components/earn/SaveEarnModal.svelte');
+	const hero = source('src/lib/components/earn/EarnHero.svelte');
+	const cta = source('src/lib/components/earn/EarnCTA.svelte');
+	const homeCard = source('src/lib/components/earn/SaveEarnCard.svelte');
 
 	it('uses a guarded REST quote for display and execution', () => {
 		expect(modal).toContain('apiGetSwapQuoteV2');
@@ -27,5 +30,17 @@ describe('Save & Earn review safeguards', () => {
 	it('blocks closed-market submission in both the UI state and handler', () => {
 		expect(modal).toContain('!marketClosed');
 		expect(modal).toContain('if (isOutsideMarketHours())');
+		expect(modal).toContain('SGOV_MARKET_CLOSED_MESSAGE');
+		expect(modal).toContain('data-testid="save-earn-market-closed"');
+		expect(modal).toContain('Market closed');
+	});
+
+	it('does not advertise market-order availability as 24/7 redemption', () => {
+		for (const copy of [modal, hero, cta, homeCard]) {
+			expect(copy).not.toMatch(/Redeem · 24\/7|redeem anytime|redeem whenever/i);
+		}
+		expect(hero).toContain('NYSE-hours trading');
+		expect(modal).toContain('Sell wtSGOV for USDC');
+		expect(modal).toContain('Sell to USDC');
 	});
 });

@@ -3,6 +3,8 @@ import {
 	isSgov,
 	formatApy,
 	SGOV_APY,
+	SGOV_MARKET_CLOSED_MESSAGE,
+	SGOV_TRADING_SCHEDULE,
 	SGOV_WRAPPED_ADDRESS,
 	SGOV_UNWRAPPED_ADDRESS
 } from '$lib/config/earn';
@@ -41,5 +43,19 @@ describe('formatApy', () => {
 
 	it('never renders trailing zeros (a round rate is "3", not "3.00")', () => {
 		expect(formatApy()).not.toMatch(/\.\d*0$/);
+	});
+});
+
+describe('SGOV trading availability copy', () => {
+	it('states the complete regular-hours schedule', () => {
+		expect(SGOV_TRADING_SCHEDULE).toBe(
+			'Monday–Friday, 9:30 AM–4:00 PM ET, excluding market holidays'
+		);
+	});
+
+	it('explains that earn and withdrawal orders are unavailable while closed', () => {
+		expect(SGOV_MARKET_CLOSED_MESSAGE).toBe(
+			`SGOV trading is currently closed. Earn and withdrawal orders can be placed ${SGOV_TRADING_SCHEDULE}.`
+		);
 	});
 });

@@ -10,7 +10,7 @@
 
 	const heroStats: [string, string][] = [
 		['$85B', 'BlackRock AUM'],
-		['<10s', 'Redeem · 24/7'],
+		['Mon–Fri', 'NYSE-hours trading'],
 		['No KYC', 'Permissionless']
 	];
 
@@ -35,13 +35,13 @@
 				Earn <span class="text-accent">{formatApy()}%</span> on your idle dollars.
 			</h1>
 			<p class="mt-2.5 text-base font-semibold text-accent sm:text-lg">
-				Treasury-backed. No KYC. Redeem anytime.
+				Treasury-backed. No KYC. No lockup.
 			</p>
 			<p class="mt-4 max-w-md text-[15px] leading-relaxed text-text-2">
 				Turn idle USDC into <span class="font-semibold text-text">SGOV</span> — BlackRock’s US
 				Treasury bill ETF, tokenised and live on Base. The only one you can hold in
-				<span class="font-semibold text-accent">any wallet</span>, then redeem to real shares in
-				under 10 seconds.
+				<span class="font-semibold text-accent">any wallet</span>. Buying and selling on st0x uses
+				NYSE market hours; primary redemption to SGOV shares uses the S01 / Alpaca bridge.
 			</p>
 			<div class="mt-6 flex flex-wrap items-center gap-3">
 				<button

@@ -14,6 +14,8 @@ import { getTokenByAnyAddress } from '$lib/config/network';
 
 export const SGOV_APY = 3;
 export const SGOV_CHAIN_ID = 8453;
+export const SGOV_TRADING_SCHEDULE = 'Monday–Friday, 9:30 AM–4:00 PM ET, excluding market holidays';
+export const SGOV_MARKET_CLOSED_MESSAGE = `SGOV trading is currently closed. Earn and withdrawal orders can be placed ${SGOV_TRADING_SCHEDULE}.`;
 
 // Canonical SGOV addresses on Base (mirror src/lib/config/tokens.ts → wtSGOV).
 export const SGOV_WRAPPED_ADDRESS = '0x78c31580c97101694C70022c83D570150c11e935';
@@ -149,7 +151,7 @@ export const PILLARS: Pillar[] = [
 	{
 		icon: 'bank',
 		title: 'Redeemable Treasuries',
-		body: "Backed 1:1 by SGOV — BlackRock's $85B T-bill ETF. Primary redemption is available through the S01 / Alpaca bridge; st0x DEX swaps follow NYSE market hours."
+		body: `Backed 1:1 by SGOV — BlackRock's $85B T-bill ETF. Primary redemption to SGOV shares uses the S01 / Alpaca bridge; buying or selling wtSGOV on st0x is available ${SGOV_TRADING_SCHEDULE}.`
 	},
 	{
 		icon: 'bolt',
@@ -159,7 +161,7 @@ export const PILLARS: Pillar[] = [
 	{
 		icon: 'shield',
 		title: 'Backed 1:1, onchain',
-		body: 'Every wtSGOV is backed 1:1 by SGOV with a right of redemption to the underlying shares — verifiable onchain, anytime.'
+		body: 'Every wtSGOV is backed 1:1 by SGOV with a right of redemption to the underlying shares — verifiable onchain.'
 	}
 ];
 
@@ -172,8 +174,8 @@ export interface HowStep {
 export const HOW_IT_WORKS: HowStep[] = [
 	{
 		n: 1,
-		t: 'Deposit dollars',
-		d: 'Swap USDC into wtSGOV in one tap, right inside st0x. No account, no KYC.'
+		t: 'Buy wtSGOV',
+		d: `Place a market order from USDC into wtSGOV on st0x. Orders are available ${SGOV_TRADING_SCHEDULE}. No account, no KYC.`
 	},
 	{
 		n: 2,
@@ -187,8 +189,8 @@ export const HOW_IT_WORKS: HowStep[] = [
 	},
 	{
 		n: 4,
-		t: 'Redeem anytime',
-		d: 'Unwrap or redeem through the S01 / Alpaca bridge without a lockup. Swaps between wtSGOV and USDC on st0x are available during NYSE market hours.'
+		t: 'Exit without a lockup',
+		d: `Sell wtSGOV for USDC on st0x during ${SGOV_TRADING_SCHEDULE}, or use the S01 / Alpaca bridge for primary redemption to the underlying SGOV shares.`
 	}
 ];
 
@@ -212,7 +214,7 @@ export const EARN_FAQ: FaqItem[] = [
 	},
 	{
 		q: 'How do I get my dollars back?',
-		a: 'Swap back to USDC on st0x during NYSE market hours, or use the S01 / Alpaca bridge for primary redemption to the underlying SGOV shares. There is no st0x lockup or withdrawal queue.'
+		a: `Sell wtSGOV for USDC on st0x during ${SGOV_TRADING_SCHEDULE}, or use the S01 / Alpaca bridge for primary redemption to the underlying SGOV shares. There is no st0x lockup or withdrawal queue.`
 	}
 ];
 

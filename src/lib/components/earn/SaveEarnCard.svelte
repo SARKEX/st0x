@@ -41,7 +41,7 @@
 					<span class="font-semibold text-accent">SGOV</span>
 					instead and earn
 					<span class="font-semibold text-accent">~{formatApy()}% a year</span>, backed 1:1 by
-					BlackRock's Treasury ETF. No KYC — redeem anytime.
+					BlackRock's Treasury ETF. No KYC — no lockup.
 				</p>
 				<div class="mt-5 flex flex-wrap items-center gap-2.5">
 					<button
