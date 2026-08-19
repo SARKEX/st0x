@@ -27,17 +27,20 @@
 	let mappedMetaV1: any[] = [];
 
 	$: if (vault && $sftMetadata?.length) {
-		// Scan all metadata entries and keep those that decoded successfully,
-		// rather than stopping at slice(0,1) even when the first entry crashes.
-		mappedMetaV1 = $sftMetadata
-			.map((metaV1) => {
+		// Show only the latest (first) metadata entry. If it fails to decode,
+		// walk forward until one succeeds so the page never crashes.
+		const decoded = $sftMetadata.reduce<ReturnType<typeof getReceiptSchema> | null>(
+			(found, metaV1) => {
+				if (found !== null) return found;
 				try {
 					return getReceiptSchema(metaV1);
 				} catch {
 					return null;
 				}
-			})
-			.filter((v): v is NonNullable<typeof v> => v !== null);
+			},
+			null
+		);
+		mappedMetaV1 = decoded !== null ? [decoded] : [];
 	} else {
 		mappedMetaV1 = [];
 	}
