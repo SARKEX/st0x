@@ -317,9 +317,20 @@ input[type='range']::-moz-range-thumb {
    - Dynamic Labs' embedded-wallet flow renders inside a `.dynamic-shadow-dom` host.
    - WalletConnect / Web3Modal renders an `<w3m-modal>` (default z-index 999).
    Lift both above every in-app modal so the wallet flow is never hidden behind. */
-:root {
-	/* Official Web3Modal/AppKit override; the modal reads var(--w3m-z-index). */
+/* Web3Modal reads var(--w3m-z-index), but it injects its own
+   `:root { --w3m-z-index: 999 }` <style> at runtime — i.e. after app.css. At
+   equal specificity the later rule wins, so a plain `:root` override here is
+   dead on arrival and the picker stays at 999, below the sidebar (10000),
+   network selector (10000) and bottom nav (9000). Repeating `:root` outranks
+   the injected rule on specificity regardless of injection order. */
+:root:root:root {
 	--w3m-z-index: 2147483000;
+}
+/* Belt and braces: pin the host element too, in case a future SDK version
+   stops honouring the variable. Outer-document rules beat the shadow root's
+   own `:host` z-index. */
+w3m-modal {
+	z-index: 2147483000 !important;
 }
 .dynamic-shadow-dom {
 	position: relative !important;

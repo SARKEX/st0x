@@ -26,6 +26,8 @@
 		toReferenceIoRatio
 	} from '$lib/services/marketOrderExecution';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
+	import { isSgov } from '$lib/config/earn';
+	import IdleUsdcNudge from '$lib/components/earn/IdleUsdcNudge.svelte';
 	import { trackTradeEvent, type ErrorClass } from '$lib/services/observability/tradeEvents';
 	import {
 		captureTradeFlowError,
@@ -292,6 +294,12 @@
 
 	// Token being spent
 	$: spendingToken = orderSide === 'Buy' ? paymentToken : assetToken;
+	// Idle USDC the user holds while buying a non-SGOV asset (spendingToken is
+	// USDC on the Buy side) — drives the "move idle USDC to Savings" nudge.
+	$: marketIdleUsdc =
+		orderSide === 'Buy' && spendingTokenBalanceDecimals != null
+			? Number(formatUnits(spendingTokenBalance, spendingTokenBalanceDecimals))
+			: 0;
 
 	// Exact spend-anchored inputs can be checked against the wallet balance
 	// without estimating a price. Buy-by-amount is intentionally left to REST,
@@ -1027,6 +1035,11 @@
 					Place Market Order
 				{/if}
 			</button>
+			{#if assetToken && !isSgov(assetToken.address) && marketIdleUsdc > 0}
+				<div class="mt-3">
+					<IdleUsdcNudge usdcAmount={marketIdleUsdc} variant="subtle" />
+				</div>
+			{/if}
 			<!-- D-09 error-banner: classified error surface for TEST-08 E2E assertions.
 		     Visible UX is rendered above (per-error inline blocks); this element
 		     exposes a stable Playwright selector + machine-readable

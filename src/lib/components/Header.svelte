@@ -10,6 +10,7 @@
 	// Unified auth
 	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
 	import { openAuthModal, logoutDynamic, dynamicSession } from '$lib/stores/dynamicStore';
+	import { formatApy } from '$lib/config/earn';
 	import { navCollapsed } from '$lib/stores/uiStore';
 
 	export let title: string;
@@ -40,13 +41,21 @@
 	$: isOnTradePage = activePath.startsWith('/trade/');
 
 	$: NAV_ITEMS = [
-		{ name: 'Trade', href: tradeHref, isActive: isOnTradePage, showAlpha: false },
-		{ name: 'Strategies', href: '/strategies', isActive: false, showAlpha: true },
+		{ name: 'Trade', href: tradeHref, isActive: isOnTradePage, showAlpha: false, isEarn: false },
+		{
+			name: 'Earn',
+			href: '/earn',
+			isActive: activePath === '/earn',
+			showAlpha: false,
+			isEarn: true
+		},
+		{ name: 'Strategies', href: '/strategies', isActive: false, showAlpha: true, isEarn: false },
 		{
 			name: 'Platform Metrics',
 			href: '/platform-metrics',
 			isActive: false,
-			showAlpha: false
+			showAlpha: false,
+			isEarn: false
 		}
 	];
 
@@ -127,21 +136,50 @@
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-1">
 						{#each NAV_ITEMS as item}
-							<a
-								href={item.href}
-								class="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors {item.isActive ||
-								activePath === item.href
-									? 'bg-white/10 text-text'
-									: 'text-text-2 hover:bg-white/5 hover:text-text'}"
-							>
-								{item.name}
-								{#if item.showAlpha}
+							{#if item.isEarn}
+								<!-- Signature Save & Earn entry: live-APY pill with a shimmer sweep -->
+								<a
+									href={item.href}
+									class="group relative flex items-center gap-2 overflow-hidden whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-semibold transition-all {item.isActive ||
+									activePath === item.href
+										? 'border-emerald-400/50 bg-emerald-400/15 text-accent'
+										: 'border-emerald-400/30 bg-emerald-400/[0.07] text-accent hover:border-emerald-400/50 hover:bg-emerald-400/15'}"
+								>
 									<span
-										class="rounded-full bg-iris-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-iris-300"
-										>Alpha</span
+										class="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-emerald-300/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+									></span>
+									<Icon name="sprout" className="h-4 w-4" />
+									<span>{item.name}</span>
+									<span
+										class="flex items-center gap-1 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-bold text-accent"
 									>
-								{/if}
-							</a>
+										<span class="relative flex h-1.5 w-1.5">
+											<span
+												class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70"
+											></span>
+											<span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400"
+											></span>
+										</span>
+										{formatApy()}%
+									</span>
+								</a>
+							{:else}
+								<a
+									href={item.href}
+									class="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors {item.isActive ||
+									activePath === item.href
+										? 'bg-white/10 text-text'
+										: 'text-text-2 hover:bg-white/5 hover:text-text'}"
+								>
+									{item.name}
+									{#if item.showAlpha}
+										<span
+											class="rounded-full bg-iris-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-iris-300"
+											>Alpha</span
+										>
+									{/if}
+								</a>
+							{/if}
 						{/each}
 					</div>
 				{/if}

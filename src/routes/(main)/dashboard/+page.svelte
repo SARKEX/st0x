@@ -24,7 +24,12 @@
 	import { readContracts, getBalance } from '@wagmi/core';
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import type { CategorizedToken } from '$lib/config/network';
+	import SavingsCard from '$lib/components/earn/SavingsCard.svelte';
+	import IdleUsdcNudge from '$lib/components/earn/IdleUsdcNudge.svelte';
+	import ApyChip from '$lib/components/earn/ApyChip.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import { openSaveEarn } from '$lib/stores/saveEarnStore';
+	import { isSgov, formatApy } from '$lib/config/earn';
 	import { goto } from '$app/navigation';
 	import { transformApiTakerTradesToDisplay } from '$lib/utils/tradeTransform';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -1107,6 +1112,13 @@
 
 	// Check if wallet is embedded (hide track token buttons for embedded wallets)
 	$: isEmbeddedWallet = $authMethod === 'dynamic' && $dynamicSession?.walletType === 'embedded';
+
+	// Save & Earn (SGOV) — surface savings derived from the SGOV holding and idle USDC.
+	$: savingsHolding = assetHoldings.find((h) => isSgov(h.address)) ?? null;
+	$: savingsValue = savingsHolding?.value ?? 0;
+	$: savingsQuantity = savingsHolding?.totalBalance ?? 0;
+	$: savingsUnrealizedPnl = savingsHolding?.unrealizedPnL ?? null;
+	$: idleUsdc = fundsHoldings.find((h) => h.symbol === 'USDC')?.walletBalanceNum ?? 0;
 </script>
 
 <!-- Main Content -->
@@ -1213,6 +1225,17 @@
 						showGradient={false}
 						valueClass="font-mono text-lg font-bold sm:text-2xl"
 					/>
+					{#if savingsValue > 0}
+						<MetricCard
+							label="Savings · earning"
+							value={`$${savingsValue.toFixed(2)}`}
+							subtitle={`at ${formatApy()}% yield`}
+							cardClass="h-full border border-emerald-400/25 bg-emerald-400/[0.05]"
+							paddingClass="p-3 sm:p-4"
+							showGradient={false}
+							valueClass="font-mono text-lg font-bold text-accent sm:text-2xl"
+						/>
+					{/if}
 					<div class="hidden h-full sm:block">
 						<MetricCard
 							label="Unrealized P&L"
@@ -1273,6 +1296,15 @@
 						Hide dust
 					</label>
 				</div>
+				{#if savingsHolding && savingsQuantity > 0}
+					<Section>
+						<SavingsCard
+							balance={savingsValue}
+							tokenBalance={savingsQuantity}
+							unrealizedPnl={savingsUnrealizedPnl}
+						/>
+					</Section>
+				{/if}
 				{#if $walletHoldingsQuery.isLoading || $vaultsListQuery.isLoading || $usdcBalanceQuery.isLoading}
 					<Section>
 						<LoadingSpinner variant="inline" size="md" text="Loading portfolio..." />
@@ -1340,6 +1372,19 @@
 													>
 													<td class="px-2 py-2 text-right sm:px-4 sm:py-3">
 														<div class="flex items-center justify-end gap-2">
+															{#if isUsdc}
+																<button
+																	type="button"
+																	on:click={() =>
+																		openSaveEarn({
+																			mode: 'deposit',
+																			prefillUsdc: idleUsdc || null
+																		})}
+																	class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-emerald-400/20"
+																>
+																	<Icon name="sprout" className="h-3.5 w-3.5" />Earn {formatApy()}%
+																</button>
+															{/if}
 															{#if $authMethod === 'dynamic' && holding.walletBalanceNum > 0}
 																<Button
 																	variant="secondary"
@@ -1363,6 +1408,12 @@
 							<EmptyState description="No funds found in your wallet or vaults." />
 						{/if}
 					</Section>
+
+					{#if idleUsdc > 0}
+						<div class="mt-2">
+							<IdleUsdcNudge usdcAmount={idleUsdc} variant="banner" />
+						</div>
+					{/if}
 
 					<!-- Holdings Section (Asset Tokens) -->
 					<Section>
@@ -1434,7 +1485,11 @@
 											{#each assetHoldings as holding}
 												{@const rowRatio = resolveHoldingRatio(holding.address)}
 												{@const rowSymbol = displayUnwrappedSymbol(holding.symbol)}
-												<tr class="border-t border-line hover:bg-overlay-hover">
+												<tr
+													class={isSgov(holding.address)
+														? 'border-t border-line bg-emerald-400/[0.04] hover:bg-emerald-400/[0.08]'
+														: 'border-t border-line hover:bg-overlay-hover'}
+												>
 													<td class="sticky left-0 bg-surface-1 px-2 py-2 sm:px-4 sm:py-3">
 														<div class="flex items-center gap-2">
 															<TokenDisplay
@@ -1444,6 +1499,7 @@
 																name={holding.name}
 																hideNameOnMobile={true}
 															/>
+															{#if isSgov(holding.address)}<ApyChip />{/if}
 														</div>
 													</td>
 													<td

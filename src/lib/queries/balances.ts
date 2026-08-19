@@ -12,6 +12,8 @@ export function invalidateDashboardBalances() {
 	queryClient.invalidateQueries({ queryKey: ['walletHoldings'] });
 	queryClient.invalidateQueries({ queryKey: ['usdcWalletBalance'] });
 	queryClient.invalidateQueries({ queryKey: ['ethWalletBalance'] });
+	queryClient.invalidateQueries({ queryKey: ['usdcBalance'] });
+	queryClient.invalidateQueries({ queryKey: ['tokenBalance'] });
 }
 
 /** Refresh all-time trade-derived data only after a confirmed market order. */
