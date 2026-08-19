@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 import { getTokenByAnyAddress } from '$lib/config/network';
 
-export const SGOV_APY = 3;
+export const SGOV_APY = 3.5;
 export const SGOV_CHAIN_ID = 8453;
 export const SGOV_TRADING_SCHEDULE = 'Monday–Friday, 9:30 AM–4:00 PM ET, excluding market holidays';
 export const SGOV_MARKET_CLOSED_MESSAGE = `SGOV trading is currently closed. Earn and withdrawal orders can be placed ${SGOV_TRADING_SCHEDULE}.`;
@@ -27,7 +27,7 @@ const SGOV_ADDRESSES = new Set<string>([
 ]);
 
 export function formatApy(decimals = 2): string {
-	// Trim trailing zeros so a round rate renders as "3%" rather than "3.00%".
+	// Trim trailing zeros so a rate renders as "3.5%" rather than "3.50%".
 	return parseFloat(SGOV_APY.toFixed(decimals)).toString();
 }
 
@@ -180,7 +180,7 @@ export const HOW_IT_WORKS: HowStep[] = [
 	{
 		n: 2,
 		t: 'Treasuries earn',
-		d: "Your tokens are backed 1:1 by SGOV — BlackRock's short-dated US T-bill ETF, ~3% yield."
+		d: `Your tokens are backed 1:1 by SGOV — BlackRock's short-dated US T-bill ETF, yielding roughly ${formatApy()}% at current Treasury rates.`
 	},
 	{
 		n: 3,
@@ -202,7 +202,7 @@ export interface FaqItem {
 export const EARN_FAQ: FaqItem[] = [
 	{
 		q: 'How does the yield actually reach me?',
-		a: 'The underlying Treasuries earn yield continuously, and each month it’s added to the wtSGOV wrapper — so your token steadily becomes worth more. Nothing to claim or stake. ~3% yield today.'
+		a: `The underlying Treasuries earn yield continuously, and each month it’s added to the wtSGOV wrapper — so your token steadily becomes worth more. Nothing to claim or stake. At current Treasury rates that works out around ${formatApy()}% a year, and it moves as those rates do.`
 	},
 	{
 		q: 'Do I need to KYC?',
