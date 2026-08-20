@@ -143,7 +143,8 @@
 		class:lg:ml-64={!useCleanLayout && !sidebarCollapsed}
 		class:lg:ml-0={useCleanLayout || sidebarCollapsed}
 		class:lg:mr-[22rem]={isTradePage && $tradePanelOpen}
-		style={$navCollapsed ? 'padding-bottom: calc(60px + env(safe-area-inset-bottom));' : ''}
+		style:--desktop-sidebar-offset={!useCleanLayout && !sidebarCollapsed ? '16rem' : '0rem'}
+		style:padding-bottom={$navCollapsed ? 'calc(60px + env(safe-area-inset-bottom))' : undefined}
 	>
 		<!-- Header for all screen sizes -->
 		<Header
