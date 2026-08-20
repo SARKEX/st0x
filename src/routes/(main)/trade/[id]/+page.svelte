@@ -2196,7 +2196,10 @@
 	</footer>
 {/if}
 {#if showChartModal}
-	<div class="fixed inset-0 z-[2000]">
+	<div
+		class="fixed inset-0 z-[2000] transition-[left] duration-300 lg:left-[var(--desktop-sidebar-offset)]"
+		data-testid="advanced-chart-modal"
+	>
 		<button
 			type="button"
 			class="absolute inset-0 h-full w-full bg-black/60"
