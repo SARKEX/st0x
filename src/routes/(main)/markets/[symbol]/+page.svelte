@@ -4,11 +4,6 @@
 	export let data: PageData;
 
 	$: asset = data.asset;
-	$: tradeHref = `/trade/${asset.address}`;
-
-	// Breadcrumb structured data (Home › Markets › Ticker) — eligible for
-	// breadcrumb rich results. No price/offer claims, so nothing to keep in sync
-	// with live market data.
 	$: breadcrumbJsonLd = JSON.stringify({
 		'@context': 'https://schema.org',
 		'@type': 'BreadcrumbList',
@@ -26,114 +21,95 @@
 </script>
 
 <svelte:head>
-	<!-- eslint-disable-next-line svelte/no-at-html-tags -- static JSON-LD serialized from a local const; no user input -->
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- local structured data -->
 	{@html `<script type="application/ld+json">${breadcrumbJsonLd}</` + 'script>'}
 </svelte:head>
 
 <div class="relative z-10 min-h-screen">
 	<section class="px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
 		<div class="mx-auto max-w-3xl">
-			<!-- Breadcrumb -->
-			<nav aria-label="Breadcrumb" class="mb-8 text-sm text-gray-500">
+			<nav aria-label="Breadcrumb" class="mb-8 text-sm text-text-3">
 				<a href="/" class="transition-colors hover:text-yellow-500">ST0x</a>
 				<span class="mx-2">/</span>
 				<a href="/markets" class="transition-colors hover:text-yellow-500">Markets</a>
 				<span class="mx-2">/</span>
-				<span class="text-gray-300">{asset.ticker}</span>
+				<span class="text-text-2">{asset.ticker}</span>
 			</nav>
 
-			<div class="mb-6 flex items-center gap-4">
+			<div class="mb-8 flex items-center gap-4">
 				{#if asset.logoUrl}
-					<img src={asset.logoUrl} alt="" class="h-14 w-14 flex-shrink-0 rounded-full bg-white/5" />
+					<img
+						src={asset.logoUrl}
+						alt=""
+						class="h-14 w-14 flex-shrink-0 rounded-full bg-overlay-2"
+					/>
 				{/if}
 				<div>
-					<h1 class="text-4xl font-bold tracking-tight text-white sm:text-5xl">
-						Trade tokenized {asset.companyName}
+					<h1 class="text-4xl font-bold tracking-tight text-text sm:text-5xl">
+						Tokenized {asset.companyName}
 					</h1>
-					<p class="mt-2 text-lg text-gray-400">
+					<p class="mt-2 text-lg text-text-2">
 						{asset.ticker} · {asset.tokenSymbol} on Base
 					</p>
 				</div>
 			</div>
 
-			<div class="mb-10 flex flex-wrap gap-3">
-				<a
-					href={tradeHref}
-					class="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-gray-900 transition-colors hover:bg-yellow-400"
-				>
-					Trade {asset.ticker}
-				</a>
-				<a
-					href="/markets"
-					class="rounded-xl border border-white/10 px-6 py-3 font-semibold text-gray-200 transition-colors hover:bg-white/5"
-				>
-					All markets
-				</a>
-			</div>
-
-			<div class="space-y-8 text-gray-300">
-				<div>
-					<h2 class="mb-3 text-2xl font-semibold text-white">
-						What is tokenized {asset.ticker}?
-					</h2>
+			<div class="space-y-8 text-text-2">
+				<section>
+					<h2 class="mb-3 text-2xl font-semibold text-text">About this token</h2>
 					<p class="leading-relaxed">
 						Tokenized {asset.companyName} ({asset.ticker}) provides on-chain exposure to the
-						underlying listed {asset.instrumentLabel}. The issued asset token is a claim against S01
-						Issuer GmbH on the terms set out in its base prospectus; holders are unsecured
-						contractual creditors of the Issuer. On ST0x it trades as
-						<span class="font-mono text-gray-200">{asset.tokenSymbol}</span>, a vault wrapper on
-						Base whose exchange rate to the issued token can change over time.
+						underlying {asset.instrumentLabel}. The issued asset token is a claim against S01 Issuer
+						GmbH on the terms set out in its Base Prospectus and Final Terms. Holders are unsecured
+						contractual creditors of the Issuer.
 					</p>
-				</div>
+				</section>
 
-				<div>
-					<h2 class="mb-3 text-2xl font-semibold text-white">How trading works on ST0x</h2>
-					<ul class="ml-6 list-disc space-y-2 leading-relaxed">
-						<li>
-							<span class="font-medium text-white">24/7 markets.</span> Trade whenever you want — not
-							just during traditional exchange hours.
-						</li>
-						<li>
-							<span class="font-medium text-white">Non-custodial.</span> Your assets stay in smart-contract
-							vaults you control; ST0x never takes custody.
-						</li>
-						<li>
-							<span class="font-medium text-white">On-chain &amp; composable.</span> Settle on Base
-							and use your tokenized {asset.ticker} across DeFi.
-						</li>
-						<li>
-							<span class="font-medium text-white">Intent-based execution.</span> Orders are placed on-chain
-							and filled by solvers when matched with liquidity.
-						</li>
-					</ul>
-				</div>
+				<section>
+					<h2 class="mb-3 text-2xl font-semibold text-text">On-chain wrapper</h2>
+					<p class="leading-relaxed">
+						<span class="font-mono text-text">{asset.tokenSymbol}</span> is an ERC-4626 vault share on
+						Base. Its exchange rate to the issued token can change over time. Issued tokens can be wrapped
+						into vault shares and vault shares can be unwrapped back into issued tokens from the wallet
+						dashboard.
+					</p>
+				</section>
+
+				<section
+					class="bg-surface-1/80 rounded-2xl border border-line p-6 shadow-[var(--shadow-1)] backdrop-blur-sm"
+				>
+					<h2 class="mb-2 text-xl font-semibold text-text">Token information</h2>
+					<dl class="space-y-3 text-sm">
+						<div class="flex flex-wrap justify-between gap-2">
+							<dt class="text-text-2">Underlying</dt>
+							<dd>{asset.companyName} ({asset.ticker})</dd>
+						</div>
+						<div class="flex flex-wrap justify-between gap-2">
+							<dt class="text-text-2">Token</dt>
+							<dd class="font-mono">{asset.tokenSymbol}</dd>
+						</div>
+						<div class="flex flex-wrap justify-between gap-2">
+							<dt class="text-text-2">Network</dt>
+							<dd>Base</dd>
+						</div>
+						<div class="flex flex-wrap justify-between gap-2">
+							<dt class="text-text-2">Token address</dt>
+							<dd class="break-all font-mono text-xs">{asset.address}</dd>
+						</div>
+					</dl>
+				</section>
 
 				{#if asset.riskDisclosure}
-					<div class="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-6">
-						<h2 class="mb-2 text-xl font-semibold text-amber-200">Product risk</h2>
-						<p class="leading-relaxed text-amber-100/90">{asset.riskDisclosure}</p>
-					</div>
+					<section class="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-6">
+						<h2 class="mb-2 text-xl font-semibold text-text">Product risk</h2>
+						<p class="leading-relaxed text-text-2">{asset.riskDisclosure}</p>
+					</section>
 				{/if}
 
-				<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
-					<h2 class="mb-2 text-xl font-semibold text-white">Ready to trade {asset.ticker}?</h2>
-					<p class="mb-4 leading-relaxed text-gray-400">
-						Connect a wallet and start trading tokenized {asset.companyName} on ST0x. New to tokenized
-						assets? Read the <a href="/faqs" class="text-yellow-500 hover:underline">FAQs</a>.
-					</p>
-					<a
-						href={tradeHref}
-						class="inline-block rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-gray-900 transition-colors hover:bg-yellow-400"
-					>
-						Trade {asset.ticker} now
-					</a>
-				</div>
-
-				<p class="text-xs leading-relaxed text-gray-600">
-					Trading tokenized assets involves substantial risk. Past performance does not guarantee
-					future results. Access requirements and eligibility restrictions apply. See the Base
-					Prospectus and Final Terms for the jurisdictions and investor categories in which the
-					tokens may be offered.
+				<p class="text-xs leading-relaxed text-text-3">
+					Tokenized securities involve substantial risk. Past performance does not guarantee future
+					results. Eligibility restrictions apply. Consult the Base Prospectus and Final Terms for
+					the applicable jurisdictions and investor categories.
 				</p>
 			</div>
 		</div>

@@ -162,7 +162,7 @@ describe('quote utilities', () => {
 					buildQuote({
 						side: 'ask',
 						assetAddress: '0xAsset',
-						quotePerAsset: 100,
+						quotePerAsset: 100
 					})
 				];
 
@@ -309,7 +309,6 @@ describe('quote utilities', () => {
 				expect(result.size).toBe(0);
 			});
 		});
-
 
 		describe('Address normalization', () => {
 			it.each([

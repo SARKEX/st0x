@@ -14,8 +14,8 @@
 		warning: {
 			borderClass: 'border-amber-500/30',
 			bgClass: 'bg-amber-500/10',
-			iconClass: 'text-amber-300',
-			titleClass: 'text-amber-300'
+			iconClass: 'text-text',
+			titleClass: 'text-text'
 		},
 		success: {
 			borderClass: 'border-green-500/30',

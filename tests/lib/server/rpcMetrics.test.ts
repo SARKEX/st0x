@@ -15,20 +15,22 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockLogger, mockGetLogger, mockGetRequestContext, mockNotifyChainExhausted } = vi.hoisted(() => {
-	const logger = {
-		debug: vi.fn(),
-		info: vi.fn(),
-		warn: vi.fn(),
-		error: vi.fn()
-	};
-	return {
-		mockLogger: logger,
-		mockGetLogger: vi.fn(() => logger),
-		mockGetRequestContext: vi.fn<[], { request_id?: string } | undefined>(() => undefined),
-		mockNotifyChainExhausted: vi.fn(async () => undefined)
-	};
-});
+const { mockLogger, mockGetLogger, mockGetRequestContext, mockNotifyChainExhausted } = vi.hoisted(
+	() => {
+		const logger = {
+			debug: vi.fn(),
+			info: vi.fn(),
+			warn: vi.fn(),
+			error: vi.fn()
+		};
+		return {
+			mockLogger: logger,
+			mockGetLogger: vi.fn(() => logger),
+			mockGetRequestContext: vi.fn<[], { request_id?: string } | undefined>(() => undefined),
+			mockNotifyChainExhausted: vi.fn(async () => undefined)
+		};
+	}
+);
 
 vi.mock('$lib/server/logger', () => ({
 	getLogger: mockGetLogger,
@@ -115,7 +117,8 @@ describe('recordRpcAttempt', () => {
 
 		expect(consoleSpy).toHaveBeenCalled();
 		const recoveryLine = consoleSpy.mock.calls.find(
-			(call) => typeof call[0] === 'string' && call[0].includes('[rpcMetrics] failed to record attempt')
+			(call) =>
+				typeof call[0] === 'string' && call[0].includes('[rpcMetrics] failed to record attempt')
 		);
 		expect(recoveryLine).toBeDefined();
 	});
@@ -178,7 +181,9 @@ describe('reportChainExhausted', () => {
 		const payload = (mockLogger.error.mock.calls[0] as unknown as [{ request_id: string }])[0];
 		expect(payload.request_id).toBe('<no-request>');
 
-		const alertArg = (mockNotifyChainExhausted.mock.calls[0] as unknown as [{ request_id: string }])[0];
+		const alertArg = (
+			mockNotifyChainExhausted.mock.calls[0] as unknown as [{ request_id: string }]
+		)[0];
 		expect(alertArg.request_id).toBe('<no-request>');
 	});
 
@@ -197,8 +202,7 @@ describe('reportChainExhausted', () => {
 		// Second error log: the alert-delivery-failed line
 		expect(mockLogger.error).toHaveBeenCalledTimes(2);
 		const deliveryLogCall = mockLogger.error.mock.calls.find(
-			([, msg]) =>
-				typeof msg === 'string' && msg.includes('[rpcMetrics] alert delivery failed')
+			([, msg]) => typeof msg === 'string' && msg.includes('[rpcMetrics] alert delivery failed')
 		);
 		expect(deliveryLogCall).toBeDefined();
 		const [deliveryPayload] = deliveryLogCall as [Record<string, unknown>, string];

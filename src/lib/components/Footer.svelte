@@ -71,8 +71,8 @@
 				© {new Date().getFullYear()} SARK X (BVI) Ltd. All rights reserved.
 			</p>
 			<p class="text-[10px] leading-relaxed text-text-muted sm:text-xs">
-				<span class="text-accent">Risk Warning:</span> Trading tokenized assets involves substantial
-				risk. Past performance does not guarantee future results.
+				<span class="text-accent">Risk Warning:</span> Tokenized securities involve substantial risk.
+				Review the applicable Base Prospectus and Final Terms before acquiring or holding a token.
 			</p>
 		</div>
 	</div>

@@ -2,7 +2,7 @@
 // `$page.data.description` and falls back to site defaults when absent, so
 // returning them here gives this page a unique, indexable title + description.
 export const load = () => ({
-	title: 'ST0x FAQs — Tokenized Stocks, Custody, Liquidity & Fees',
+	title: 'ST0x FAQs — Tokenized Securities, Custody & Wrapping',
 	description:
-		'How ST0x works: 24/7 on-chain trading of tokenized stocks and ETFs, non-custodial settlement, wrapped vault shares, liquidity, wallet access and fees.'
+		'Information about ST0x tokenized securities, issuance, self-custodied wallets, wrapped vault shares and token wrapping.'
 });

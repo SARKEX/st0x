@@ -19,14 +19,14 @@
 </svelte:head>
 
 <div
-	class="flex min-h-screen flex-col items-center justify-center bg-gray-900 px-6 text-center text-white"
+	class="flex min-h-screen flex-col items-center justify-center bg-bg px-6 text-center text-text"
 >
 	<img src="/images/logo-sidebar.svg" alt="ST0x" class="mb-8 h-10 w-auto" />
 	<p class="mb-2 text-6xl font-bold text-yellow-400">{status}</p>
-	<p class="mb-8 max-w-md text-base text-gray-300">{message}</p>
+	<p class="mb-8 max-w-md text-base text-text-2">{message}</p>
 	<a
 		href="/"
-		class="rounded-lg bg-gradient-to-r from-blue-600 to-purple-700 px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+		class="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-accent-ink transition hover:brightness-105"
 	>
 		Back to home
 	</a>

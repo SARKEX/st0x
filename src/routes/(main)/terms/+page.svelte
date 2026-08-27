@@ -10,10 +10,10 @@
 				Website Terms of Use
 			</h1>
 
-			<p class="mb-8 text-text-3"><em>Last Updated: 7 August 2026</em></p>
+			<p class="mb-8 text-text-3"><em>Last Updated: 27 August 2026</em></p>
 
 			<div class="mb-10 rounded-xl border border-amber-500/40 bg-amber-500/10 p-5">
-				<p class="font-semibold text-amber-300">
+				<p class="font-semibold text-text">
 					YOU MUST READ THESE TERMS OF USE BEFORE USING THE WEBSITE. BY USING THE WEBSITE, YOU WILL
 					BE DEEMED TO HAVE ACCEPTED THESE TERMS OF USE.
 				</p>
@@ -52,14 +52,14 @@
 			<h2 class="mb-4 mt-8 text-2xl font-bold text-text">1. About the Website</h2>
 			<ol class="space-y-4 text-text-2">
 				<li>
-					The Website is an interface to public smart contracts deployed on the Base blockchain (the
-					"<strong class="text-text">Contracts</strong>"). The Contracts execute autonomously.
-					Neither the Provider nor any affiliate operates order matching, controls execution, or
-					exercises discretion over access to the Contracts.
+					The Website provides information about tokenised securities and access to supported
+					wrapping and unwrapping smart contracts deployed on the Base blockchain (the "<strong
+						class="text-text">Contracts</strong
+					>").
 				</li>
 				<li>
-					The Website is one of several possible interfaces to the Contracts. Users may interact
-					with the same Contracts directly or through interfaces built by others.
+					Wrapping and unwrapping transactions are initiated by users from their own wallets. The
+					Contracts execute autonomously and the Provider does not take custody of users' tokens.
 				</li>
 				<li>
 					We reserve the right in our sole discretion to modify or discontinue any parts of the
@@ -354,7 +354,7 @@
 					You understand that we cannot and do not guarantee or warrant that files available for
 					downloading from the internet or the Website will be free of viruses or other destructive
 					code, nor that any in-browser data processing performed on the Website in connection with
-					placing orders through the Contracts will be complete, accurate, or free from error.
+					the Contracts will be complete, accurate, or free from error.
 				</li>
 				<li>
 					You are solely responsible for implementing sufficient procedures and checkpoints to

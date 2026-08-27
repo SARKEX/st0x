@@ -8,7 +8,6 @@ import type { MidpointPrice } from '$lib/queries/midpointPrices';
 import { createMidpointPricesQuery } from '$lib/queries/midpointPrices';
 import { createSftsQuery } from '$lib/queries/vaults';
 import type { CreateQueryResult } from '@tanstack/svelte-query';
-import { browser } from '$app/environment';
 
 type QueryResultStore<T> = CreateQueryResult<T, Error>;
 
@@ -48,47 +47,3 @@ export const midpointPrices = mapQueryData(
 	midpointPricesQuery,
 	{} as Record<string, MidpointPrice>
 );
-
-// Store for Rainlang confirmation modal
-export const rainlangConfirmationModal = writable<{
-	show: boolean;
-	rainlangCode: string;
-	onDeploy: (() => void | Promise<void>) | null;
-	onCancel: (() => void) | null;
-}>({
-	show: false,
-	rainlangCode: '',
-	onDeploy: null,
-	onCancel: null
-});
-
-// Store for review strategy source code preference (persisted to localStorage)
-const REVIEW_STRATEGY_KEY = 'st0x_review_strategy_on_deploy';
-
-function createReviewStrategyStore() {
-	// Initialize from localStorage if available, default to false
-	const initialValue = browser ? localStorage.getItem(REVIEW_STRATEGY_KEY) === 'true' : false;
-	const { subscribe, set } = writable<boolean>(initialValue);
-
-	return {
-		subscribe,
-		set: (value: boolean) => {
-			if (browser) {
-				localStorage.setItem(REVIEW_STRATEGY_KEY, String(value));
-			}
-			set(value);
-		},
-		toggle: () => {
-			const newValue = browser ? localStorage.getItem(REVIEW_STRATEGY_KEY) !== 'true' : false;
-			if (browser) {
-				localStorage.setItem(REVIEW_STRATEGY_KEY, String(newValue));
-			}
-			set(newValue);
-		}
-	};
-}
-
-export const reviewStrategyOnDeploy = createReviewStrategyStore();
-
-// Store for trade panel visibility (used to squish layout on large screens)
-export const tradePanelOpen = writable<boolean>(false);

@@ -6,7 +6,6 @@ import { scrubSentryEvent } from '$lib/observability/scrub';
 import { CSP_DIRECTIVES } from '$lib/server/csp';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
-import { injectTradeSeoHead } from '$lib/seo/trade';
 
 // =============================================================================
 // Sentry Server Init (OBS-01)
@@ -217,9 +216,6 @@ function isPublicPath(path: string): boolean {
 	if (path === '/api/auth/session' || path === '/api/auth/session/challenge') return true;
 	if (path === '/api/auth/logout') return true;
 
-	// TradingView endpoints (public data)
-	if (path.startsWith('/api/tradingview/')) return true;
-
 	// Nansen tiers (public)
 	if (path === '/api/nansen/tiers') return true;
 
@@ -322,13 +318,7 @@ const existingHandle: Handle = async ({ event, resolve }) => {
 	}
 
 	if (debug) console.log('[auth] allowing path', path);
-	// Trade pages intentionally remain client-rendered because the trading UI
-	// depends on browser-only wallet and chart libraries. Inject route-specific
-	// metadata into that HTML shell so link unfurlers and crawlers still receive
-	// a title, description, canonical URL, and social card without executing JS.
-	const response = await resolve(event, {
-		transformPageChunk: ({ html }) => injectTradeSeoHead(html, path)
-	});
+	const response = await resolve(event);
 	return addSecurityAndCorsHeaders(response, origin, path);
 };
 

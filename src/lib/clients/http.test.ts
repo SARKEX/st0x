@@ -65,7 +65,7 @@ describe('fetchJson structured errors', () => {
 			)
 		);
 
-		await expect(fetchJson('/api/st0x/v1/swap/quote', { fetchFn })).rejects.toMatchObject({
+		await expect(fetchJson('/api/st0x/v1/tokens', { fetchFn })).rejects.toMatchObject({
 			code: 'SWAP_UNSUPPORTED_TOKEN'
 		});
 		expect(fetchFn).toHaveBeenCalledTimes(1);

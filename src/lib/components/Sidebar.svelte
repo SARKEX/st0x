@@ -48,6 +48,10 @@
 		collapsed = !collapsed;
 		dispatch('toggleCollapse', { collapsed });
 	}
+
+	function marketHref(symbol: string): string {
+		return `/markets/${symbol.replace(/^w?t/i, '').toLowerCase()}`;
+	}
 </script>
 
 <!-- Pull-out tab (desktop) - always visible, positioned near top -->
@@ -119,12 +123,12 @@
 				{#each sortedAssets as asset}
 					{@const tokenInfo = findApiTokenByAnyAddress(apiTokens, asset.address)}
 					<a
-						href={`/trade/${tokenInfo?.address ?? asset.id}`}
+						href={marketHref(asset.symbol)}
 						on:click={() => {
 							if (!desktop) dispatch('close');
 						}}
 						class="block rounded-md px-2 py-2 transition-colors hover:bg-surface-2 {activePath ===
-						`/trade/${tokenInfo?.address ?? asset.id}`
+						marketHref(asset.symbol)
 							? 'border-l-2 border-accent bg-accent-soft'
 							: ''}"
 					>

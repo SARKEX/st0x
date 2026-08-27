@@ -1,20 +1,21 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { sfts } from '$lib/stores';
 	import { navCollapsed, anySheetOpen } from '$lib/stores/uiStore';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import type { IconName } from '$lib/components/ui/Icon.svelte';
 
 	$: activePath = $page.url.pathname;
-	$: firstTokenId = $sfts?.[0]?.id;
-	$: tradeHref = firstTokenId ? `/trade/${firstTokenId}` : '/';
 
-	type Tab = { href: string; label: string; icon: IconName; active: boolean; earn?: boolean };
+	type Tab = { href: string; label: string; icon: IconName; active: boolean };
 
 	$: tabs = [
 		{ href: '/', label: 'Home', icon: 'home', active: activePath === '/' },
-		{ href: tradeHref, label: 'Trade', icon: 'swap', active: activePath.startsWith('/trade') },
-		{ href: '/earn', label: 'Earn', icon: 'sprout', active: activePath === '/earn', earn: true },
+		{
+			href: '/markets',
+			label: 'Markets',
+			icon: 'blocks',
+			active: activePath.startsWith('/markets')
+		},
 		{ href: '/dashboard', label: 'Wallet', icon: 'wallet', active: activePath === '/dashboard' },
 		{
 			href: '/platform-metrics',
@@ -43,26 +44,14 @@
 				aria-label={tab.label}
 				aria-current={tab.active ? 'page' : undefined}
 				class="relative flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium transition-colors {tab.active
-					? tab.earn
-						? 'text-accent'
-						: 'text-text'
+					? 'text-text'
 					: 'text-text-3'}"
 			>
 				{#if tab.active}
-					<span
-						class="absolute top-0 h-0.5 w-7 rounded-full {tab.earn ? 'bg-accent' : 'bg-text/70'}"
-					></span>
+					<span class="bg-text/70 absolute top-0 h-0.5 w-7 rounded-full"></span>
 				{/if}
-				<span class="relative">
+				<span>
 					<Icon name={tab.icon} className="h-[22px] w-[22px]" stroke={tab.active ? 2 : 1.6} />
-					{#if tab.earn}
-						<span class="absolute -right-1.5 -top-1 flex h-1.5 w-1.5">
-							<span
-								class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70"
-							></span>
-							<span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent"></span>
-						</span>
-					{/if}
 				</span>
 				{tab.label}
 			</a>
