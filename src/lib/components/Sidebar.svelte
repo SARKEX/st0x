@@ -6,6 +6,7 @@
 	import { formatUnits } from 'viem';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import { getSeoAssets } from '$lib/seo/assets';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
@@ -15,6 +16,11 @@
 	const dispatch = createEventDispatcher();
 
 	$: activePath = $page.url.pathname;
+
+	function marketHrefForAsset(address: string): string {
+		const asset = getSeoAssets().find((a) => a.address.toLowerCase() === address.toLowerCase());
+		return asset ? `/markets/${asset.slug}` : '/markets';
+	}
 
 	type AssetWithMetrics = OffchainAssetReceiptVault & {
 		price: number;
@@ -118,13 +124,14 @@
 			<div class="space-y-0.5">
 				{#each sortedAssets as asset}
 					{@const tokenInfo = findApiTokenByAnyAddress(apiTokens, asset.address)}
+					{@const href = marketHrefForAsset(tokenInfo?.address ?? asset.address)}
 					<a
-						href={`/trade/${tokenInfo?.address ?? asset.id}`}
+						href={href}
 						on:click={() => {
 							if (!desktop) dispatch('close');
 						}}
 						class="block rounded-md px-2 py-2 transition-colors hover:bg-surface-2 {activePath ===
-						`/trade/${tokenInfo?.address ?? asset.id}`
+						href
 							? 'border-l-2 border-accent bg-accent-soft'
 							: ''}"
 					>

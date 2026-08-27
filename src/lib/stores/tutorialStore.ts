@@ -1,26 +1,9 @@
 import { writable, derived } from 'svelte/store';
 import { hideTutorial as persistHideTutorial } from '$lib/utils/tutorialStorage';
 
-export type TutorialStep =
-	| 'welcome'
-	| 'token-list'
-	| 'navigate-trade'
-	| 'buy-sell-panel'
-	| 'tradingview'
-	| 'dex-activity'
-	| 'fundamentals'
-	| 'complete';
+export type TutorialStep = 'welcome' | 'token-list' | 'complete';
 
-export const TUTORIAL_STEPS: TutorialStep[] = [
-	'welcome',
-	'token-list',
-	'navigate-trade',
-	'buy-sell-panel',
-	'tradingview',
-	'dex-activity',
-	'fundamentals',
-	'complete'
-];
+export const TUTORIAL_STEPS: TutorialStep[] = ['welcome', 'token-list', 'complete'];
 
 // Current tutorial step
 export const tutorialStep = writable<TutorialStep>('welcome');
@@ -28,7 +11,7 @@ export const tutorialStep = writable<TutorialStep>('welcome');
 // Whether tutorial is active (visible)
 export const tutorialActive = writable<boolean>(false);
 
-// Whether the trade panel should be open (for tutorial)
+// Whether the trade panel should be open (for tutorial) — unused after trading UI removal
 export const tutorialWantsTradePanel = writable<boolean>(false);
 
 // Advance to next step

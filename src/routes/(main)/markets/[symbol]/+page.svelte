@@ -4,7 +4,6 @@
 	export let data: PageData;
 
 	$: asset = data.asset;
-	$: tradeHref = `/trade/${asset.address}`;
 
 	// Breadcrumb structured data (Home › Markets › Ticker) — eligible for
 	// breadcrumb rich results. No price/offer claims, so nothing to keep in sync
@@ -48,7 +47,7 @@
 				{/if}
 				<div>
 					<h1 class="text-4xl font-bold tracking-tight text-white sm:text-5xl">
-						Trade tokenized {asset.companyName}
+						Tokenized {asset.companyName}
 					</h1>
 					<p class="mt-2 text-lg text-gray-400">
 						{asset.ticker} · {asset.tokenSymbol} on Base
@@ -57,12 +56,6 @@
 			</div>
 
 			<div class="mb-10 flex flex-wrap gap-3">
-				<a
-					href={tradeHref}
-					class="rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-gray-900 transition-colors hover:bg-yellow-400"
-				>
-					Trade {asset.ticker}
-				</a>
 				<a
 					href="/markets"
 					class="rounded-xl border border-white/10 px-6 py-3 font-semibold text-gray-200 transition-colors hover:bg-white/5"
@@ -80,30 +73,26 @@
 						Tokenized {asset.companyName} ({asset.ticker}) provides on-chain exposure to the
 						underlying listed {asset.instrumentLabel}. The issued asset token is a claim against S01
 						Issuer GmbH on the terms set out in its base prospectus; holders are unsecured
-						contractual creditors of the Issuer. On ST0x it trades as
+						contractual creditors of the Issuer. On ST0x it is represented as
 						<span class="font-mono text-gray-200">{asset.tokenSymbol}</span>, a vault wrapper on
 						Base whose exchange rate to the issued token can change over time.
 					</p>
 				</div>
 
 				<div>
-					<h2 class="mb-3 text-2xl font-semibold text-white">How trading works on ST0x</h2>
+					<h2 class="mb-3 text-2xl font-semibold text-white">About this token</h2>
 					<ul class="ml-6 list-disc space-y-2 leading-relaxed">
 						<li>
-							<span class="font-medium text-white">24/7 markets.</span> Trade whenever you want — not
-							just during traditional exchange hours.
+							<span class="font-medium text-white">On-chain representation.</span> Issued as a
+							tokenized security claim on Base.
 						</li>
 						<li>
-							<span class="font-medium text-white">Non-custodial.</span> Your assets stay in smart-contract
-							vaults you control; ST0x never takes custody.
+							<span class="font-medium text-white">Non-custodial wrappers.</span> Wrapped forms
+							settle in smart-contract vaults you control.
 						</li>
 						<li>
-							<span class="font-medium text-white">On-chain &amp; composable.</span> Settle on Base
-							and use your tokenized {asset.ticker} across DeFi.
-						</li>
-						<li>
-							<span class="font-medium text-white">Intent-based execution.</span> Orders are placed on-chain
-							and filled by solvers when matched with liquidity.
+							<span class="font-medium text-white">Composable.</span> Use tokenized {asset.ticker}
+							across DeFi where supported.
 						</li>
 					</ul>
 				</div>
@@ -116,24 +105,18 @@
 				{/if}
 
 				<div class="rounded-2xl border border-white/10 bg-gray-800/50 p-6 backdrop-blur-sm">
-					<h2 class="mb-2 text-xl font-semibold text-white">Ready to trade {asset.ticker}?</h2>
+					<h2 class="mb-2 text-xl font-semibold text-white">Learn more</h2>
 					<p class="mb-4 leading-relaxed text-gray-400">
-						Connect a wallet and start trading tokenized {asset.companyName} on ST0x. New to tokenized
-						assets? Read the <a href="/faqs" class="text-yellow-500 hover:underline">FAQs</a>.
+						New to tokenized assets? Read the
+						<a href="/faqs" class="text-yellow-500 hover:underline">FAQs</a>.
 					</p>
-					<a
-						href={tradeHref}
-						class="inline-block rounded-xl bg-yellow-500 px-6 py-3 font-semibold text-gray-900 transition-colors hover:bg-yellow-400"
-					>
-						Trade {asset.ticker} now
-					</a>
 				</div>
 
 				<p class="text-xs leading-relaxed text-gray-600">
-					Trading tokenized assets involves substantial risk. Past performance does not guarantee
-					future results. Access requirements and eligibility restrictions apply. See the Base
-					Prospectus and Final Terms for the jurisdictions and investor categories in which the
-					tokens may be offered.
+					Tokenized assets involve substantial risk. Past performance does not guarantee future
+					results. Access requirements and eligibility restrictions apply. See the Base Prospectus
+					and Final Terms for the jurisdictions and investor categories in which the tokens may be
+					offered.
 				</p>
 			</div>
 		</div>

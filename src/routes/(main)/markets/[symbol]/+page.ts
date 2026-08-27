@@ -13,8 +13,8 @@ export const load = ({ params }) => {
 		throw redirect(308, `/markets/${asset.slug}`);
 	}
 
-	const title = `Trade Tokenized ${asset.companyName} (${asset.ticker}) 24/7 | ST0x`;
-	const description = `Buy and sell tokenized ${asset.companyName} (${asset.ticker}) on ST0x with 24/7 on-chain execution and non-custodial settlement on Base.`;
+	const title = `Tokenized ${asset.companyName} (${asset.ticker}) | ST0x`;
+	const description = `Learn about tokenized ${asset.companyName} (${asset.ticker}) on ST0x — on-chain exposure to the underlying ${asset.instrumentLabel} on Base.`;
 
 	return { asset, title, description };
 };

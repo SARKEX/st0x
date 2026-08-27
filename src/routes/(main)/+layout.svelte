@@ -16,7 +16,6 @@
 		typeof import('$lib/components/RainlangConfirmationModal.svelte').default;
 	type WalletConnectionModalComponent =
 		typeof import('$lib/components/WalletConnectionModal.svelte').default;
-	type SaveEarnModalComponent = typeof import('$lib/components/earn/SaveEarnModal.svelte').default;
 	type TutorialComponent = typeof import('$lib/components/Tutorial.svelte').default;
 	type LowFundsBannerComponent = typeof import('$lib/components/LowFundsBanner.svelte').default;
 	type OldTokensBannerComponent = typeof import('$lib/components/OldTokensBanner.svelte').default;
@@ -24,7 +23,6 @@
 	let TransactionModal: TransactionModalComponent | null = null;
 	let RainlangConfirmationModal: RainlangConfirmationModalComponent | null = null;
 	let WalletConnectionModal: WalletConnectionModalComponent | null = null;
-	let SaveEarnModal: SaveEarnModalComponent | null = null;
 	let Tutorial: TutorialComponent | null = null;
 	let LowFundsBanner: LowFundsBannerComponent | null = null;
 	let OldTokensBanner: OldTokensBannerComponent | null = null;
@@ -36,16 +34,14 @@
 			walletConnectionModal,
 			tutorial,
 			lowFundsBanner,
-			oldTokensBanner,
-			saveEarnModal
+			oldTokensBanner
 		] = await Promise.all([
 			import('$lib/components/TransactionModal.svelte'),
 			import('$lib/components/RainlangConfirmationModal.svelte'),
 			import('$lib/components/WalletConnectionModal.svelte'),
 			import('$lib/components/Tutorial.svelte'),
 			import('$lib/components/LowFundsBanner.svelte'),
-			import('$lib/components/OldTokensBanner.svelte'),
-			import('$lib/components/earn/SaveEarnModal.svelte')
+			import('$lib/components/OldTokensBanner.svelte')
 		]);
 
 		TransactionModal = transactionModal.default;
@@ -54,7 +50,6 @@
 		Tutorial = tutorial.default;
 		LowFundsBanner = lowFundsBanner.default;
 		OldTokensBanner = oldTokensBanner.default;
-		SaveEarnModal = saveEarnModal.default;
 	}
 
 	onMount(() => {
@@ -186,11 +181,6 @@
 	<!-- Connection Modal -->
 	{#if WalletConnectionModal}
 		<svelte:component this={WalletConnectionModal} />
-	{/if}
-
-	<!-- Save & Earn (SGOV) deposit/withdraw modal -->
-	{#if SaveEarnModal}
-		<svelte:component this={SaveEarnModal} />
 	{/if}
 
 	<!-- Tutorial Overlay -->

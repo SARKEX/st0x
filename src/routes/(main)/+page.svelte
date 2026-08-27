@@ -9,20 +9,19 @@
 	import { formatUnits } from 'viem';
 	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
-	import QuickTrade from '$lib/components/QuickTrade.svelte';
-	import SaveEarnCard from '$lib/components/earn/SaveEarnCard.svelte';
 	import ApyChip from '$lib/components/earn/ApyChip.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isSgov } from '$lib/config/earn';
-	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
+	import { getSeoAssets } from '$lib/seo/assets';
 	import Footer from '$lib/components/Footer.svelte';
 	import { track, trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	import { toBigInt } from '$lib/utils/tokenMath';
 
-	function startTour() {
-		tutorialActive.set(true);
-		tutorialStep.set('welcome');
+	function marketHrefForToken(address: string): string {
+		if (isSgov(address)) return '/earn';
+		const asset = getSeoAssets().find((a) => a.address.toLowerCase() === address.toLowerCase());
+		return asset ? `/markets/${asset.slug}` : '/markets';
 	}
 
 	// Typewriter animation for hero text
@@ -199,23 +198,13 @@
 
 			<!-- Rewards APY Banner - temporarily hidden -->
 
-			<!-- Product pair: QuickTrade + Save & Earn, stacked as equal-width peers -->
-			<div
-				class="mx-auto flex w-full max-w-md flex-col items-stretch gap-5 px-2 text-left sm:px-0 md:max-w-none"
-			>
-				<QuickTrade />
-				<!-- Save & Earn (SGOV) — peer product below the swap card -->
-				<SaveEarnCard />
-			</div>
-
 			<div class="mt-4 flex justify-center">
-				<button
-					type="button"
-					class="hidden text-sm text-text-3 underline decoration-text-muted underline-offset-4 transition hover:text-accent hover:decoration-accent sm:inline-block"
-					on:click={startTour}
+				<a
+					href="/markets"
+					class="rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-bg transition hover:brightness-110"
 				>
-					New? Take the tour 👉
-				</button>
+					View markets
+				</a>
 			</div>
 
 			<!-- Why st0x — trust pillars -->
@@ -364,7 +353,7 @@
 												token_id: token.id,
 												source: 'landing_page_table'
 											});
-											goto(isSgov(token.address) ? '/earn' : `/trade/${token.id}`);
+											goto(marketHrefForToken(token.address));
 										}}
 									>
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">

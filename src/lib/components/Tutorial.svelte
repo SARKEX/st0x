@@ -40,47 +40,15 @@
 	> = {
 		welcome: {
 			title: 'Welcome to ST0x',
-			description:
-				'U.S. equities on-chain. Fully decentralised. Fully backed by real equities. 24/7 trading.',
+			description: 'U.S. equities on-chain. Fully decentralised. Fully backed by real equities.',
 			buttonText: 'Next',
 			isModal: true
 		},
 		'token-list': {
-			title: 'Tradeable Equities',
-			description: 'Currently tradeable equities. More coming soon.',
+			title: 'Tokenized assets',
+			description: 'Browse listed tokenized equities and related assets. More coming soon.',
 			targetSelector: '[data-tutorial="token-list"]',
-			buttonText: 'Next'
-		},
-		'navigate-trade': {
-			title: 'Ready to Trade',
-			description: "Let's explore the trading interface.",
-			buttonText: 'Go to Trade',
-			isModal: true
-		},
-		'buy-sell-panel': {
-			title: 'Place Orders',
-			description:
-				'Click Buy or Sell to open the order panel. Choose between market orders, limit orders, and DCAs. All orders are against USDC on Base.',
-			targetSelector: ['[data-tutorial="buy-sell-buttons"]', '[data-tutorial="trade-panel"]'],
-			buttonText: 'Next'
-		},
-		tradingview: {
-			title: 'Live Market Data',
-			description: 'Live US exchange data on the underlying equity.',
-			targetSelector: ['[data-tutorial="symbol-overview"]', '[data-tutorial="tradingview"]'],
-			buttonText: 'Next'
-		},
-		'dex-activity': {
-			title: 'On-chain Market',
-			description: 'On-chain orderbook and transaction data, including your orders and holdings.',
-			targetSelector: '[data-tutorial="dex-activity"]',
-			buttonText: 'Next'
-		},
-		fundamentals: {
-			title: 'Learn More',
-			description: 'Explore the underlying equity details or token fundamentals.',
-			targetSelector: '[data-tutorial="fundamentals"]',
-			buttonText: 'Finish'
+			buttonText: 'Done'
 		},
 		complete: {
 			title: '',
