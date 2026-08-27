@@ -28,53 +28,6 @@ export interface ApiToken extends ApiTokenRef {
 }
 
 // ============================================================================
-// Order Types
-// ============================================================================
-
-export interface ApiOrderSummary {
-	orderHash: string;
-	owner: string;
-	chainId: number;
-	orderBytes: string;
-	inputToken: ApiTokenRef;
-	outputToken: ApiTokenRef;
-	outputVaultBalance: string;
-	maxOutput?: string | null;
-	ioRatio: string;
-	orderType: 'limit' | 'dca' | 'dynamic-spread' | 'custom';
-	active: boolean;
-	removedAt?: number | null;
-	createdAt: number;
-	orderbookId: string;
-}
-
-export interface ApiOrdersPagination {
-	page: number;
-	pageSize: number;
-	totalOrders: number;
-	totalPages: number;
-	hasMore: boolean;
-}
-
-export interface ApiOrdersListResponse {
-	orders: ApiOrderSummary[];
-	pagination: ApiOrdersPagination;
-}
-
-export interface ApiOrdersQueryRequest {
-	chainId: number;
-	tokenAddresses: string[];
-	ownerAddresses?: string[];
-	raindexAddresses?: string[];
-	orderHash?: string;
-	state?: 'active' | 'inactive' | 'all';
-	side?: 'input' | 'output';
-	page?: number;
-	pageSize?: number;
-	denomination?: 'wrapped' | 'unwrapped';
-}
-
-// ============================================================================
 // Trade Types
 // ============================================================================
 
@@ -102,33 +55,7 @@ export interface ApiTradesByAddressResponse {
 	pagination: ApiTradesPagination;
 }
 
-// ============================================================================
-// Batch Trade Types
-// ============================================================================
-
-export interface ApiTradesBatchEntry {
-	orderHash: string;
-	trades: ApiTradeByAddress[];
-}
-
-export interface ApiTradesBatchResponse {
-	tradesByOrderHash: ApiTradesBatchEntry[];
-	totalCount: number;
-}
-
-export interface ApiTradesOrderHashesQueryRequest {
-	orderHashes: string[];
-	tokenAddresses?: string[];
-	chainId?: number;
-	startTime?: number;
-	endTime?: number;
-	denomination?: 'wrapped' | 'unwrapped';
-	page?: never;
-	pageSize?: never;
-}
-
 export interface ApiTradesTokensQueryRequest {
-	orderHashes?: never;
 	tokenAddresses: string[];
 	chainId: number;
 	startTime: number;
@@ -137,10 +64,6 @@ export interface ApiTradesTokensQueryRequest {
 	pageSize?: number;
 	denomination?: 'wrapped' | 'unwrapped';
 }
-
-export type ApiTradesQueryRequest = ApiTradesOrderHashesQueryRequest | ApiTradesTokensQueryRequest;
-
-export type ApiTradesQueryResponse = ApiTradesBatchResponse | ApiTradesByAddressResponse;
 
 // ============================================================================
 // Token Proof Types
@@ -330,44 +253,6 @@ function apiUrl(path: string, params?: Record<string, string | number | undefine
 }
 
 /**
- * Fetch orders by token address from the REST API
- */
-export async function apiGetOrdersByToken(
-	tokenAddress: string,
-	options?: {
-		page?: number;
-		pageSize?: number;
-		side?: 'input' | 'output';
-		state?: 'active' | 'inactive' | 'all';
-	}
-): Promise<ApiOrdersListResponse> {
-	assertBrowser('apiGetOrdersByToken');
-	const url = apiUrl(`/v1/orders/token/${tokenAddress}`, {
-		page: options?.page,
-		pageSize: options?.pageSize,
-		side: options?.side,
-		state: options?.state
-	});
-	return fetchJson<ApiOrdersListResponse>(url);
-}
-
-/**
- * Fetch a bounded page of orders matching a token set.
- */
-export async function apiQueryOrders(
-	request: ApiOrdersQueryRequest,
-	signal?: AbortSignal
-): Promise<ApiOrdersListResponse> {
-	assertBrowser('apiQueryOrders');
-	return fetchJson<ApiOrdersListResponse>(apiUrl('/v1/orders/query'), {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(request),
-		signal
-	});
-}
-
-/**
  * Fetch the canonical supported token list from the REST API.
  */
 export async function apiGetTokens(): Promise<ApiToken[]> {
@@ -435,112 +320,5 @@ export async function apiGetWrapRatioHistory(
 			page: options?.page,
 			pageSize: options?.pageSize
 		})
-	);
-}
-
-/**
- * Fetch trades by owner address from the REST API
- */
-export async function apiGetTradesByAddress(
-	address: string,
-	options?: { page?: number; pageSize?: number; startTime?: number; endTime?: number }
-): Promise<ApiTradesByAddressResponse> {
-	assertBrowser('apiGetTradesByAddress');
-	const url = apiUrl(`/v1/trades/${address}`, {
-		page: options?.page,
-		pageSize: options?.pageSize,
-		startTime: options?.startTime,
-		endTime: options?.endTime
-	});
-	return fetchJson<ApiTradesByAddressResponse>(url);
-}
-
-/**
- * Fetch trades where the user was the taker.
- */
-export async function apiGetTakerTrades(
-	address: string,
-	options?: { page?: number; pageSize?: number }
-): Promise<ApiTradesByAddressResponse> {
-	assertBrowser('apiGetTakerTrades');
-	const url = apiUrl(`/v1/trades/taker/${address}`, {
-		page: options?.page,
-		pageSize: options?.pageSize
-	});
-	return fetchJson<ApiTradesByAddressResponse>(url);
-}
-
-/**
- * Fetch orders by owner address from the REST API
- */
-export async function apiGetOrdersByOwner(
-	ownerAddress: string,
-	options?: { page?: number; pageSize?: number; state?: 'active' | 'inactive' | 'all' }
-): Promise<ApiOrdersListResponse> {
-	assertBrowser('apiGetOrdersByOwner');
-	const url = apiUrl(`/v1/orders/owner/${ownerAddress}`, {
-		page: options?.page,
-		pageSize: options?.pageSize,
-		state: options?.state
-	});
-	return fetchJson<ApiOrdersListResponse>(url);
-}
-
-/**
- * Fetch trades through the REST batch query. The overloads preserve the legacy
- * grouped order-hash response while exposing the paginated token-set mode.
- */
-export function apiQueryTrades(
-	request: ApiTradesOrderHashesQueryRequest,
-	signal?: AbortSignal
-): Promise<ApiTradesBatchResponse>;
-export function apiQueryTrades(
-	request: ApiTradesTokensQueryRequest,
-	signal?: AbortSignal
-): Promise<ApiTradesByAddressResponse>;
-export function apiQueryTrades(
-	request: ApiTradesQueryRequest,
-	signal?: AbortSignal
-): Promise<ApiTradesQueryResponse>;
-export async function apiQueryTrades(
-	request: ApiTradesQueryRequest,
-	signal?: AbortSignal
-): Promise<ApiTradesQueryResponse> {
-	assertBrowser('apiQueryTrades');
-	return fetchJson<ApiTradesQueryResponse>(apiUrl('/v1/trades/query'), {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(request),
-		signal
-	});
-}
-
-/**
- * Fetch trades for multiple orders in a single query request.
- * Used to compute filled amounts for a user's deployed orders.
- */
-export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTradesBatchResponse> {
-	return apiQueryTrades({ orderHashes });
-}
-
-/**
- * Fetch trades by token address from the REST API
- */
-export async function apiGetTradesByToken(
-	tokenAddress: string,
-	page: number = 1,
-	pageSize: number = 200,
-	startTime?: number,
-	endTime?: number
-): Promise<ApiTradesByAddressResponse> {
-	assertBrowser('apiGetTradesByToken');
-	const params = new URLSearchParams({
-		page: String(page),
-		pageSize: String(pageSize)
-	});
-	if (startTime !== undefined) params.set('startTime', String(startTime));
-	if (endTime !== undefined) params.set('endTime', String(endTime));
-	return fetchJson<ApiTradesByAddressResponse>(
-		`/api/st0x/v1/trades/token/${tokenAddress}?${params}`
 	);
 }

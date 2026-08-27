@@ -32,11 +32,40 @@ test('public pages expose information without trading actions', async ({ page })
 	expect(swapRequests).toEqual([]);
 });
 
-test('retired routes fail closed to informational markets', async ({ page }) => {
-	for (const path of ['/trade/0x1234', '/strategies', '/earn', '/api-docs']) {
-		await page.goto(path);
-		await expect(page).toHaveURL(/\/markets$/);
-		await expect(page.getByRole('heading', { name: 'Tokenized markets' })).toBeVisible();
+test('retired routes return hard 404 responses', async ({ page }) => {
+	for (const path of [
+		'/trade/0x1234',
+		'/trade/0x1234/proofs',
+		'/strategies',
+		'/earn',
+		'/api-docs'
+	]) {
+		const response = await page.goto(path);
+		expect(response?.status()).toBe(404);
+		await expect(page).toHaveURL(path);
+	}
+});
+
+test('website proxy rejects order, trade and swap endpoints', async ({ request }) => {
+	for (const path of [
+		'/api/st0x/v1/orders/token/0xToken',
+		'/api/st0x/v1/orders/owner/0xOwner',
+		'/api/st0x/v1/trades/token/0xToken',
+		'/api/st0x/v1/trades/tx/0xHash',
+		'/api/st0x/v1/trades/taker/0xTaker'
+	]) {
+		expect((await request.get(path)).status()).toBe(404);
+	}
+
+	for (const path of [
+		'/api/st0x/v1/orders/query',
+		'/api/st0x/v1/trades/query',
+		'/api/st0x/v1/swap/quote',
+		'/api/st0x/v1/swap/calldata',
+		'/api/st0x/v2/swap/quote',
+		'/api/st0x/v2/swap/calldata'
+	]) {
+		expect((await request.post(path, { data: {} })).status()).toBe(404);
 	}
 });
 

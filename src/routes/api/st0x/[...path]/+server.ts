@@ -85,29 +85,8 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 		method: 'GET',
 		pattern: /^v1\/tokens\/[^/]+\/proofs$/,
 		cache: 'public, s-maxage=60, stale-while-revalidate=300'
-	},
-	// Shared endpoints — same response for all users, cache at Vercel edge
-	{
-		method: 'GET',
-		pattern: /^v1\/orders\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=120'
-	},
-	{ method: 'POST', pattern: /^v1\/orders\/query$/ },
-	{
-		method: 'GET',
-		pattern: /^v1\/trades\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=120'
-	},
-	// Per-user endpoints — no shared caching
-	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/tx\/[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/(?!taker\/|query$)[^/]+$/ },
-	{ method: 'GET', pattern: /^v1\/trades\/taker\/[^/]+$/ },
-	{ method: 'POST', pattern: /^v1\/trades\/query$/ },
-	{ method: 'POST', pattern: /^v1\/swap\/quote$/ },
-	{ method: 'POST', pattern: /^v1\/swap\/calldata$/ },
-	{ method: 'POST', pattern: /^v2\/swap\/quote$/ },
-	{ method: 'POST', pattern: /^v2\/swap\/calldata$/ }
+	}
+	// Trading, order and trade routes are intentionally not proxied by the issuer website.
 ];
 
 function matchProxyRoute(method: string, pathSuffix: string): { cache?: string } | null {
@@ -155,6 +134,12 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	const requestId = requestIdOrUuid(
 		getRequestContext()?.request_id ?? request.headers.get('x-request-id')
 	);
+	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
+	const matched = matchProxyRoute(request.method, pathSuffix);
+	if (!matched) {
+		return errorResponse(requestId, 404, 'NOT_FOUND', 'Proxy route not found');
+	}
+
 	let apiBase: string;
 	let authHeader: string;
 	try {
@@ -163,14 +148,9 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Proxy configuration error';
 		getLogger().error({ error: { message: msg } }, 'st0x proxy configuration error');
-		return errorResponse(requestId, 503, 'UPSTREAM_UNAVAILABLE', 'The trading API is unavailable');
+		return errorResponse(requestId, 503, 'UPSTREAM_UNAVAILABLE', 'The ST0x API is unavailable');
 	}
 
-	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
-	const matched = matchProxyRoute(request.method, pathSuffix);
-	if (!matched) {
-		return errorResponse(requestId, 404, 'NOT_FOUND', 'Proxy route not found');
-	}
 	const targetUrl = `${apiBase}/${pathSuffix}${url.search}`;
 
 	const headers = new Headers();
@@ -200,7 +180,7 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 			{ error: { message: msg }, upstream_path: pathSuffix },
 			'st0x upstream request failed'
 		);
-		return errorResponse(requestId, 503, 'UPSTREAM_UNAVAILABLE', 'The trading API is unavailable');
+		return errorResponse(requestId, 503, 'UPSTREAM_UNAVAILABLE', 'The ST0x API is unavailable');
 	}
 
 	const responseHeaders = new Headers();

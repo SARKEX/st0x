@@ -1,5 +1,5 @@
-import { redirect } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 
 export const load = () => {
-	throw redirect(308, '/markets');
+	throw error(404, 'Not Found');
 };
