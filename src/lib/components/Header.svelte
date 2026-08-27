@@ -6,7 +6,7 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { wrongNetwork, sfts, tradePanelOpen } from '$lib/stores';
+	import { wrongNetwork, tradePanelOpen } from '$lib/stores';
 	// Unified auth
 	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
 	import { openAuthModal, logoutDynamic, dynamicSession } from '$lib/stores/dynamicStore';
@@ -36,12 +36,15 @@
 	}
 
 	$: activePath = $page.url.pathname;
-	$: firstTokenId = $sfts?.[0]?.id;
-	$: tradeHref = firstTokenId ? `/trade/${firstTokenId}` : '/';
-	$: isOnTradePage = activePath.startsWith('/trade/');
 
 	$: NAV_ITEMS = [
-		{ name: 'Trade', href: tradeHref, isActive: isOnTradePage, showAlpha: false, isEarn: false },
+		{
+			name: 'Markets',
+			href: '/markets',
+			isActive: activePath.startsWith('/markets'),
+			showAlpha: false,
+			isEarn: false
+		},
 		{
 			name: 'Earn',
 			href: '/earn',
@@ -49,11 +52,10 @@
 			showAlpha: false,
 			isEarn: true
 		},
-		{ name: 'Strategies', href: '/strategies', isActive: false, showAlpha: true, isEarn: false },
 		{
 			name: 'Platform Metrics',
 			href: '/platform-metrics',
-			isActive: false,
+			isActive: activePath === '/platform-metrics',
 			showAlpha: false,
 			isEarn: false
 		}

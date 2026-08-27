@@ -22,9 +22,6 @@ import { resolve } from 'node:path';
 const orderDeploymentPath = resolve(process.cwd(), 'src/lib/services/orderDeployment.ts');
 const orderDeploymentSource = readFileSync(orderDeploymentPath, 'utf-8');
 
-const tradePagePath = resolve(process.cwd(), 'src/routes/(main)/trade/[id]/+page.svelte');
-const tradePageSource = readFileSync(tradePagePath, 'utf-8');
-
 const deployStorePath = resolve(process.cwd(), 'src/lib/stores/deployTransactionStore.ts');
 const deployStoreSource = readFileSync(deployStorePath, 'utf-8');
 
@@ -79,21 +76,6 @@ describe('orderDeployment.ts mandatory eventContext (Plan 02-03 Task 2c)', () =>
 			expect(call).not.toMatch(/order_type:\s*['"]limit['"]/);
 			expect(call).not.toMatch(/order_type:\s*['"]dca['"]/);
 		}
-	});
-});
-
-describe('+page.svelte page_viewed (Plan 02-03 Task 2c)', () => {
-	it("Test P1: route emits trackPageView('trade', ...) — page === 'trade' for OBS-08 filter (checker fix #7)", () => {
-		// Per checker fix #7: page name MUST be 'trade' (not 'trade_page') so
-		// OBS-08 funnel can filter `page === 'trade'`. The previous call site
-		// used 'trade_page' — this test asserts the rename landed.
-		expect(tradePageSource).toMatch(/trackPageView\(\s*['"]trade['"]/);
-		// And NOT the old 'trade_page' name (regression guard for the rename).
-		expect(tradePageSource).not.toMatch(/trackPageView\(\s*['"]trade_page['"]/);
-	});
-
-	it('Test P2: trackPageView call passes token_id from $page.params.id', () => {
-		expect(tradePageSource).toMatch(/trackPageView\(\s*['"]trade['"][\s\S]*?token_id:/);
 	});
 });
 

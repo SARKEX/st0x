@@ -3,9 +3,7 @@
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/clients/queryClient';
 	import { page } from '$app/stores';
-	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
-	import { removeInjectedTradeSeoHead, syncTradeRobotsMeta } from '$lib/seo/trade';
 
 	// Site-wide SEO defaults. Pages override the title via their own <svelte:head>
 	// (Svelte keeps the last <title>), or by returning `title`/`description` from a
@@ -20,7 +18,6 @@
 	$: metaTitle = ($page.data?.title as string | undefined) ?? DEFAULT_TITLE;
 	$: metaDescription = ($page.data?.description as string | undefined) ?? DEFAULT_DESCRIPTION;
 	$: canonicalUrl = `${SITE_URL}${$page.url.pathname}`;
-	$: if (browser) syncTradeRobotsMeta(document, $page.url.pathname);
 
 	// Site-wide structured data: Organization (brand/logo/social knowledge-panel
 	// signals) + WebSite (enables the sitelinks search box). Emitted once from the
@@ -195,9 +192,6 @@
 	}
 
 	onMount(() => {
-		// Client-only trade routes receive server-injected social tags for crawlers.
-		// Once Svelte owns the document head, remove those temporary duplicates.
-		removeInjectedTradeSeoHead(document);
 		document.title = metaTitle;
 
 		let unsubscribe: (() => void) | undefined;

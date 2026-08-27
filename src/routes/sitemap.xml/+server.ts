@@ -14,8 +14,8 @@ const SITE = 'https://www.st0x.io';
 // per-URL git timestamps to avoid pulling git state into the request path.)
 const LASTMOD = '2026-07-15';
 
-// Public, indexable routes. App/auth-gated routes (/dashboard, /trade,
-// /strategies, /platform-metrics) are intentionally excluded. Per-asset
+// Public, indexable routes. App/auth-gated routes (/dashboard,
+// /platform-metrics) are intentionally excluded. Per-asset
 // landing pages are enumerated from the token registry so new listings appear
 // automatically. Product docs (/docs) are temporarily offline.
 const staticRoutes = ['/', '/faqs', '/terms', '/privacy-policy', '/markets'];

@@ -3,12 +3,11 @@
 	import { onMount } from 'svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import TickerTape from '$lib/components/TickerTape.svelte';
 	import AmbientBackground from '$lib/components/AmbientBackground.svelte';
 	import MobileTabBar from '$lib/components/MobileTabBar.svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
-	import { rainlangConfirmationModal, tradePanelOpen } from '$lib/stores';
+	import { rainlangConfirmationModal } from '$lib/stores';
 	import { navCollapsed } from '$lib/stores/uiStore';
 
 	type TransactionModalComponent = typeof import('$lib/components/TransactionModal.svelte').default;
@@ -67,7 +66,6 @@
 
 	// Landing page uses the clean/floating layout (no sidebar, transparent header)
 	$: isLandingPage = $page.url.pathname === '/';
-	$: isTradePage = $page.url.pathname.startsWith('/trade/');
 	$: useCleanLayout = isLandingPage;
 
 	// Prevent background scroll when mobile sidebar is open
@@ -87,13 +85,9 @@
 	$: pageTitle = getPageTitle($page.url.pathname);
 
 	function getPageTitle(pathname: string): string {
-		if (pathname.startsWith('/trade/')) return '';
-
 		switch (pathname) {
 			case '/':
 				return '';
-			case '/strategies':
-				return 'Strategies';
 			case '/dashboard':
 				return '';
 			case '/portfolio':
@@ -142,7 +136,6 @@
 		class="relative z-10 transition-all duration-300"
 		class:lg:ml-64={!useCleanLayout && !sidebarCollapsed}
 		class:lg:ml-0={useCleanLayout || sidebarCollapsed}
-		class:lg:mr-[22rem]={isTradePage && $tradePanelOpen}
 		style:--desktop-sidebar-offset={!useCleanLayout && !sidebarCollapsed ? '16rem' : '0rem'}
 		style:padding-bottom={$navCollapsed ? 'calc(60px + env(safe-area-inset-bottom))' : undefined}
 	>
@@ -161,11 +154,6 @@
 		<!-- Old tokens banner (shown when user has legacy tokens that need to be swapped) -->
 		{#if OldTokensBanner}
 			<svelte:component this={OldTokensBanner} />
-		{/if}
-
-		<!-- Ticker tape underneath header (trade pages only) -->
-		{#if isTradePage}
-			<div class="hidden sm:block"><TickerTape /></div>
 		{/if}
 
 		<slot {sidebarExpanded} />

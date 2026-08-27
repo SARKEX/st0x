@@ -1,19 +1,21 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { sfts } from '$lib/stores';
 	import { navCollapsed, anySheetOpen } from '$lib/stores/uiStore';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import type { IconName } from '$lib/components/ui/Icon.svelte';
 
 	$: activePath = $page.url.pathname;
-	$: firstTokenId = $sfts?.[0]?.id;
-	$: tradeHref = firstTokenId ? `/trade/${firstTokenId}` : '/';
 
 	type Tab = { href: string; label: string; icon: IconName; active: boolean; earn?: boolean };
 
 	$: tabs = [
 		{ href: '/', label: 'Home', icon: 'home', active: activePath === '/' },
-		{ href: tradeHref, label: 'Trade', icon: 'swap', active: activePath.startsWith('/trade') },
+		{
+			href: '/markets',
+			label: 'Markets',
+			icon: 'chart',
+			active: activePath.startsWith('/markets')
+		},
 		{ href: '/earn', label: 'Earn', icon: 'sprout', active: activePath === '/earn', earn: true },
 		{ href: '/dashboard', label: 'Wallet', icon: 'wallet', active: activePath === '/dashboard' },
 		{
