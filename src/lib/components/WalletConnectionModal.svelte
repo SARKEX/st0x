@@ -40,7 +40,7 @@
 
 			<div class="text-center">
 				<p class="text-text-2">
-					Connect your wallet to place orders and access all platform features.
+					Connect your wallet to view balances and manage token wrapping or unwrapping.
 				</p>
 			</div>
 		</div>

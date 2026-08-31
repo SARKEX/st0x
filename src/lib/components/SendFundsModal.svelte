@@ -283,7 +283,7 @@
 								<button
 									type="button"
 									on:click={handleMax}
-									class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-surface-3 px-2 py-0.5 text-xs font-medium text-accent hover:bg-gray-600"
+									class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-surface-3 px-2 py-0.5 text-xs font-medium text-accent hover:bg-overlay-hover"
 								>
 									MAX
 								</button>

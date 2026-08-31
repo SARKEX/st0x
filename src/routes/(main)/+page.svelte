@@ -7,23 +7,12 @@
 	import { createApiTokensQuery, findApiTokenByAnyAddress } from '$lib/queries/tokens';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { formatUnits } from 'viem';
-	import { goto } from '$app/navigation';
 	import Table from '$lib/components/ui/table/Table.svelte';
-	import QuickTrade from '$lib/components/QuickTrade.svelte';
-	import SaveEarnCard from '$lib/components/earn/SaveEarnCard.svelte';
-	import ApyChip from '$lib/components/earn/ApyChip.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
-	import { isSgov } from '$lib/config/earn';
-	import { tutorialActive, tutorialStep } from '$lib/stores/tutorialStore';
 	import Footer from '$lib/components/Footer.svelte';
-	import { track, trackPageView } from '$lib/services/analytics';
+	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
 	import { toBigInt } from '$lib/utils/tokenMath';
-
-	function startTour() {
-		tutorialActive.set(true);
-		tutorialStep.set('welcome');
-	}
 
 	// Typewriter animation for hero text
 	const typewriterWords = ['Global', 'DeFi-Ready', 'Transferable', 'Right of Exchange'];
@@ -160,8 +149,6 @@
 					isSft: true
 				});
 			}
-			// Pin SGOV (the Save & Earn product) to the top of the asset list.
-			rows.sort((a, b) => (isSgov(b.address) ? 1 : 0) - (isSgov(a.address) ? 1 : 0));
 			processedTokens = rows;
 		} else {
 			processedTokens = [];
@@ -197,32 +184,11 @@
 				>
 			</h1>
 
-			<!-- Rewards APY Banner - temporarily hidden -->
-
-			<!-- Product pair: QuickTrade + Save & Earn, stacked as equal-width peers -->
-			<div
-				class="mx-auto flex w-full max-w-md flex-col items-stretch gap-5 px-2 text-left sm:px-0 md:max-w-none"
-			>
-				<QuickTrade />
-				<!-- Save & Earn (SGOV) — peer product below the swap card -->
-				<SaveEarnCard />
-			</div>
-
-			<div class="mt-4 flex justify-center">
-				<button
-					type="button"
-					class="hidden text-sm text-text-3 underline decoration-text-muted underline-offset-4 transition hover:text-accent hover:decoration-accent sm:inline-block"
-					on:click={startTour}
-				>
-					New? Take the tour 👉
-				</button>
-			</div>
-
 			<!-- Why st0x — trust pillars -->
 			<div class="mt-16 sm:mt-24 lg:mt-28">
 				<p class="text-accent/70 text-xs font-semibold uppercase tracking-[0.2em]">Why st0x</p>
 				<h2 class="mt-3 text-2xl font-bold tracking-tight text-text sm:text-[32px]">
-					Tokenised equities &amp; yield, done properly.
+					Tokenised equities, issued for on-chain use.
 				</h2>
 				<div class="mt-10 grid gap-8 sm:grid-cols-3">
 					<!-- Decentralised -->
@@ -240,18 +206,18 @@
 						</p>
 					</div>
 
-					<!-- Liquid -->
+					<!-- Transparent -->
 					<div class="icon-trigger flex flex-col items-center text-center">
 						<div class="pillar-float" style="animation-delay: -2.3s">
 							<div
 								class="pillar-tile flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/[0.08] text-accent"
 							>
-								<Icon name="swap" className="h-7 w-7" />
+								<Icon name="chart" className="h-7 w-7" />
 							</div>
 						</div>
-						<h3 class="mt-4 text-base font-semibold text-text">Liquid</h3>
+						<h3 class="mt-4 text-base font-semibold text-text">Transparent</h3>
 						<p class="mt-2 max-w-[17rem] text-[13.5px] leading-relaxed text-text-2">
-							Supply bridged real-time from stock markets. 24/7 trading.
+							Token supply and activity metrics are available directly on-chain.
 						</p>
 					</div>
 
@@ -332,14 +298,13 @@
 										>Holders</th
 									>
 								{/if}
-								<th class="w-10"></th>
 							</tr>
 						</thead>
 						<tbody>
 							{#if !processedTokens.length}
 								<tr>
 									<td
-										colspan={showHolders ? 6 : 5}
+										colspan={showHolders ? 5 : 4}
 										class="px-5 py-8 text-center text-sm text-text-3"
 									>
 										No assets available.
@@ -354,19 +319,7 @@
 										displayPrice != null && Number.isFinite(displayPrice)
 											? bridgedSupply * displayPrice
 											: null}
-									<tr
-										class="icon-trigger cursor-pointer transition-all {isSgov(token.address)
-											? 'bg-emerald-400/[0.04] hover:bg-emerald-400/[0.08]'
-											: 'hover:bg-surface-2'}"
-										on:click={() => {
-											track('token_clicked', {
-												token_symbol: token.symbol,
-												token_id: token.id,
-												source: 'landing_page_table'
-											});
-											goto(isSgov(token.address) ? '/earn' : `/trade/${token.id}`);
-										}}
-									>
+									<tr class="transition-colors hover:bg-surface-2">
 										<td class="sticky left-0 z-10 px-3 py-3 sm:px-5 sm:py-4">
 											<div class="flex items-center gap-2">
 												<TokenDisplay
@@ -374,7 +327,6 @@
 													symbol={token.symbol}
 													showName={false}
 												/>
-												{#if isSgov(token.address)}<ApyChip />{/if}
 											</div>
 										</td>
 										<td class="px-3 py-3 sm:px-5 sm:py-4">
@@ -415,18 +367,6 @@
 												<div class="font-mono text-sm text-text-2">{token.totalHolders}</div>
 											</td>
 										{/if}
-										<td class="px-3 py-3 sm:px-5 sm:py-4">
-											{#if isSgov(token.address)}
-												<span
-													class="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-accent"
-												>
-													Earn
-													<Icon name="arrowRight" className="icon-slide h-4 w-4" />
-												</span>
-											{:else}
-												<Icon name="arrowRight" className="icon-slide h-4 w-4 text-text-muted" />
-											{/if}
-										</td>
 									</tr>
 								{/each}
 							{/if}

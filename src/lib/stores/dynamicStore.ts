@@ -34,7 +34,6 @@ export const dynamicAccessToken = writable<string | null>(null);
 export const showAuthModal = writable<boolean>(false);
 export const showSendFundsModal = writable<boolean>(false);
 export const showDepositModal = writable<boolean>(false);
-export const showTokenSwapModal = writable<boolean>(false);
 export const showWrapUnwrapModal = writable<boolean>(false);
 
 // Wrap/Unwrap mode and pre-selected token
@@ -49,16 +48,6 @@ export interface WrapUnwrapModalToken {
 	balanceRaw: bigint; // raw balance for calculations
 }
 export const wrapUnwrapModalToken = writable<WrapUnwrapModalToken | null>(null);
-
-// Pre-selected token for swap modal (old token to swap)
-export interface SwapModalToken {
-	address: string;
-	symbol: string;
-	decimals: number;
-	balance: string; // formatted balance string
-	balanceRaw: bigint; // raw balance for max calculation
-}
-export const swapModalToken = writable<SwapModalToken | null>(null);
 
 // Pre-selected token for send modal
 export interface SendModalToken {
@@ -158,22 +147,6 @@ export function openDepositModal(): void {
  */
 export function closeDepositModal(): void {
 	showDepositModal.set(false);
-}
-
-/**
- * Open the token swap modal, optionally with a pre-selected old token
- */
-export function openTokenSwapModal(token?: SwapModalToken): void {
-	swapModalToken.set(token ?? null);
-	showTokenSwapModal.set(true);
-}
-
-/**
- * Close the token swap modal
- */
-export function closeTokenSwapModal(): void {
-	showTokenSwapModal.set(false);
-	swapModalToken.set(null);
 }
 
 /**

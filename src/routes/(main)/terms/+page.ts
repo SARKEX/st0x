@@ -2,5 +2,5 @@
 export const load = () => ({
 	title: 'Terms of Service | ST0x',
 	description:
-		'The terms governing use of the ST0x platform for 24/7 on-chain trading of tokenized real-world assets.'
+		'The terms governing use of the ST0x website, token information and on-chain wrapping utilities.'
 });

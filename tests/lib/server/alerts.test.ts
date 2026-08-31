@@ -28,7 +28,10 @@ const { mockLogger, mockGetLogger, mockEnv, mockDevFlag, mockFetch } = vi.hoiste
 	return {
 		mockLogger: logger,
 		mockGetLogger: vi.fn(() => logger),
-		mockEnv: { OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN: '', OBSERVABILITY_ALERT_TELEGRAM_CHAT_ID: '' } as Record<string, string>,
+		mockEnv: {
+			OBSERVABILITY_ALERT_TELEGRAM_BOT_TOKEN: '',
+			OBSERVABILITY_ALERT_TELEGRAM_CHAT_ID: ''
+		} as Record<string, string>,
 		mockDevFlag: { current: true },
 		mockFetch: vi.fn()
 	};

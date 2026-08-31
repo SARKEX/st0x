@@ -40,7 +40,7 @@ export function createMockRequestEvent(opts: MockRequestEventOptions = {}): Requ
 	const request = new Request(fullUrl, {
 		method,
 		headers,
-		body: method === 'GET' || method === 'HEAD' ? null : (opts.body ?? null)
+		body: method === 'GET' || method === 'HEAD' ? null : opts.body ?? null
 	});
 
 	return {
@@ -66,11 +66,9 @@ export function createMockKv() {
 	const store = new Map<string, string>();
 	return {
 		get: vi.fn(async (key: string) => store.get(key) ?? null),
-		set: vi.fn(
-			async (key: string, value: string, _opts?: { PX?: number; EX?: number }) => {
-				store.set(key, value);
-			}
-		),
+		set: vi.fn(async (key: string, value: string, _opts?: { PX?: number; EX?: number }) => {
+			store.set(key, value);
+		}),
 		del: vi.fn(async (key: string) => {
 			store.delete(key);
 		}),
@@ -84,8 +82,7 @@ export function createMockKv() {
 export function createMockSession({ walletAddress }: { walletAddress: string }) {
 	const now = Date.now();
 	// 64-hex sessionId (matches the shape regex in hooks.server.ts:290).
-	const sessionId =
-		walletAddress.toLowerCase().replace(/^0x/, '').padEnd(64, '0').slice(0, 64);
+	const sessionId = walletAddress.toLowerCase().replace(/^0x/, '').padEnd(64, '0').slice(0, 64);
 	return {
 		sessionId,
 		record: {

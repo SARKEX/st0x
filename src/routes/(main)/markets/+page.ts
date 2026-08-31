@@ -5,7 +5,7 @@ import { getSeoAssets } from '$lib/seo/assets';
 // concentrates internal links to the individual asset pages.
 export const load = () => ({
 	assets: getSeoAssets(),
-	title: 'Tokenized Stocks, ETFs & Commodities | ST0x Markets',
+	title: 'Tokenized Stocks, ETFs & Commodities | ST0x',
 	description:
-		'Browse tokenized stocks, ETFs and commodities on ST0x, with 24/7 on-chain execution and non-custodial settlement on Base.'
+		'Browse ST0x tokenized stocks, ETFs and commodities issued on Base, with token information and on-chain metrics.'
 });

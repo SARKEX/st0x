@@ -162,7 +162,7 @@
 
 		<!-- Warning -->
 		<div class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-			<p class="text-xs text-amber-300">
+			<p class="text-xs text-text-2">
 				Only send tokens on the {networkName} network. Tokens sent on other networks may be lost.
 			</p>
 		</div>

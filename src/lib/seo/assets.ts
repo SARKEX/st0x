@@ -27,7 +27,7 @@ export interface SeoAsset {
 	tokenSymbol: string;
 	/** Token logo path under /static. */
 	logoUrl?: string;
-	/** On-chain token address (used to link into the trade app). */
+	/** On-chain token address shown on the informational token page. */
 	address: string;
 }
 

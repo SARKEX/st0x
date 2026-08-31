@@ -1,9 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { hexToBigInt } from '$lib/utils/orderbook';
-import { buildTokenPriceMap, type ProcessedQuote } from '$lib/api/orders';
+import {
+	buildTokenPriceMap as buildTokenPriceMapBase,
+	hexToBigInt,
+	type ProcessedQuote
+} from '$lib/utils/orderbook';
 import * as tokenMath from '$lib/utils/tokenMath';
+
+const buildTokenPriceMap = (quotes: ProcessedQuote[], quoteAddress: string) =>
+	buildTokenPriceMapBase(quotes, quoteAddress, tokenMath.describeQuote);
 
 // Helper to convert bigint to hex-encoded Float string for tests
 function bigintToHexFloat(value: bigint): string {
@@ -162,7 +168,7 @@ describe('quote utilities', () => {
 					buildQuote({
 						side: 'ask',
 						assetAddress: '0xAsset',
-						quotePerAsset: 100,
+						quotePerAsset: 100
 					})
 				];
 
@@ -309,7 +315,6 @@ describe('quote utilities', () => {
 				expect(result.size).toBe(0);
 			});
 		});
-
 
 		describe('Address normalization', () => {
 			it.each([

@@ -20,7 +20,7 @@
 	import { previewWrap, previewUnwrap } from '$lib/services/wrapService';
 	import { getTokenByAnyAddress } from '$lib/config/tokens';
 	import Button from './ui/Button.svelte';
-	import transactionStore from '$lib/stores/transaction';
+	import transactionStore from '$lib/stores/wrapTransactionStore';
 	import { track } from '$lib/services/analytics';
 
 	const queryClient = useQueryClient();
@@ -366,7 +366,7 @@
 									<button
 										type="button"
 										on:click={handleMaxClick}
-										class="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-text-2 transition hover:bg-gray-600 hover:text-text"
+										class="rounded bg-surface-3 px-1.5 py-0.5 text-[10px] text-text-2 transition hover:bg-overlay-hover hover:text-text"
 									>
 										MAX
 									</button>
@@ -448,7 +448,7 @@
 						</div>
 						<div class="mt-1 text-text-3">
 							{isWrapMode
-								? 'Wrap your underlying tokens into the ERC4626 vault for trading.'
+								? 'Wrap your issued tokens into ERC-4626 vault shares.'
 								: 'Unwrap your vault shares back to the underlying tokens.'}
 						</div>
 					</div>

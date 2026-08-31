@@ -14,7 +14,6 @@
 	import { createTokenLookup, normalizeAddress, type TokenLookup } from '$lib/utils/tokenMath';
 	import { createRaindexClient } from '$lib/clients/raindex';
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/raindex';
-	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
 	import { normalizeApiTokensForNetwork } from '$lib/queries/tokens';
 	import type { PublicTradeActivityResponse } from '../../api/public/trade-activity/+server';
@@ -45,7 +44,6 @@
 	let selectedNetwork = networks[0];
 
 	const priceFeedQueries = networks.map((network) => createPriceFeedsQuery(network));
-	const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
 	const apiTokensQuery = createQuery<CategorizedToken[]>({
 		queryKey: ['st0xApiTokens', 'allNetworks'],
 		enabled: browser,
@@ -65,7 +63,6 @@
 	});
 
 	const allPriceFeedQueries = derived(priceFeedQueries, (queries) => queries);
-	const allOrderbookQueries = derived(orderbookQueries, (queries) => queries);
 
 	let cleanupScrollTracking: (() => void) | null = null;
 
@@ -89,11 +86,6 @@
 	$: priceFeedStates = networks.map((network, index) => ({
 		network,
 		query: $allPriceFeedQueries[index]
-	}));
-
-	$: orderbookStates = networks.map((network, index) => ({
-		network,
-		query: $allOrderbookQueries[index]
 	}));
 
 	let priceFeedByNetwork = new Map<number, TradingViewQuote[]>();
@@ -266,12 +258,12 @@
 			map.set(network.chainId, new Set<string>());
 		});
 
-		orderbookStates.forEach(({ network, query }) => {
-			const set = map.get(network.chainId);
+		vaultsByNetwork.forEach((vaults, chainId) => {
+			const set = map.get(chainId);
 			if (!set) return;
-			const summary = query?.data?.summary ?? {};
-			Object.keys(summary).forEach((address) => {
-				const normalised = normalizeAddress(address);
+			vaults.forEach((vault) => {
+				if (!vault.ordersAsInput?.length && !vault.ordersAsOutput?.length) return;
+				const normalised = normalizeAddress(vault.token.address);
 				if (normalised && canonicalTokens.has(normalised)) {
 					set.add(normalised);
 				}
@@ -486,13 +478,11 @@
 		const tradingVolume = tradeActivityByChain.get(network.chainId)?.tradingVolume ?? 0;
 
 		const orderHashes = new Set<string>();
-		orderbookStates
-			.find(({ network: net }) => net.chainId === network.chainId)
-			?.query?.data?.quotes?.forEach((quote) => {
-				if (quote.orderHash) {
-					orderHashes.add(quote.orderHash.toLowerCase());
-				}
-			});
+		allNetworkVaults.forEach((vault) => {
+			for (const order of [...(vault.ordersAsInput ?? []), ...(vault.ordersAsOutput ?? [])]) {
+				if (order.orderHash) orderHashes.add(order.orderHash.toLowerCase());
+			}
+		});
 
 		// Calculate per-network TVL from admin token TVL data
 		// Sum up TVL for tokens that belong to this network

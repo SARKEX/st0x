@@ -85,8 +85,8 @@ describe('orderPerspective', () => {
 			const taker = makerToTakerTokens(maker, USDC);
 
 			// Taker would SELL asset to this BID maker
-			expect(taker.takerWants).toEqual(USDC);  // Taker wants USDC
-			expect(taker.takerPays).toEqual(ASSET);  // Taker pays asset
+			expect(taker.takerWants).toEqual(USDC); // Taker wants USDC
+			expect(taker.takerPays).toEqual(ASSET); // Taker pays asset
 		});
 
 		it('should convert ASK maker order to taker perspective', () => {
@@ -99,8 +99,8 @@ describe('orderPerspective', () => {
 			const taker = makerToTakerTokens(maker, USDC);
 
 			// Taker would BUY asset from this ASK maker
-			expect(taker.takerWants).toEqual(ASSET);  // Taker wants asset
-			expect(taker.takerPays).toEqual(USDC);    // Taker pays USDC
+			expect(taker.takerWants).toEqual(ASSET); // Taker wants asset
+			expect(taker.takerPays).toEqual(USDC); // Taker pays USDC
 		});
 	});
 
@@ -214,15 +214,11 @@ describe('orderPerspective', () => {
 		} as ProcessedQuote;
 
 		it('getMakerInputTokenAddress returns inputTokenAddress', () => {
-			expect(getMakerInputTokenAddress(quote)).toBe(
-				'0xAAaa1111111111111111111111111111111111aa'
-			);
+			expect(getMakerInputTokenAddress(quote)).toBe('0xAAaa1111111111111111111111111111111111aa');
 		});
 
 		it('getMakerOutputTokenAddress returns outputTokenAddress', () => {
-			expect(getMakerOutputTokenAddress(quote)).toBe(
-				'0xBBbb2222222222222222222222222222222222bb'
-			);
+			expect(getMakerOutputTokenAddress(quote)).toBe('0xBBbb2222222222222222222222222222222222bb');
 		});
 
 		it('getMakerInputIOIndex returns inputIOIndex', () => {

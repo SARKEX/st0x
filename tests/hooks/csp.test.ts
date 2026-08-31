@@ -75,11 +75,12 @@ describe('hooks.server CSP', () => {
 		expect(csp).toMatch(/object-src 'none'/);
 	});
 
-	it('connect-src excludes retired display-price feeds but preserves order execution', async () => {
+	it('connect-src excludes retired price feeds and trading-oracle services', async () => {
 		const csp = await getCspForPath('/trade');
 		expect(csp).not.toContain('hermes.pyth.network');
-		expect(csp).toContain('st0x-oracle-server.fly.dev');
-		expect(csp).toContain('rain-oracle-server.fly.dev');
+		expect(csp).not.toContain('st0x-oracle');
+		expect(csp).not.toContain('rain-oracle');
+		expect(csp).not.toContain('tradingview.com');
 	});
 
 	it('X-Frame-Options DENY is set (defense-in-depth alongside frame-ancestors)', async () => {

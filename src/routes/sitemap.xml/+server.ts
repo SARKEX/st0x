@@ -12,10 +12,10 @@ const SITE = 'https://www.st0x.io';
 // `lastmod` for the listed URLs. Bump on meaningful content changes; it tells
 // Google which pages are worth recrawling. (Kept a single constant rather than
 // per-URL git timestamps to avoid pulling git state into the request path.)
-const LASTMOD = '2026-07-15';
+const LASTMOD = '2026-08-27';
 
-// Public, indexable routes. App/auth-gated routes (/dashboard, /trade,
-// /strategies, /platform-metrics) are intentionally excluded. Per-asset
+// Public, indexable routes. Wallet/auth-gated and operational metric routes
+// are intentionally excluded. Per-asset
 // landing pages are enumerated from the token registry so new listings appear
 // automatically. Product docs (/docs) are temporarily offline.
 const staticRoutes = ['/', '/faqs', '/terms', '/privacy-policy', '/markets'];

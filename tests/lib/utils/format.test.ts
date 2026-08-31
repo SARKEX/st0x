@@ -31,12 +31,9 @@ describe('format utilities', () => {
 			expect(truncateAddress(address)).toBe(expected);
 		});
 
-		it.each([[null], [undefined]])(
-			'should return empty string for falsy inputs: %s',
-			(input) => {
-				expect(truncateAddress(input as any)).toBe('');
-			}
-		);
+		it.each([[null], [undefined]])('should return empty string for falsy inputs: %s', (input) => {
+			expect(truncateAddress(input as any)).toBe('');
+		});
 	});
 
 	describe('formatUsd', () => {

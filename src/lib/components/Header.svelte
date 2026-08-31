@@ -6,11 +6,10 @@
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { web3Modal } from 'svelte-wagmi';
 	import { page } from '$app/stores';
-	import { wrongNetwork, sfts, tradePanelOpen } from '$lib/stores';
+	import { wrongNetwork } from '$lib/stores';
 	// Unified auth
 	import { walletAddress, authMethod, isAuthenticated } from '$lib/stores/authStore';
 	import { openAuthModal, logoutDynamic, dynamicSession } from '$lib/stores/dynamicStore';
-	import { formatApy } from '$lib/config/earn';
 	import { navCollapsed } from '$lib/stores/uiStore';
 
 	export let title: string;
@@ -36,40 +35,27 @@
 	}
 
 	$: activePath = $page.url.pathname;
-	$: firstTokenId = $sfts?.[0]?.id;
-	$: tradeHref = firstTokenId ? `/trade/${firstTokenId}` : '/';
-	$: isOnTradePage = activePath.startsWith('/trade/');
 
 	$: NAV_ITEMS = [
-		{ name: 'Trade', href: tradeHref, isActive: isOnTradePage, showAlpha: false, isEarn: false },
 		{
-			name: 'Earn',
-			href: '/earn',
-			isActive: activePath === '/earn',
-			showAlpha: false,
-			isEarn: true
+			name: 'Markets',
+			href: '/markets',
+			isActive: activePath.startsWith('/markets'),
+			showAlpha: false
 		},
-		{ name: 'Strategies', href: '/strategies', isActive: false, showAlpha: true, isEarn: false },
 		{
-			name: 'Platform Metrics',
+			name: 'Metrics',
 			href: '/platform-metrics',
-			isActive: false,
-			showAlpha: false,
-			isEarn: false
+			isActive: activePath === '/platform-metrics',
+			showAlpha: false
 		}
 	];
 
 	// Calculate effective breakpoint based on what's taking up space
 	// Base: 1350px for the nav content itself
 	// +256px when sidebar is expanded (not landing page and not collapsed)
-	// +352px when trade panel is open
 	$: sidebarOffset = !isLandingPage && !isSidebarCollapsed ? 256 : 0;
-	$: tradePanelOffset = $tradePanelOpen ? 352 : 0;
-	// Base = the width the full nav cluster actually needs (~1100px of content +
-	// margin). The sidebar/trade-panel offsets account for horizontal space those
-	// take away from the header, so a full-size laptop keeps the inline nav and only
-	// collapses to the hamburger when the sidebar + order panel are both open.
-	$: effectiveBreakpoint = 1180 + sidebarOffset + tradePanelOffset;
+	$: effectiveBreakpoint = 900 + sidebarOffset;
 	$: isHamburgerMode = windowWidth < effectiveBreakpoint;
 	// Share the collapse signal so the bottom MobileTabBar shows exactly when the
 	// inline header nav hides — no width band is left without navigation.
@@ -136,50 +122,15 @@
 				{#if !isHamburgerMode}
 					<div class="flex flex-nowrap items-center gap-1">
 						{#each NAV_ITEMS as item}
-							{#if item.isEarn}
-								<!-- Signature Save & Earn entry: live-APY pill with a shimmer sweep -->
-								<a
-									href={item.href}
-									class="group relative flex items-center gap-2 overflow-hidden whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-semibold transition-all {item.isActive ||
-									activePath === item.href
-										? 'border-emerald-400/50 bg-emerald-400/15 text-accent'
-										: 'border-emerald-400/30 bg-emerald-400/[0.07] text-accent hover:border-emerald-400/50 hover:bg-emerald-400/15'}"
-								>
-									<span
-										class="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-emerald-300/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"
-									></span>
-									<Icon name="sprout" className="h-4 w-4" />
-									<span>{item.name}</span>
-									<span
-										class="flex items-center gap-1 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[11px] font-bold text-accent"
-									>
-										<span class="relative flex h-1.5 w-1.5">
-											<span
-												class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70"
-											></span>
-											<span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400"
-											></span>
-										</span>
-										{formatApy()}%
-									</span>
-								</a>
-							{:else}
-								<a
-									href={item.href}
-									class="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors {item.isActive ||
-									activePath === item.href
-										? 'bg-white/10 text-text'
-										: 'text-text-2 hover:bg-white/5 hover:text-text'}"
-								>
-									{item.name}
-									{#if item.showAlpha}
-										<span
-											class="rounded-full bg-iris-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-iris-300"
-											>Alpha</span
-										>
-									{/if}
-								</a>
-							{/if}
+							<a
+								href={item.href}
+								class="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors {item.isActive ||
+								activePath === item.href
+									? 'bg-overlay-2 text-text'
+									: 'text-text-2 hover:bg-overlay-hover hover:text-text'}"
+							>
+								{item.name}
+							</a>
 						{/each}
 					</div>
 				{/if}

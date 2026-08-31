@@ -3,9 +3,8 @@ import { queryClient } from '$lib/clients/queryClient';
 /**
  * Invalidate all dashboard balance queries.
  * Call this after transactions that affect token balances:
- * - Market orders (buy/sell)
- * - Limit/DCA order deployments
- * - Vault withdrawals
+ * This is used after wrapping, unwrapping, deposits, sends, and other
+ * non-trading wallet activity.
  */
 export function invalidateDashboardBalances() {
 	// Invalidate all balance-related queries
@@ -14,14 +13,4 @@ export function invalidateDashboardBalances() {
 	queryClient.invalidateQueries({ queryKey: ['ethWalletBalance'] });
 	queryClient.invalidateQueries({ queryKey: ['usdcBalance'] });
 	queryClient.invalidateQueries({ queryKey: ['tokenBalance'] });
-}
-
-/** Refresh all-time trade-derived data only after a confirmed market order. */
-export function invalidateCostBasis() {
-	queryClient.invalidateQueries({ queryKey: ['costBasis'] });
-}
-
-/** Refresh the bounded recent market-order list after a confirmed market order. */
-export function invalidateTakerTrades() {
-	queryClient.invalidateQueries({ queryKey: ['takerTrades'] });
 }

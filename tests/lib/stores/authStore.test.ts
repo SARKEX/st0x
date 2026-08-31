@@ -18,7 +18,9 @@ const {
 		mockConnected: writable<boolean>(false),
 		mockChainId: writable<number>(8453),
 		mockCurrentNetwork: writable({ id: 8453, name: 'Base' }),
-		mockDynamicSession: writable<{ userId: string; walletAddress: string; email?: string } | null>(null),
+		mockDynamicSession: writable<{ userId: string; walletAddress: string; email?: string } | null>(
+			null
+		),
 		mockDynamicWalletAddress: writable<string | null>(null),
 		mockIsDynamicAuthenticated: writable<boolean>(false),
 		mockShowAuthModal: writable<boolean>(false)

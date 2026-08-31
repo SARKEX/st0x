@@ -31,13 +31,10 @@ const replayIntegrationSpy = vi.fn().mockReturnValue({ name: 'Replay' });
 
 vi.mock('@sentry/sveltekit', () => {
 	const noop = () => {};
-	const noopHandler = () => async ({
-		event,
-		resolve
-	}: {
-		event: unknown;
-		resolve: (e: unknown) => unknown;
-	}) => resolve(event);
+	const noopHandler =
+		() =>
+		async ({ event, resolve }: { event: unknown; resolve: (e: unknown) => unknown }) =>
+			resolve(event);
 	return {
 		init: initSpy,
 		replayIntegration: replayIntegrationSpy,

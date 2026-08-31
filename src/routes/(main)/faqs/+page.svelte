@@ -10,7 +10,7 @@
 		{
 			q: 'What is ST0x?',
 			a: [
-				'ST0x is infrastructure for trading tokenised securities on a public blockchain. Tokens issued by S01 Issuer GmbH can be held in a self-custodied wallet and traded through public smart contracts on Base, at any hour.'
+				'ST0x provides information and on-chain utilities for tokenised securities issued by S01 Issuer GmbH. The tokens can be held in a self-custodied wallet on Base.'
 			]
 		},
 		{
@@ -20,15 +20,15 @@
 			]
 		},
 		{
-			q: 'Who operates the trading contracts?',
+			q: 'What information is available on this website?',
 			a: [
-				'The contracts are deployed on Base, a public blockchain, and execute autonomously. No group entity or affiliate operates order matching, controls execution, or exercises discretion over access to those contracts. This website is one of several possible interfaces to the same public contracts.'
+				'The website provides token listings, issuance information, proofs and read-only on-chain metrics. It also provides wrapping and unwrapping for supported tokens.'
 			]
 		},
 		{
-			q: 'What assets can I trade on ST0x?',
+			q: 'Which tokens are listed?',
 			a: [
-				'Tokenised exposure to U.S.-listed stocks, exchange-traded funds and commodity trusts. ST0x markets trade wrapped vault shares whose exchange rate to the issued token can change over time.'
+				'The listings cover tokenised exposure to U.S.-listed stocks, exchange-traded funds and commodity trusts.'
 			]
 		},
 		{
@@ -39,15 +39,15 @@
 			]
 		},
 		{
-			q: 'How is liquidity handled?',
+			q: 'What are wrapped tokens?',
 			a: [
-				'Liquidity is demand-driven. Arbitrageurs create or redeem tokens via the Core Bridge, aligning prices between off-chain markets and on-chain tokens.'
+				'Supported issued tokens can be deposited into an ERC-4626 vault to receive wrapped vault shares. Those shares can be redeemed to unwrap them back into the issued token. The exchange rate can change over time.'
 			]
 		},
 		{
 			q: 'Is ST0x custodial?',
 			a: [
-				'No. ST0x is non-custodial. Users maintain control of their assets in smart contract vaults.'
+				'No. Users maintain control of their tokens in their own wallets and approve wrapping or unwrapping transactions themselves.'
 			]
 		},
 		{
@@ -57,9 +57,9 @@
 			]
 		},
 		{
-			q: 'Are there trading fees?',
+			q: 'Are there wrapping fees?',
 			a: [
-				'Yes. Fees include trading fees, gas costs, and potential withdrawal fees, structured transparently.'
+				'Blockchain gas costs apply. The current wrap ratio and its history are shown before a wrapping or unwrapping transaction is submitted.'
 			]
 		},
 		{
