@@ -13,6 +13,8 @@ import type { RequestHandler } from './$types';
 const REGISTRY_REPOSITORY_RAW_URL =
 	'https://raw.githubusercontent.com/ST0x-Technology/st0x.registry';
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/i;
+const STALE_REGISTRY_PIN_PATTERN =
+	/https:\/\/raw\.githubusercontent\.com\/ST0x-Technology\/st0x\.registry\/[0-9a-f]{40}\//gi;
 
 type RegistryMetadata = {
 	registry_type: 'private_artifact' | 'public_url';
@@ -37,6 +39,20 @@ function registryUrlForCommit(commit: string): string {
 		throw new Error('REST API returned an invalid registry source commit');
 	}
 	return `${REGISTRY_REPOSITORY_RAW_URL}/${commit}/registry`;
+}
+
+/**
+ * The `registry` index file pins each asset to a commit SHA captured when that
+ * file was authored. Squash-merges leave those SHAs off `main`, and GitHub's
+ * raw CDN then 400s them even though the GitHub API still has the blobs.
+ * Rewrite every pin to the REST API source commit — the immutable public
+ * pointer this endpoint already uses to fetch the index.
+ */
+function rewriteRegistryPinsToSourceCommit(manifest: string, sourceCommit: string): string {
+	return manifest.replace(
+		STALE_REGISTRY_PIN_PATTERN,
+		`${REGISTRY_REPOSITORY_RAW_URL}/${sourceCommit}/`
+	);
 }
 
 export const GET: RequestHandler = async ({ fetch }) => {
@@ -69,12 +85,14 @@ export const GET: RequestHandler = async ({ fetch }) => {
 		return new Response('Registry metadata is invalid', { status: 502 });
 	}
 
+	let sourceCommit: string;
 	let registryUrl: string;
 	try {
 		if (!metadata.source_commit) {
 			throw new Error('REST API registry metadata has no source commit');
 		}
-		registryUrl = registryUrlForCommit(metadata.source_commit);
+		sourceCommit = metadata.source_commit;
+		registryUrl = registryUrlForCommit(sourceCommit);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		console.warn('[registry/manifest] invalid REST API registry metadata:', message);
@@ -95,11 +113,13 @@ export const GET: RequestHandler = async ({ fetch }) => {
 		return new Response('Public registry is unavailable', { status: 502 });
 	}
 
-	return new Response(await registryResponse.text(), {
+	const manifest = rewriteRegistryPinsToSourceCommit(await registryResponse.text(), sourceCommit);
+
+	return new Response(manifest, {
 		headers: {
 			'content-type': 'text/plain; charset=utf-8',
 			'cache-control': 'public, max-age=300',
-			'x-registry-source-commit': metadata.source_commit
+			'x-registry-source-commit': sourceCommit
 		}
 	});
 };

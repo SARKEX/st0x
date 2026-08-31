@@ -55,6 +55,37 @@ describe('/registry/manifest', () => {
 		});
 	});
 
+	it('rewrites stale GitHub pins in the upstream manifest to the REST API source commit', async () => {
+		const staleCommit = '1cc104bdf9ee50d7a409d5fafa5c7e1c62810492';
+		const upstreamManifest = [
+			`https://raw.githubusercontent.com/ST0x-Technology/st0x.registry/${staleCommit}/settings.yaml`,
+			`fixed-limit https://raw.githubusercontent.com/ST0x-Technology/st0x.registry/${staleCommit}/src/fixed-limit.rain`
+		].join('\n');
+		const rewrittenManifest = [
+			`${PUBLIC_REGISTRY_URL.replace(/\/registry$/, '')}/settings.yaml`,
+			`fixed-limit ${PUBLIC_REGISTRY_URL.replace(/\/registry$/, '')}/src/fixed-limit.rain`
+		].join('\n');
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({ registry_type: 'private_artifact', source_commit: SOURCE_COMMIT }),
+					{ status: 200, headers: { 'content-type': 'application/json' } }
+				)
+			)
+			.mockResolvedValueOnce(new Response(upstreamManifest, { status: 200 }));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(registryManifestEvent());
+
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe(rewrittenManifest);
+		expect(response.headers.get('x-registry-source-commit')).toBe(SOURCE_COMMIT);
+		expect(fetchMock).toHaveBeenNthCalledWith(2, PUBLIC_REGISTRY_URL, {
+			cache: 'no-store'
+		});
+	});
+
 	it('rejects an invalid source commit without fetching public content', async () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		const fetchMock = vi
