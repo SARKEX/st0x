@@ -23,9 +23,7 @@ const certificationClient = createPublicClient({
 });
 
 /** Returns true when the legacy vault's transfer certification window has expired. */
-export async function isLegacyTokenCertificationExpired(
-	tokenAddress: Address
-): Promise<boolean> {
+export async function isLegacyTokenCertificationExpired(tokenAddress: Address): Promise<boolean> {
 	try {
 		return await certificationClient.readContract({
 			address: tokenAddress,
@@ -48,9 +46,7 @@ export function isCertificationExpiredError(message: string | undefined): boolea
 	);
 }
 
-export function legacyTokenCertificationExpiredMessage(
-	tokenSymbol?: string
-): string {
+export function legacyTokenCertificationExpiredMessage(tokenSymbol?: string): string {
 	if (!tokenSymbol) return LEGACY_TOKEN_CERTIFICATION_EXPIRED_MESSAGE;
 	return `${tokenSymbol} transfers are temporarily paused because on-chain certification has expired. Migration swaps will work again after certification is renewed. Please try again later or contact support if this persists.`;
 }

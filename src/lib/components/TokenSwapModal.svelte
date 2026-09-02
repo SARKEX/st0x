@@ -304,17 +304,7 @@
 		return formatUnits(value, decimals);
 	}
 
-	/** Format a decimal string amount for display (normalizes to token decimals via viem) */
-	function formatAmountDisplay(amountStr: string, decimals: number): string {
-		try {
-			const wei = parseUnits(amountStr === '' || amountStr === '.' ? '0' : amountStr, decimals);
-			return formatUnits(wei, decimals);
-		} catch {
-			return '0';
-		}
-	}
-
-	/** Format a number for display (e.g. liquidity) using viem to avoid float noise */
+	/** Format a number for display (e.g. estimated receive) using viem to avoid float noise */
 	function formatNumberWithDecimals(value: number, decimals: number): string {
 		try {
 			const wei = parseUnits(value.toFixed(decimals), decimals);
@@ -484,7 +474,7 @@
 				mapping.newToken.decimals
 			);
 			const ratioParsed = Float.parse(migrationQuote.ioRatio);
-			if (maximumReceiveFloat.error || ratioParsed.error || !ratioParsed.value) {
+			if (!maximumReceiveFloat.float || ratioParsed.error || !ratioParsed.value) {
 				transactionStore.transactionError(
 					'Failed to build order parameters.' as TransactionErrorMessage
 				);
