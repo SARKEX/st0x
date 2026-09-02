@@ -988,6 +988,16 @@ export const handleTakeOrders = async (
 
 			const errorMessage = extractTransactionError(error);
 
+			if (
+				isCertificationExpiredError(typeof errorMessage === 'string' ? errorMessage : undefined)
+			) {
+				return transactionError(
+					legacyTokenCertificationExpiredMessage(
+						params.takerPaysToken.symbol
+					) as TransactionErrorMessage
+				);
+			}
+
 			console.error('[marketTakeStore:handleTakeOrders] Transaction error:', error);
 			if (isSkippableMakerLegError(errorMessage) && orderIndex < ordersToExecute.length - 1) {
 				carryForwardFillAmount = fillAmount;

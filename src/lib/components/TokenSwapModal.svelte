@@ -31,6 +31,7 @@
 		isLegacyTokenCertificationExpired,
 		legacyTokenCertificationExpiredMessage
 	} from '$lib/utils/legacyTokenCertification';
+	import { migrationPayCapWei, migrationReceiveWei } from '$lib/utils/migrationSwapQuote';
 
 	const queryClient = useQueryClient();
 
@@ -40,26 +41,21 @@
 	let liquidityWarning = false;
 
 	type MigrationOrderQuote = {
-		liquidity: number;
+		/** Maker output inventory in wrapped-token base units. */
+		maxOutputWei: bigint;
 		ioRatio: string;
 	};
 
-	const EMPTY_MIGRATION_QUOTE: MigrationOrderQuote = { liquidity: 0, ioRatio: '1' };
-	const RATIO_SCALE = 18;
-
-	/** Floor wrapped receive from legacy pay amount using the maker IO ratio (bigint-safe). */
-	function migrationReceiveWei(payWei: bigint, ioRatio: string): bigint {
-		const ratioWei = parseUnits(ioRatio, RATIO_SCALE);
-		if (ratioWei <= 0n || payWei <= 0n) return 0n;
-		return (payWei * 10n ** BigInt(RATIO_SCALE)) / ratioWei;
-	}
+	const EMPTY_MIGRATION_QUOTE: MigrationOrderQuote = { maxOutputWei: 0n, ioRatio: '1' };
 
 	function parseMigrationOrderQuote(
 		mapping: (typeof TOKEN_MIGRATION_MAPPINGS)[0],
-		quote: {
-			success?: boolean;
-			data?: { maxOutput?: string; formattedRatio?: string };
-		} | undefined
+		quote:
+			| {
+					success?: boolean;
+					data?: { maxOutput?: string; formattedRatio?: string };
+			  }
+			| undefined
 	): MigrationOrderQuote {
 		if (!quote?.success || !quote.data?.maxOutput || !quote.data.formattedRatio) {
 			return EMPTY_MIGRATION_QUOTE;
@@ -75,7 +71,7 @@
 		if (typeof fdValue?.value !== 'string') return EMPTY_MIGRATION_QUOTE;
 
 		return {
-			liquidity: parseFloat(formatUnits(BigInt(fdValue.value), mapping.newToken.decimals)),
+			maxOutputWei: BigInt(fdValue.value),
 			ioRatio: quote.data.formattedRatio
 		};
 	}
@@ -115,9 +111,7 @@
 		staleTime: 30_000,
 		queryFn: async () => {
 			if (!selectedOldTokenAddress) return false;
-			return isLegacyTokenCertificationExpired(
-				selectedOldTokenAddress as `0x${string}`
-			);
+			return isLegacyTokenCertificationExpired(selectedOldTokenAddress as `0x${string}`);
 		}
 	});
 
@@ -233,9 +227,14 @@
 			? preSelectedTokenData
 			: undefined);
 
-	// Available liquidity and maker ratio for the selected migration order.
-	$: availableLiquidity = $swapLiquidityQuery.data?.liquidity ?? 0;
+	// Available maker output (wrapped) and derived legacy pay cap for input controls.
+	$: maxOutputWei = $swapLiquidityQuery.data?.maxOutputWei ?? 0n;
 	$: swapIoRatio = $swapLiquidityQuery.data?.ioRatio ?? '1';
+	$: availablePayCapWei = migrationPayCapWei(maxOutputWei, swapIoRatio);
+	$: availablePayLiquidity = (() => {
+		if (!currentMapping || availablePayCapWei <= 0n) return 0;
+		return parseFloat(formatUnits(availablePayCapWei, currentMapping.oldToken.decimals));
+	})();
 	$: swapRateLabel = (() => {
 		const ratio = Number(swapIoRatio);
 		if (!Number.isFinite(ratio) || ratio <= 0) return '1:1';
@@ -295,9 +294,9 @@
 					: `${parts[0]}.${parts[1].slice(0, decimals)}`;
 		}
 
-		// Check if we need to show liquidity warning
+		// Check if we need to show liquidity warning (legacy pay vs pay cap)
 		const amount = parseFloat(swapAmount) || 0;
-		liquidityWarning = amount > availableLiquidity && availableLiquidity > 0;
+		liquidityWarning = amount > availablePayLiquidity && availablePayLiquidity > 0;
 	}
 
 	/** Format balance/amount for display using viem (bigint → string with token decimals) */
@@ -325,26 +324,30 @@
 		}
 	}
 
-	// Set max amount (capped by liquidity)
+	// Set max amount (capped by legacy pay liquidity derived from wrapped maxOutput)
 	function handleMaxClick() {
 		if (!selectedTokenData || !currentMapping) return;
 
 		const decimals = selectedTokenData.oldToken.decimals;
-		const liquidityWei = parseUnits(availableLiquidity.toFixed(decimals), decimals);
 		const maxWei =
-			selectedTokenData.balance < liquidityWei ? selectedTokenData.balance : liquidityWei;
+			selectedTokenData.balance < availablePayCapWei
+				? selectedTokenData.balance
+				: availablePayCapWei;
 		swapAmount = formatUnits(maxWei, decimals);
-		liquidityWarning = selectedTokenData.balanceFormatted > availableLiquidity;
+		liquidityWarning = selectedTokenData.balance > availablePayCapWei && availablePayCapWei > 0n;
 	}
 
-	// Cap to available liquidity
+	// Cap to available legacy pay liquidity
 	function capToLiquidity() {
-		if (!currentMapping || parsedSwapAmount <= availableLiquidity || availableLiquidity <= 0)
+		if (!currentMapping || availablePayCapWei <= 0n) return;
+		try {
+			const payWei = parseUnits(swapAmount || '0', currentMapping.oldToken.decimals);
+			if (payWei <= availablePayCapWei) return;
+			swapAmount = formatUnits(availablePayCapWei, currentMapping.oldToken.decimals);
+			liquidityWarning = true;
+		} catch {
 			return;
-		const decimals = currentMapping.oldToken.decimals;
-		const liquidityWei = parseUnits(availableLiquidity.toFixed(decimals), decimals);
-		swapAmount = formatUnits(liquidityWei, decimals);
-		liquidityWarning = true;
+		}
 	}
 
 	// Execute the swap by taking the migration order (same flow as market order)
@@ -381,15 +384,9 @@
 		try {
 			transactionStore.awaitWalletConfirmation('Preparing swap...');
 
-			if (
-				await isLegacyTokenCertificationExpired(
-					mapping.oldToken.address as `0x${string}`
-				)
-			) {
+			if (await isLegacyTokenCertificationExpired(mapping.oldToken.address as `0x${string}`)) {
 				transactionStore.transactionError(
-					legacyTokenCertificationExpiredMessage(
-						mapping.oldToken.symbol
-					) as TransactionErrorMessage
+					legacyTokenCertificationExpiredMessage(mapping.oldToken.symbol) as TransactionErrorMessage
 				);
 				return;
 			}
@@ -423,7 +420,7 @@
 			}
 
 			const migrationQuote = parseMigrationOrderQuote(mapping, quotesResult.value[0]);
-			if (migrationQuote.liquidity <= 0 || !migrationQuote.ioRatio) {
+			if (migrationQuote.maxOutputWei <= 0n || !migrationQuote.ioRatio) {
 				transactionStore.transactionError(
 					'Migration order not available. Please try again later.' as TransactionErrorMessage
 				);
@@ -431,13 +428,16 @@
 			}
 
 			const swapAmountWei = parseUnits(swapAmountStr, mapping.oldToken.decimals);
-			const requestedTakerWantsAmount = migrationReceiveWei(
-				swapAmountWei,
-				migrationQuote.ioRatio
-			);
+			const requestedTakerWantsAmount = migrationReceiveWei(swapAmountWei, migrationQuote.ioRatio);
 			if (requestedTakerWantsAmount <= 0n) {
 				transactionStore.transactionError(
 					'Swap amount is too small for this migration order.' as TransactionErrorMessage
+				);
+				return;
+			}
+			if (requestedTakerWantsAmount > migrationQuote.maxOutputWei) {
+				transactionStore.transactionError(
+					'Not enough migration inventory for this amount. Try a smaller size.' as TransactionErrorMessage
 				);
 				return;
 			}
@@ -484,11 +484,7 @@
 				mapping.newToken.decimals
 			);
 			const ratioParsed = Float.parse(migrationQuote.ioRatio);
-			if (
-				maximumReceiveFloat.error ||
-				ratioParsed.error ||
-				!ratioParsed.value
-			) {
+			if (maximumReceiveFloat.error || ratioParsed.error || !ratioParsed.value) {
 				transactionStore.transactionError(
 					'Failed to build order parameters.' as TransactionErrorMessage
 				);
@@ -803,12 +799,9 @@
 									<span class="animate-pulse text-text-3">Checking...</span>
 								{:else if $swapLiquidityQuery.isError}
 									<span class="text-orange-400">Failed to check — retrying...</span>
-								{:else if availableLiquidity > 0}
+								{:else if availablePayLiquidity > 0}
 									<span class="text-text"
-										>{formatNumberWithDecimals(
-											availableLiquidity,
-											currentMapping.oldToken.decimals
-										)}
+										>{formatBalance(availablePayCapWei, currentMapping.oldToken.decimals)}
 										{currentMapping.oldToken.symbol}</span
 									>
 								{:else}
@@ -831,7 +824,7 @@
 							legacyCertificationExpired ||
 							$swapLiquidityQuery.isLoading ||
 							$swapLiquidityQuery.isError ||
-							availableLiquidity <= 0}
+							availablePayCapWei <= 0n}
 						on:click={handleSwap}
 					>
 						{#if tokensToShow.length === 0}
@@ -846,7 +839,7 @@
 							Checking liquidity...
 						{:else if $swapLiquidityQuery.isError}
 							Checking liquidity — please wait...
-						{:else if availableLiquidity <= 0}
+						{:else if availablePayCapWei <= 0n}
 							No liquidity available
 						{:else if parsedSwapAmount <= 0}
 							Enter amount
