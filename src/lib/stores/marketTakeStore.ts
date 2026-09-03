@@ -47,6 +47,10 @@ import type { TakeOrdersParams } from '$lib/types/transactions';
 import type { Network } from '$lib/config/network';
 import { getMakerInputIOIndex, getMakerOutputIOIndex } from '$lib/types/orderPerspective';
 import {
+	isCertificationExpiredError,
+	legacyTokenCertificationExpiredMessage
+} from '$lib/utils/legacyTokenCertification';
+import {
 	TransactionStatus,
 	transactionStoreInternal,
 	validateOrderbookAddress,
@@ -121,6 +125,12 @@ function isSkippableMakerLegError(message: string | undefined): boolean {
 function shouldFallbackFromAggregatedTake(sdkMsg: string | undefined): boolean {
 	if (!sdkMsg) return false;
 	if (sdkMsg.includes('No liquidity')) return true;
+	const normalized = sdkMsg.toLowerCase();
+	// Aggregated preflight simulates before per-order approval; fall back so
+	// getTakeCalldata can surface isNeedsApproval and run the approval flow.
+	if (normalized.includes('preflight check failed') && normalized.includes('allowance')) {
+		return true;
+	}
 	return isSkippableMakerLegError(sdkMsg);
 }
 
@@ -678,7 +688,7 @@ export const handleTakeOrders = async (
 		priceCapStr,
 		taker: $signerAddress
 	});
-	if (aggregatedTakeRequest) {
+	if (aggregatedTakeRequest && !params.skipAggregatedTake) {
 		const handled = await handleAggregatedTakeOrdersCalldata(
 			aggregatedTakeRequest,
 			raindexOrder,
@@ -899,6 +909,13 @@ export const handleTakeOrders = async (
 					);
 				}
 				if (readyCalldataResult.error || !readyCalldataResult.value?.takeOrdersInfo) {
+					if (isCertificationExpiredError(readyCalldataResult.error?.readableMsg)) {
+						return transactionError(
+							legacyTokenCertificationExpiredMessage(
+								params.takerPaysToken.symbol
+							) as TransactionErrorMessage
+						);
+					}
 					if (
 						isSkippableMakerLegError(readyCalldataResult.error?.readableMsg) &&
 						orderIndex < ordersToExecute.length - 1
@@ -970,6 +987,16 @@ export const handleTakeOrders = async (
 			}
 
 			const errorMessage = extractTransactionError(error);
+
+			if (
+				isCertificationExpiredError(typeof errorMessage === 'string' ? errorMessage : undefined)
+			) {
+				return transactionError(
+					legacyTokenCertificationExpiredMessage(
+						params.takerPaysToken.symbol
+					) as TransactionErrorMessage
+				);
+			}
 
 			console.error('[marketTakeStore:handleTakeOrders] Transaction error:', error);
 			if (isSkippableMakerLegError(errorMessage) && orderIndex < ordersToExecute.length - 1) {

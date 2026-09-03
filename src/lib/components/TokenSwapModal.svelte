@@ -27,6 +27,11 @@
 	import { Float } from '@rainlanguage/float';
 	import type { TakeOrdersConfigV5, TakeOrderConfigV4, OrderV4 } from '@rainlanguage/raindex';
 	import { track } from '$lib/services/analytics';
+	import {
+		isLegacyTokenCertificationExpired,
+		legacyTokenCertificationExpiredMessage
+	} from '$lib/utils/legacyTokenCertification';
+	import { migrationPayCapWei, migrationReceiveWei } from '$lib/utils/migrationSwapQuote';
 
 	const queryClient = useQueryClient();
 
@@ -35,12 +40,48 @@
 	let swapAmount = '';
 	let liquidityWarning = false;
 
-	/** Fetch liquidity for a specific token migration order */
-	async function fetchLiquidityForToken(
+	type MigrationOrderQuote = {
+		/** Maker output inventory in wrapped-token base units. */
+		maxOutputWei: bigint;
+		ioRatio: string;
+	};
+
+	const EMPTY_MIGRATION_QUOTE: MigrationOrderQuote = { maxOutputWei: 0n, ioRatio: '1' };
+
+	function parseMigrationOrderQuote(
+		mapping: (typeof TOKEN_MIGRATION_MAPPINGS)[0],
+		quote:
+			| {
+					success?: boolean;
+					data?: { maxOutput?: string; formattedRatio?: string };
+			  }
+			| undefined
+	): MigrationOrderQuote {
+		if (!quote?.success || !quote.data?.maxOutput || !quote.data.formattedRatio) {
+			return EMPTY_MIGRATION_QUOTE;
+		}
+
+		const maxOutputFloat = Float.fromHex(quote.data.maxOutput as `0x${string}`);
+		if (maxOutputFloat.error || !maxOutputFloat.value) return EMPTY_MIGRATION_QUOTE;
+
+		const fixedResult = maxOutputFloat.value.toFixedDecimalLossy(mapping.newToken.decimals);
+		if (fixedResult.error || !fixedResult.value) return EMPTY_MIGRATION_QUOTE;
+
+		const fdValue = fixedResult.value as unknown as Record<string, unknown>;
+		if (typeof fdValue?.value !== 'string') return EMPTY_MIGRATION_QUOTE;
+
+		return {
+			maxOutputWei: BigInt(fdValue.value),
+			ioRatio: quote.data.formattedRatio
+		};
+	}
+
+	/** Fetch liquidity and the maker IO ratio for a migration swap order. */
+	async function fetchMigrationOrderQuote(
 		mapping: (typeof TOKEN_MIGRATION_MAPPINGS)[0],
 		network: Network
-	): Promise<number> {
-		if (!mapping.swapOrderHash) return 0;
+	): Promise<MigrationOrderQuote> {
+		if (!mapping.swapOrderHash) return EMPTY_MIGRATION_QUOTE;
 
 		const client = await getLoadBalancedClient(network);
 		const ordersResult = await client.getOrders(
@@ -52,28 +93,29 @@
 		if (ordersResult.error) {
 			throw new Error(`Failed to fetch order: ${ordersResult.error.readableMsg}`);
 		}
-		if (!ordersResult.value?.orders.length) return 0;
+		if (!ordersResult.value?.orders.length) return EMPTY_MIGRATION_QUOTE;
 
 		const quotesResult = await ordersResult.value.orders[0].getQuotes();
 		if (quotesResult.error) {
 			throw new Error(`Failed to fetch quotes: ${quotesResult.error.readableMsg}`);
 		}
-		if (!quotesResult.value?.length) return 0;
+		if (!quotesResult.value?.length) return EMPTY_MIGRATION_QUOTE;
 
-		const quote = quotesResult.value[0];
-		if (!quote?.success || !quote?.data?.maxOutput) return 0;
-
-		const maxOutputFloat = Float.fromHex(quote.data.maxOutput as `0x${string}`);
-		if (maxOutputFloat.error || !maxOutputFloat.value) return 0;
-
-		const fixedResult = maxOutputFloat.value.toFixedDecimalLossy(mapping.newToken.decimals);
-		if (fixedResult.error || !fixedResult.value) return 0;
-
-		const fdValue = fixedResult.value as unknown as Record<string, unknown>;
-		if (typeof fdValue?.value !== 'string') return 0;
-
-		return parseFloat(formatUnits(BigInt(fdValue.value), mapping.newToken.decimals));
+		return parseMigrationOrderQuote(mapping, quotesResult.value[0]);
 	}
+
+	// Legacy OARV tokens require an active on-chain certification window to transfer.
+	$: legacyCertificationQuery = createQuery({
+		queryKey: ['legacyTokenCertification', $currentNetwork?.chainId, selectedOldTokenAddress],
+		enabled: !!($currentNetwork && $showTokenSwapModal && selectedOldTokenAddress),
+		staleTime: 30_000,
+		queryFn: async () => {
+			if (!selectedOldTokenAddress) return false;
+			return isLegacyTokenCertificationExpired(selectedOldTokenAddress as `0x${string}`);
+		}
+	});
+
+	$: legacyCertificationExpired = $legacyCertificationQuery.data === true;
 
 	// Query to fetch liquidity for the currently selected token only
 	$: swapLiquidityQuery = createQuery({
@@ -88,8 +130,8 @@
 		refetchIntervalInBackground: false,
 		queryFn: async () => {
 			const network = $currentNetwork;
-			if (!network || !currentMapping) return 0;
-			return fetchLiquidityForToken(currentMapping, network);
+			if (!network || !currentMapping) return EMPTY_MIGRATION_QUOTE;
+			return fetchMigrationOrderQuote(currentMapping, network);
 		}
 	});
 
@@ -185,11 +227,33 @@
 			? preSelectedTokenData
 			: undefined);
 
-	// Available liquidity for selected token (from real order data)
-	$: availableLiquidity = $swapLiquidityQuery.data ?? 0;
+	// Available maker output (wrapped) and derived legacy pay cap for input controls.
+	$: maxOutputWei = $swapLiquidityQuery.data?.maxOutputWei ?? 0n;
+	$: swapIoRatio = $swapLiquidityQuery.data?.ioRatio ?? '1';
+	$: availablePayCapWei = migrationPayCapWei(maxOutputWei, swapIoRatio);
+	$: availablePayLiquidity = (() => {
+		if (!currentMapping || availablePayCapWei <= 0n) return 0;
+		return parseFloat(formatUnits(availablePayCapWei, currentMapping.oldToken.decimals));
+	})();
+	$: swapRateLabel = (() => {
+		const ratio = Number(swapIoRatio);
+		if (!Number.isFinite(ratio) || ratio <= 0) return '1:1';
+		if (Math.abs(ratio - 1) < 0.0001) return '1:1';
+		return `1 new ≈ ${ratio.toFixed(6).replace(/\.?0+$/, '')} old`;
+	})();
 
 	// Parse swap amount
 	$: parsedSwapAmount = parseFloat(swapAmount) || 0;
+	$: estimatedReceiveAmount = (() => {
+		if (parsedSwapAmount <= 0 || !currentMapping) return 0;
+		try {
+			const payWei = parseUnits(swapAmount || '0', currentMapping.oldToken.decimals);
+			const recvWei = migrationReceiveWei(payWei, swapIoRatio);
+			return parseFloat(formatUnits(recvWei, currentMapping.newToken.decimals));
+		} catch {
+			return 0;
+		}
+	})();
 
 	// Check if amount exceeds balance
 	$: exceedsBalance = selectedTokenData
@@ -230,9 +294,9 @@
 					: `${parts[0]}.${parts[1].slice(0, decimals)}`;
 		}
 
-		// Check if we need to show liquidity warning
+		// Check if we need to show liquidity warning (legacy pay vs pay cap)
 		const amount = parseFloat(swapAmount) || 0;
-		liquidityWarning = amount > availableLiquidity && availableLiquidity > 0;
+		liquidityWarning = amount > availablePayLiquidity && availablePayLiquidity > 0;
 	}
 
 	/** Format balance/amount for display using viem (bigint → string with token decimals) */
@@ -240,17 +304,7 @@
 		return formatUnits(value, decimals);
 	}
 
-	/** Format a decimal string amount for display (normalizes to token decimals via viem) */
-	function formatAmountDisplay(amountStr: string, decimals: number): string {
-		try {
-			const wei = parseUnits(amountStr === '' || amountStr === '.' ? '0' : amountStr, decimals);
-			return formatUnits(wei, decimals);
-		} catch {
-			return '0';
-		}
-	}
-
-	/** Format a number for display (e.g. liquidity) using viem to avoid float noise */
+	/** Format a number for display (e.g. estimated receive) using viem to avoid float noise */
 	function formatNumberWithDecimals(value: number, decimals: number): string {
 		try {
 			const wei = parseUnits(value.toFixed(decimals), decimals);
@@ -260,26 +314,30 @@
 		}
 	}
 
-	// Set max amount (capped by liquidity)
+	// Set max amount (capped by legacy pay liquidity derived from wrapped maxOutput)
 	function handleMaxClick() {
 		if (!selectedTokenData || !currentMapping) return;
 
 		const decimals = selectedTokenData.oldToken.decimals;
-		const liquidityWei = parseUnits(availableLiquidity.toFixed(decimals), decimals);
 		const maxWei =
-			selectedTokenData.balance < liquidityWei ? selectedTokenData.balance : liquidityWei;
+			selectedTokenData.balance < availablePayCapWei
+				? selectedTokenData.balance
+				: availablePayCapWei;
 		swapAmount = formatUnits(maxWei, decimals);
-		liquidityWarning = selectedTokenData.balanceFormatted > availableLiquidity;
+		liquidityWarning = selectedTokenData.balance > availablePayCapWei && availablePayCapWei > 0n;
 	}
 
-	// Cap to available liquidity
+	// Cap to available legacy pay liquidity
 	function capToLiquidity() {
-		if (!currentMapping || parsedSwapAmount <= availableLiquidity || availableLiquidity <= 0)
+		if (!currentMapping || availablePayCapWei <= 0n) return;
+		try {
+			const payWei = parseUnits(swapAmount || '0', currentMapping.oldToken.decimals);
+			if (payWei <= availablePayCapWei) return;
+			swapAmount = formatUnits(availablePayCapWei, currentMapping.oldToken.decimals);
+			liquidityWarning = true;
+		} catch {
 			return;
-		const decimals = currentMapping.oldToken.decimals;
-		const liquidityWei = parseUnits(availableLiquidity.toFixed(decimals), decimals);
-		swapAmount = formatUnits(liquidityWei, decimals);
-		liquidityWarning = true;
+		}
 	}
 
 	// Execute the swap by taking the migration order (same flow as market order)
@@ -316,8 +374,12 @@
 		try {
 			transactionStore.awaitWalletConfirmation('Preparing swap...');
 
-			const swapAmountWei = parseUnits(swapAmountStr, mapping.oldToken.decimals);
-			const requestedTakerWantsAmount = parseUnits(swapAmountStr, mapping.newToken.decimals);
+			if (await isLegacyTokenCertificationExpired(mapping.oldToken.address as `0x${string}`)) {
+				transactionStore.transactionError(
+					legacyTokenCertificationExpiredMessage(mapping.oldToken.symbol) as TransactionErrorMessage
+				);
+				return;
+			}
 
 			// 1. Fetch the migration swap order by order hash
 			const client = await getLoadBalancedClient(network);
@@ -339,6 +401,37 @@
 			}
 
 			const raindexOrderObj = ordersResult.value.orders[0];
+			const quotesResult = await raindexOrderObj.getQuotes();
+			if (quotesResult.error || !quotesResult.value?.length) {
+				transactionStore.transactionError(
+					'Failed to fetch migration order price.' as TransactionErrorMessage
+				);
+				return;
+			}
+
+			const migrationQuote = parseMigrationOrderQuote(mapping, quotesResult.value[0]);
+			if (migrationQuote.maxOutputWei <= 0n || !migrationQuote.ioRatio) {
+				transactionStore.transactionError(
+					'Migration order not available. Please try again later.' as TransactionErrorMessage
+				);
+				return;
+			}
+
+			const swapAmountWei = parseUnits(swapAmountStr, mapping.oldToken.decimals);
+			const requestedTakerWantsAmount = migrationReceiveWei(swapAmountWei, migrationQuote.ioRatio);
+			if (requestedTakerWantsAmount <= 0n) {
+				transactionStore.transactionError(
+					'Swap amount is too small for this migration order.' as TransactionErrorMessage
+				);
+				return;
+			}
+			if (requestedTakerWantsAmount > migrationQuote.maxOutputWei) {
+				transactionStore.transactionError(
+					'Not enough migration inventory for this amount. Try a smaller size.' as TransactionErrorMessage
+				);
+				return;
+			}
+
 			const sgOrderResult = raindexOrderObj.convertToSgOrder();
 			if (sgOrderResult.error || !sgOrderResult.value) {
 				transactionStore.transactionError(
@@ -368,7 +461,7 @@
 				return;
 			}
 
-			// 3. Build take-order config (single order, 1:1 migration)
+			// 3. Build take-order config — user enters old-token pay; buyUpTo for wrapped receive.
 			const takeOrderConfig: TakeOrderConfigV4 = {
 				order: orderData,
 				inputIOIndex: String(inputIndex),
@@ -376,12 +469,12 @@
 				signedContext: []
 			};
 
-			const maximumInputFloat = Float.fromFixedDecimalLossy(
+			const maximumReceiveFloat = Float.fromFixedDecimalLossy(
 				requestedTakerWantsAmount,
 				mapping.newToken.decimals
 			);
-			const ratioOne = Float.parse('1');
-			if (ratioOne.error || !ratioOne.value) {
+			const ratioParsed = Float.parse(migrationQuote.ioRatio);
+			if (!maximumReceiveFloat.float || ratioParsed.error || !ratioParsed.value) {
 				transactionStore.transactionError(
 					'Failed to build order parameters.' as TransactionErrorMessage
 				);
@@ -390,8 +483,8 @@
 
 			const takeOrdersConfig: TakeOrdersConfigV5 = {
 				minimumIO: Float.fromBigint(0n).asHex(),
-				maximumIO: maximumInputFloat.float.asHex(),
-				maximumIORatio: ratioOne.value.asHex(),
+				maximumIO: maximumReceiveFloat.float.asHex(),
+				maximumIORatio: ratioParsed.value.asHex(),
 				IOIsInput: true as unknown as string,
 				orders: [takeOrderConfig],
 				data: '0x'
@@ -414,7 +507,9 @@
 				takerWantsToken,
 				takerPaysToken,
 				requestedTakerWantsAmount,
-				orderFillAmounts: [requestedTakerWantsAmount]
+				requestedTakerPaysAmount: swapAmountWei,
+				orderFillAmounts: [requestedTakerWantsAmount],
+				skipAggregatedTake: true
 			};
 
 			// handleTakeOrders manages the transaction flow and calls transactionSuccess/Error
@@ -621,8 +716,11 @@
 								{/if}
 								<div class="flex-1 text-right">
 									<span class="text-xl font-medium text-text">
-										{parsedSwapAmount > 0
-											? formatAmountDisplay(swapAmount, currentMapping?.newToken.decimals ?? 6)
+										{estimatedReceiveAmount > 0
+											? formatNumberWithDecimals(
+													estimatedReceiveAmount,
+													currentMapping?.newToken.decimals ?? 6
+												)
 											: '0'}
 									</span>
 								</div>
@@ -635,6 +733,18 @@
 							{/if}
 						</div>
 					</div>
+
+					<!-- Certification expired (legacy OARV transfer window) -->
+					{#if legacyCertificationExpired}
+						<div
+							class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-200"
+						>
+							<p class="font-medium">Migration temporarily unavailable</p>
+							<p class="mt-0.5 text-amber-200/80">
+								{legacyTokenCertificationExpiredMessage(currentMapping?.oldToken.symbol)}
+							</p>
+						</div>
+					{/if}
 
 					<!-- Liquidity Warning -->
 					{#if liquidityWarning}
@@ -670,7 +780,7 @@
 					<div class="rounded-lg bg-surface-2 px-4 py-3 text-xs text-text-2">
 						<div class="flex justify-between">
 							<span>Rate</span>
-							<span class="text-text">1:1</span>
+							<span class="text-text">{swapRateLabel}</span>
 						</div>
 						{#if currentMapping}
 							<div class="mt-1 flex justify-between">
@@ -679,12 +789,9 @@
 									<span class="animate-pulse text-text-3">Checking...</span>
 								{:else if $swapLiquidityQuery.isError}
 									<span class="text-orange-400">Failed to check — retrying...</span>
-								{:else if availableLiquidity > 0}
+								{:else if availablePayLiquidity > 0}
 									<span class="text-text"
-										>{formatNumberWithDecimals(
-											availableLiquidity,
-											currentMapping.oldToken.decimals
-										)}
+										>{formatBalance(availablePayCapWei, currentMapping.oldToken.decimals)}
 										{currentMapping.oldToken.symbol}</span
 									>
 								{:else}
@@ -703,20 +810,26 @@
 							parsedSwapAmount <= 0 ||
 							exceedsBalance ||
 							tokensToShow.length === 0 ||
+							$legacyCertificationQuery.isLoading ||
+							legacyCertificationExpired ||
 							$swapLiquidityQuery.isLoading ||
 							$swapLiquidityQuery.isError ||
-							availableLiquidity <= 0}
+							availablePayCapWei <= 0n}
 						on:click={handleSwap}
 					>
 						{#if tokensToShow.length === 0}
 							No legacy tokens to swap
 						{:else if !selectedTokenData}
 							Select a token
+						{:else if $legacyCertificationQuery.isLoading}
+							Checking transfer status...
+						{:else if legacyCertificationExpired}
+							Migration temporarily unavailable
 						{:else if $swapLiquidityQuery.isLoading}
 							Checking liquidity...
 						{:else if $swapLiquidityQuery.isError}
 							Checking liquidity — please wait...
-						{:else if availableLiquidity <= 0}
+						{:else if availablePayCapWei <= 0n}
 							No liquidity available
 						{:else if parsedSwapAmount <= 0}
 							Enter amount
