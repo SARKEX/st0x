@@ -579,6 +579,58 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:TQQQ',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0xd92cc92557BFC33028195983ED31465F99b4A01c',
+		unwrappedAddress: '0xF5245a17E5eb64D53dEa213d40aBa01821D465Cd',
+		symbol: 'wtMC.PA',
+		decimals: 18,
+		name: 'Wrapped LVMH Moët Hennessy Louis Vuitton SE ST0x',
+		logoUrl: '/images/MC.PA.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'EURONEXT:MC',
+		tradingViewMarket: 'france',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x1C600EF167c675C878BF3222f3935C4fA2A43C31',
+		unwrappedAddress: '0xDdB07ADd0e23BB7eC97f53C0959d9c6Cc09624f4',
+		symbol: 'wtAIR.PA',
+		decimals: 18,
+		name: 'Wrapped Airbus SE ST0x',
+		logoUrl: '/images/AIR.PA.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'EURONEXT:AIR',
+		tradingViewMarket: 'france',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0xed0B0fdD92F7eece606A0FB0457352616d6e6B34',
+		unwrappedAddress: '0xa662066a60964a528aD05209139a79BDa3a7577f',
+		symbol: 'wtSIE.DE',
+		decimals: 18,
+		name: 'Wrapped Siemens Aktiengesellschaft ST0x',
+		logoUrl: '/images/SIE.DE.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'XETR:SIE',
+		tradingViewMarket: 'germany',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0xD0269618455cF7dA71665856f16C2D03A1b26290',
+		unwrappedAddress: '0x9610C265EB8F38B22Fec78498C74924D9fe55891',
+		symbol: 'wtBMW.DE',
+		decimals: 18,
+		name: 'Wrapped Bayerische Motoren Werke Aktiengesellschaft ST0x',
+		logoUrl: '/images/BMW.DE.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'XETR:BMW',
+		tradingViewMarket: 'germany',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
