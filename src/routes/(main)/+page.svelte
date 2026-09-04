@@ -296,7 +296,7 @@
 		<div class="mx-auto max-w-5xl">
 			{#if isVaultLoading}
 				<div class="flex w-full items-center justify-center py-16">
-					<LoadingSpinner variant="fullscreen" size="lg" text="Loading assets..." />
+					<LoadingSpinner variant="inline" size="lg" text="Loading assets..." />
 				</div>
 			{:else if vaultsError}
 				<div class="flex w-full items-center justify-center py-16 text-sm text-down">
