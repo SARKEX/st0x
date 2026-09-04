@@ -1,6 +1,6 @@
 // Maker-order deployment helper.
 //
-// Deploys a fixed-limit order to the orderbook on anvil using the production Rain
+// Deploys a dia-limit order to the orderbook on anvil using the production Rain
 // SDK (DotrainRegistry + RaindexOrderBuilder) — same path as the UI's
 // `src/lib/services/orderDeployment.ts`. The only thing we do differently is
 // (a) point the SDK's RPC at anvil instead of LIVE Base, and (b) submit
@@ -21,6 +21,7 @@
 // having to parse `AddOrderV*` event logs whose topic isn't documented in the
 // SDK type surface.
 
+import { ST0X_REGISTRY_MANIFEST_URL } from '$lib/config/registry';
 import {
 	createWalletClient,
 	decodeEventLog,
@@ -198,21 +199,27 @@ export async function deployMakerLimitOrder(
 			? params.pricePaymentPerAsset
 			: String(1 / parseFloat(params.pricePaymentPerAsset));
 
-	const registry = await getRegistry(
-		params.registryUrl ?? 'http://127.0.0.1:4173/registry/manifest'
-	);
-	const guiResult = await registry.getOrderBuilder('fixed-limit', 'base');
+	const registry = await getRegistry(params.registryUrl ?? ST0X_REGISTRY_MANIFEST_URL);
+	// Sell (ask) → base-dia-limit (DIA direct); buy (bid) → base-dia-limit-inv (DIA inverted).
+	const deploymentKey = orderType === 'ask' ? 'base-dia-limit' : 'base-dia-limit-inv';
+	const guiResult = await registry.getOrderBuilder('dia-limit', deploymentKey);
 	if (guiResult.error || !guiResult.value) {
 		throw new Error(
-			`registry.getOrderBuilder(fixed-limit) failed: ${guiResult.error?.readableMsg ?? 'no value'}`
+			`registry.getOrderBuilder(dia-limit, ${deploymentKey}) failed: ${guiResult.error?.readableMsg ?? 'no value'}`
 		);
 	}
 	const gui = guiResult.value;
 
-	await gui.setSelectToken('token1', sdkInputToken.address);
-	await gui.setSelectToken('token2', sdkOutputToken.address);
+	await gui.setSelectToken('input', sdkInputToken.address);
+	await gui.setSelectToken('output', sdkOutputToken.address);
+
+	// Strip wt/t prefix → DiaWords feed id (e.g. wtCOIN → "COIN").
+	const diaFeed = params.assetToken.symbol.replace(/^(wt|t)/i, '').toUpperCase();
+	gui.setFieldValue('dia-id', `"${diaFeed}"`);
+	gui.setFieldValue('baseline-multiplier', '1.0075');
+	gui.setFieldValue('oracle-price-timeout', '7200');
 	gui.setFieldValue('fixed-io', sdkRatio);
-	await gui.setDeposit('token2', formatUnits(params.depositAmount, sdkOutputToken.decimals));
+	await gui.setDeposit('output', formatUnits(params.depositAmount, sdkOutputToken.decimals));
 
 	// Deployment calldata: multicall(approvals + deposit + addOrder). Approvals are
 	// listed separately for the UX flow; we execute them one by one then submit the
