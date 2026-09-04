@@ -299,6 +299,32 @@ describe('/api/st0x proxy', () => {
 		);
 	});
 
+	it('edge-caches token trade responses for a full activity window', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					trades: [],
+					pagination: {
+						page: 1,
+						pageSize: 200,
+						totalTrades: 0,
+						totalPages: 0,
+						hasMore: false
+					}
+				}),
+				{ status: 200, headers: { 'Content-Type': 'application/json' } }
+			)
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const response = await GET(proxyEvent('GET', 'v1/trades/token/0xToken'));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('Cache-Control')).toBe(
+			'public, s-maxage=60, stale-while-revalidate=600'
+		);
+	});
+
 	it('allows cached wrap-ratio endpoints', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ data: [], errors: [] }), {

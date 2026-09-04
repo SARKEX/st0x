@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	apiGetSwapCalldataV2,
 	apiGetSwapQuoteV2,
+	apiGetTradesByToken,
 	apiGetTradesBatch,
 	apiQueryOrders,
 	apiQueryTrades
@@ -10,6 +11,29 @@ import {
 describe('st0x API client', () => {
 	beforeEach(() => {
 		vi.restoreAllMocks();
+	});
+
+	it('forwards cancellation to token trade requests', async () => {
+		const responseBody = {
+			trades: [],
+			pagination: { page: 1, pageSize: 200, totalTrades: 0, totalPages: 0, hasMore: false }
+		};
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify(responseBody), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const signal = new AbortController().signal;
+
+		await expect(apiGetTradesByToken('0xToken', 1, 200, 1_000, 2_000, signal)).resolves.toEqual(
+			responseBody
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/api/st0x/v1/trades/token/0xToken?page=1&pageSize=200&startTime=1000&endTime=2000',
+			expect.objectContaining({ signal })
+		);
 	});
 
 	it('posts v2 swap calldata requests through the authenticated proxy', async () => {
