@@ -850,13 +850,13 @@
 			<span class="h-px flex-1 bg-line"></span>
 		</div>
 
-		<!-- Launch Trading Terminal (secondary) -->
+		<!-- Open the trading interface (secondary) -->
 		<button
 			type="button"
 			class="w-full rounded-xl border border-line-strong bg-overlay-2 py-3 text-sm font-semibold text-text transition hover:bg-overlay-hover"
 			on:click={() => goto('/trade/0x2289249984f1fa2ce86c4e8867e7eb819ea7df95')}
 		>
-			Launch Trading Terminal
+			Open the trading interface
 		</button>
 	</div>
 
