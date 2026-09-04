@@ -605,6 +605,19 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NYSE:MCD',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x1197E6FA778c4D13E47875bD1761c68C22c928e0',
+		unwrappedAddress: '0xA4178410216F5f00C718BE88C2fF8AC24de192bc',
+		symbol: 'wtGRND',
+		decimals: 18,
+		name: 'Wrapped Grindr Inc. ST0x',
+		logoUrl: '/images/GRND.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:GRND',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
