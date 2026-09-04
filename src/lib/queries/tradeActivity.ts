@@ -21,7 +21,7 @@ const WINDOW_SECONDS = 30 * 24 * 60 * 60; // 30 days
 export function createTokenTradeActivityQuery(
 	network: Network | null,
 	tokenAddress: string | null,
-	pollInterval: number = 300_000
+	pollInterval: number = 900_000
 ) {
 	// Resolve to wrapped (primary) address — the SFT subgraph returns the unwrapped
 	// vault address, but trades are indexed by the wrapped ERC20 token address.
@@ -30,15 +30,17 @@ export function createTokenTradeActivityQuery(
 		: null;
 
 	return createQuery<TokenTradeActivityPayload>({
-		queryKey: ['tokenTradeActivity', network?.id, tokenAddress],
+		// Key by the canonical address used by the request so wrapped, unwrapped,
+		// and legacy aliases share one cache entry instead of duplicating traffic.
+		queryKey: ['tokenTradeActivity', network?.id, primaryAddress],
 		enabled: Boolean(network && primaryAddress),
-		staleTime: 600_000,
+		staleTime: 900_000,
 		refetchInterval: pollInterval,
 		// Don't retry on 429 — the next poll is the retry. Retrying here just piles more
 		// load onto an already-throttling upstream.
 		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
 		refetchOnWindowFocus: false,
-		queryFn: async () => {
+		queryFn: async ({ signal }) => {
 			// Bucket the window edge so consecutive polls produce identical
 			// startTime/endTime params — letting the upstream REST API serve them
 			// from one cache key instead of a fresh fan-out every second.
@@ -49,7 +51,14 @@ export function createTokenTradeActivityQuery(
 			let page = 1;
 
 			while (page <= 50) {
-				const response = await apiGetTradesByToken(primaryAddress!, page, PAGE_SIZE, from, now);
+				const response = await apiGetTradesByToken(
+					primaryAddress!,
+					page,
+					PAGE_SIZE,
+					from,
+					now,
+					signal
+				);
 				// `?? []` because the upstream REST API occasionally omits `trades`
 				// on a paginated response; `[].concat(undefined)` returns
 				// `[undefined]`, which then poisons every downstream consumer.

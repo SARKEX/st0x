@@ -701,7 +701,8 @@ export async function apiGetTradesByToken(
 	page: number = 1,
 	pageSize: number = 200,
 	startTime?: number,
-	endTime?: number
+	endTime?: number,
+	signal?: AbortSignal
 ): Promise<ApiTradesByAddressResponse> {
 	assertBrowser('apiGetTradesByToken');
 	const params = new URLSearchParams({
@@ -711,6 +712,7 @@ export async function apiGetTradesByToken(
 	if (startTime !== undefined) params.set('startTime', String(startTime));
 	if (endTime !== undefined) params.set('endTime', String(endTime));
 	return fetchJson<ApiTradesByAddressResponse>(
-		`/api/st0x/v1/trades/token/${tokenAddress}?${params}`
+		`/api/st0x/v1/trades/token/${tokenAddress}?${params}`,
+		{ signal }
 	);
 }
