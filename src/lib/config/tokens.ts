@@ -709,6 +709,71 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NYSE:MCD',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x1db49Ff8BEe88ec73F82F395B0BEAd372BdcAdb7',
+		unwrappedAddress: '0x6C2b6Ed57d4d9e93F3E4975FAc70eE4B180F4Eb9',
+		symbol: 'wtDNUT',
+		decimals: 18,
+		name: 'Wrapped Krispy Kreme, Inc. ST0x',
+		logoUrl: '/images/DNUT.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:DNUT',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x761d56D1FE1E390A96A5ECf58dE69838A231A37c',
+		unwrappedAddress: '0x47C04A6f705f755C10641E975607ecE8f18BC60c',
+		symbol: 'wtGM',
+		decimals: 18,
+		name: 'Wrapped General Motors Company ST0x',
+		logoUrl: '/images/GM.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:GM',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x35fDe767dBFAa610D12cf99914bCd6CFEda73B7B',
+		unwrappedAddress: '0xe9bc7eF69f123cA2bcA1021D1BE30224271a9217',
+		symbol: 'wtPLBY',
+		decimals: 18,
+		name: 'Wrapped Playboy, Inc. ST0x',
+		logoUrl: '/images/PLBY.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:PLBY',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x433fd2Fc0964B07E9820e4cd01774eDE59D1F002',
+		unwrappedAddress: '0xeF935b17d5BE5b7ecA803158a845A08A7A9383f2',
+		symbol: 'wtTR',
+		decimals: 18,
+		name: 'Wrapped Tootsie Roll Industries, Inc. ST0x',
+		logoUrl: '/images/TR.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:TR',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x31Fa821F8B1BDea7Db357ec9622d1A2f6aFE903d',
+		unwrappedAddress: '0xedA4df511dEA07b6529db2196998B30E03791d87',
+		symbol: 'wtWEN',
+		decimals: 18,
+		name: "Wrapped The Wendy's Company ST0x",
+		logoUrl: '/images/WEN.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NASDAQ:WEN',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
