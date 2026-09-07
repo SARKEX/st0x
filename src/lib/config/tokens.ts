@@ -579,6 +579,45 @@ export const TOKENS: CategorizedToken[] = [
 		tradingViewSymbol: 'NASDAQ:TQQQ',
 		tradingViewMarket: 'america',
 		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x0883f32d23Ed5535057a4B5E3eB1970FE08606AF',
+		unwrappedAddress: '0x88C3F4E2E0a977Fed97ed246c70BFD7A01070246',
+		symbol: 'wtNKE',
+		decimals: 18,
+		name: 'Wrapped NIKE, Inc. ST0x',
+		logoUrl: '/images/NKE.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:NKE',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x7ecAE30Ed8ee4F72653ada7b0941bDE7a0a8eE8d',
+		unwrappedAddress: '0x6363657E19A82ABE0E210e9b8c88Ea61d96eceaB',
+		symbol: 'wtMCD',
+		decimals: 18,
+		name: "Wrapped McDonald's Corporation ST0x",
+		logoUrl: '/images/MCD.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:MCD',
+		tradingViewMarket: 'america',
+		limitOrders: []
+	},
+	{
+		chainId: base.id,
+		address: '0x1197E6FA778c4D13E47875bD1761c68C22c928e0',
+		unwrappedAddress: '0xA4178410216F5f00C718BE88C2fF8AC24de192bc',
+		symbol: 'wtGRND',
+		decimals: 18,
+		name: 'Wrapped Grindr Inc. ST0x',
+		logoUrl: '/images/GRND.png',
+		category: 'ST0x',
+		tradingViewSymbol: 'NYSE:GRND',
+		tradingViewMarket: 'america',
+		limitOrders: []
 	}
 	// {
 	// 	chainId: base.id,
