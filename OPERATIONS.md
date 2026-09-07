@@ -39,6 +39,9 @@ general website traffic from exhausting each other's API-side allowance.
   Redis so they apply consistently across website instances.
 - `GET /v1/tokens` is cached at the website edge for five minutes, with a
   one-hour stale-while-revalidate window.
+- Token trade history is fresh at the website edge for one minute, remains
+  available for ten minutes during revalidation, and browser polling is limited
+  to once every fifteen minutes. Superseded token requests are aborted.
 
 Public-price REST failures emit structured `[monitor]` events with
 `endpoint=public-prices`, `credentialLabel`, and status `429` when applicable.
