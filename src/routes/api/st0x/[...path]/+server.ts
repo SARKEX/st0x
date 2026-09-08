@@ -140,30 +140,30 @@ function sharedCacheKey(
 	searchParams: URLSearchParams
 ): string {
 	const canonical = new URLSearchParams();
-	const set = (name: string, fallback?: string) => {
-		const value = searchParams.get(name) ?? fallback;
-		if (value !== undefined) canonical.set(name, value);
+	const set = (name: string) => {
+		const value = searchParams.get(name);
+		if (value !== null) canonical.set(name, value);
 	};
 
 	if (/^v1\/orders\/token\/[^/]+$/.test(pathSuffix)) {
-		set('page', '1');
-		set('pageSize', '50');
+		set('page');
+		set('pageSize');
 		set('side');
-		set('state', 'active');
+		set('state');
 	} else if (/^v1\/trades\/token\/[^/]+$/.test(pathSuffix)) {
-		set('page', '1');
-		set('pageSize', '50');
+		set('page');
+		set('pageSize');
 		set('startTime');
 		set('endTime');
 	} else if (/^v1\/tokens\/[^/]+\/details$/.test(pathSuffix)) {
 		set('chainId');
-		set('activityLimit', '5');
+		set('activityLimit');
 	} else if (/^v1\/tokens\/[^/]+\/proofs$/.test(pathSuffix)) {
 		set('chainId');
 	} else if (/^v1\/tokens\/wrap-ratio\/[^/]+\/history$/.test(pathSuffix)) {
 		set('chainId');
-		set('page', '1');
-		set('pageSize', '50');
+		set('page');
+		set('pageSize');
 	} else if (/^v1\/tokens\/wrap-ratio\/[^/]+$/.test(pathSuffix)) {
 		set('chainId');
 	}

@@ -563,7 +563,7 @@ describe('/api/st0x proxy', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('normalizes equivalent cache keys and ignores irrelevant cache-busting params', async () => {
+	it('keeps omitted and explicit upstream parameters in separate cache entries', async () => {
 		const fetchMock = vi.fn().mockImplementation(
 			async () =>
 				new Response(JSON.stringify({ orders: [], pagination: { hasMore: false } }), {
@@ -574,6 +574,31 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const first = await GET(proxyEvent('GET', 'v1/orders/token/0xAbC'));
+		const secondEvent = proxyEvent('GET', 'v1/orders/token/0xabc');
+		secondEvent.url = new URL(
+			'http://localhost/api/st0x/v1/orders/token/0xabc?noise=unique&pageSize=50&page=1'
+		);
+		const second = await GET(secondEvent);
+
+		expect(first.status).toBe(200);
+		expect(second.status).toBe(200);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock.mock.calls[0][0]).not.toBe(fetchMock.mock.calls[1][0]);
+	});
+
+	it('still normalizes address casing and ignores irrelevant cache-busting params', async () => {
+		const fetchMock = vi.fn().mockImplementation(
+			async () =>
+				new Response(JSON.stringify({ orders: [], pagination: { hasMore: false } }), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const firstEvent = proxyEvent('GET', 'v1/orders/token/0xAbC');
+		firstEvent.url = new URL('http://localhost/api/st0x/v1/orders/token/0xAbC?pageSize=50&page=1');
+		const first = await GET(firstEvent);
 		const secondEvent = proxyEvent('GET', 'v1/orders/token/0xabc');
 		secondEvent.url = new URL(
 			'http://localhost/api/st0x/v1/orders/token/0xabc?noise=unique&pageSize=50&page=1'
