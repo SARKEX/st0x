@@ -56,22 +56,22 @@ describe('trade history request amplification', () => {
 			.mockResolvedValueOnce(page([takerOne], true))
 			.mockResolvedValueOnce(page([takerTwo], false));
 
-		const result = await fetchAllUserTrades('0xuser');
+		const result = await fetchAllUserTrades('0xuser', 8453);
 
-		expect(apiMocks.apiGetTradesByAddress).toHaveBeenNthCalledWith(1, '0xuser', {
+		expect(apiMocks.apiGetTradesByAddress).toHaveBeenNthCalledWith(1, '0xuser', 8453, {
 			page: 1,
 			pageSize: 500
 		});
-		expect(apiMocks.apiGetTradesByAddress).toHaveBeenNthCalledWith(2, '0xuser', {
+		expect(apiMocks.apiGetTradesByAddress).toHaveBeenNthCalledWith(2, '0xuser', 8453, {
 			page: 2,
 			pageSize: 500
 		});
 		expect(apiMocks.apiGetTakerTrades).toHaveBeenCalledTimes(2);
-		expect(apiMocks.apiGetTakerTrades).toHaveBeenNthCalledWith(1, '0xuser', {
+		expect(apiMocks.apiGetTakerTrades).toHaveBeenNthCalledWith(1, '0xuser', 8453, {
 			page: 1,
 			pageSize: 500
 		});
-		expect(apiMocks.apiGetTakerTrades).toHaveBeenNthCalledWith(2, '0xuser', {
+		expect(apiMocks.apiGetTakerTrades).toHaveBeenNthCalledWith(2, '0xuser', 8453, {
 			page: 2,
 			pageSize: 500
 		});
@@ -83,9 +83,9 @@ describe('trade history request amplification', () => {
 		const trades = [trade('taker-1'), trade('taker-2')];
 		apiMocks.apiGetTakerTrades.mockResolvedValueOnce(page(trades, true));
 
-		await expect(fetchRecentTakerTrades('0xuser')).resolves.toEqual({ trades });
+		await expect(fetchRecentTakerTrades('0xuser', 8453)).resolves.toEqual({ trades });
 		expect(apiMocks.apiGetTakerTrades).toHaveBeenCalledOnce();
-		expect(apiMocks.apiGetTakerTrades).toHaveBeenCalledWith('0xuser', {
+		expect(apiMocks.apiGetTakerTrades).toHaveBeenCalledWith('0xuser', 8453, {
 			page: 1,
 			pageSize: 500
 		});

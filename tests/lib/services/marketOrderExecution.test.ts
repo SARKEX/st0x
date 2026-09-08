@@ -77,6 +77,7 @@ const APPROVAL_HASH = `0x${'a'.repeat(64)}` as const;
 const TRADE_HASH = `0x${'b'.repeat(64)}` as const;
 const network = {
 	id: 8453,
+	chainId: 8453,
 	trustedOrderbooks: [ORDERBOOK]
 } as unknown as Parameters<typeof executeMarketOrder>[0]['network'];
 const tokens = {
@@ -122,6 +123,7 @@ function takeOrdersData(
 function readyResponse(
 	request: ApiSwapCalldataV2Request = {
 		taker: TAKER,
+		chainId: 8453,
 		inputToken: PAYMENT,
 		outputToken: ASSET,
 		mode: 'buyUpTo',
@@ -248,6 +250,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 				})
 			).toEqual({
 				...expected,
+				chainId: 8453,
 				slippageBps: 75,
 				referenceIoRatio: '2.5',
 				denomination: 'wrapped'
@@ -287,6 +290,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 		expect(result).toEqual({ success: true });
 		expect(mocks.apiGetSwapCalldataV2).toHaveBeenCalledWith({
 			taker: TAKER,
+			chainId: 8453,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
 			mode: 'buyUpTo',
@@ -300,7 +304,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 			data: expect.stringMatching(/^0x69c72856/),
 			value: 0n
 		});
-		expect(mocks.apiGetTradesByTx).toHaveBeenCalledWith(TRADE_HASH);
+		expect(mocks.apiGetTradesByTx).toHaveBeenCalledWith(TRADE_HASH, 8453);
 		expect(mocks.invalidateCostBasis).toHaveBeenCalledOnce();
 		expect(mocks.invalidateTakerTrades).toHaveBeenCalledOnce();
 		expect(mocks.transactionSuccess).toHaveBeenCalledWith(TRADE_HASH, 'Market order confirmed', {
@@ -317,6 +321,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 		mocks.apiGetTradesByTx.mockResolvedValue({
 			...indexedTradeResponse({
 				taker: TAKER,
+				chainId: 8453,
 				inputToken: ASSET,
 				outputToken: PAYMENT,
 				mode: 'spendUpTo',
@@ -358,6 +363,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 		mocks.apiGetTradesByTx.mockResolvedValue({
 			...indexedTradeResponse({
 				taker: TAKER,
+				chainId: 8453,
 				inputToken: PAYMENT,
 				outputToken: ASSET,
 				mode: 'buyUpTo',
@@ -465,6 +471,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 	it('refreshes ready calldata immediately before wallet broadcast', async () => {
 		const initialRequest = {
 			taker: TAKER,
+			chainId: 8453,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
 			mode: 'buyUpTo' as const,
@@ -474,6 +481,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 		};
 		const refreshRequest = {
 			taker: TAKER,
+			chainId: 8453,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
 			mode: 'buyUpTo' as const,
@@ -524,6 +532,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 		});
 		const retryRequest = {
 			taker: TAKER,
+			chainId: 8453,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
 			mode: 'buyUpTo' as const,
@@ -579,6 +588,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 		});
 		const retryRequest = {
 			taker: TAKER,
+			chainId: 8453,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
 			mode: 'buyUpTo' as const,

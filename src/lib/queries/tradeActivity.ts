@@ -53,6 +53,7 @@ export function createTokenTradeActivityQuery(
 			while (page <= 50) {
 				const response = await apiGetTradesByToken(
 					primaryAddress!,
+					network!.chainId,
 					page,
 					PAGE_SIZE,
 					from,
@@ -93,7 +94,7 @@ export function createBatchTradesQuery(
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		queryFn: async () => {
-			const response = await apiGetTradesBatch(orderHashes);
+			const response = await apiGetTradesBatch(orderHashes, network!.chainId);
 			const map = new Map<string, ApiTradeByAddress[]>();
 			for (const entry of response.tradesByOrderHash) {
 				map.set(entry.orderHash.toLowerCase(), entry.trades);
@@ -107,10 +108,13 @@ export type TakerTradesPayload = {
 	trades: ApiTradeByAddress[];
 };
 
-export async function fetchRecentTakerTrades(walletAddress: string): Promise<TakerTradesPayload> {
+export async function fetchRecentTakerTrades(
+	walletAddress: string,
+	chainId: number
+): Promise<TakerTradesPayload> {
 	// Preserve the existing 500-trade display limit in one REST request instead of
 	// ten sequential 50-trade requests.
-	const response = await apiGetTakerTrades(walletAddress, { page: 1, pageSize: 500 });
+	const response = await apiGetTakerTrades(walletAddress, chainId, { page: 1, pageSize: 500 });
 	return { trades: response.trades ?? [] };
 }
 
@@ -125,6 +129,6 @@ export function createTakerTradesQuery(
 		staleTime: 600_000,
 		refetchInterval: pollInterval,
 		retry: shouldRetryTradeQuery,
-		queryFn: () => fetchRecentTakerTrades(walletAddress!)
+		queryFn: () => fetchRecentTakerTrades(walletAddress!, network!.chainId)
 	});
 }

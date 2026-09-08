@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	apiGetSwapCalldataV2,
 	apiGetSwapQuoteV2,
+	apiGetTokenDetailsByAddress,
 	apiGetTradesByToken,
 	apiGetTradesBatch,
 	apiQueryOrders,
@@ -27,11 +28,11 @@ describe('st0x API client', () => {
 		vi.stubGlobal('fetch', fetchMock);
 		const signal = new AbortController().signal;
 
-		await expect(apiGetTradesByToken('0xToken', 1, 200, 1_000, 2_000, signal)).resolves.toEqual(
+		await expect(apiGetTradesByToken('0xToken', 8453, 1, 200, 1_000, 2_000, signal)).resolves.toEqual(
 			responseBody
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'/api/st0x/v1/trades/token/0xToken?page=1&pageSize=200&startTime=1000&endTime=2000',
+			'/api/st0x/v1/trades/token/0xToken?chainId=8453&page=1&pageSize=200&startTime=1000&endTime=2000',
 			expect.objectContaining({ signal })
 		);
 	});
@@ -56,6 +57,7 @@ describe('st0x API client', () => {
 
 		const result = await apiGetSwapCalldataV2({
 			taker: '0x0000000000000000000000000000000000000002',
+			chainId: 8453,
 			inputToken: '0x0000000000000000000000000000000000000003',
 			outputToken: '0x0000000000000000000000000000000000000004',
 			mode: 'spendUpTo',
@@ -70,6 +72,7 @@ describe('st0x API client', () => {
 				method: 'POST',
 				body: JSON.stringify({
 					taker: '0x0000000000000000000000000000000000000002',
+					chainId: 8453,
 					inputToken: '0x0000000000000000000000000000000000000003',
 					outputToken: '0x0000000000000000000000000000000000000004',
 					mode: 'spendUpTo',
@@ -103,6 +106,7 @@ describe('st0x API client', () => {
 
 		const request = {
 			taker: '0x0000000000000000000000000000000000000002',
+			chainId: 8453,
 			inputToken: responseBody.inputToken,
 			outputToken: responseBody.outputToken,
 			mode: 'buyUpTo' as const,
@@ -216,13 +220,38 @@ describe('st0x API client', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		await expect(apiGetTradesBatch(['0xhash'])).resolves.toEqual(response);
+		await expect(apiGetTradesBatch(['0xhash'], 8453)).resolves.toEqual(response);
 		expect(fetchMock).toHaveBeenCalledWith(
 			'/api/st0x/v1/trades/query',
 			expect.objectContaining({
 				method: 'POST',
-				body: JSON.stringify({ orderHashes: ['0xhash'] })
+				body: JSON.stringify({ orderHashes: ['0xhash'], chainId: 8453 })
 			})
+		);
+	});
+
+	it('sends chainId when fetching token details by address', async () => {
+		const responseBody = {
+			address: '0xToken',
+			symbol: 'wtTEST',
+			name: 'Test',
+			chainId: 8453,
+			activity: { deposits: [], withdraws: [] }
+		};
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify(responseBody), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			apiGetTokenDetailsByAddress('0xToken', 8453, { activityLimit: 5 })
+		).resolves.toEqual(responseBody);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/api/st0x/v1/tokens/0xToken/details?chainId=8453&activityLimit=5',
+			expect.anything()
 		);
 	});
 });

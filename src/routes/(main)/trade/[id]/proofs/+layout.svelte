@@ -12,8 +12,8 @@
 
 	$: query = createQuery({
 		queryKey: ['getTokenProofs', id, $currentNetwork?.id],
-		enabled: Boolean(browser && id),
-		queryFn: () => apiGetTokenProofs(id)
+		enabled: Boolean(browser && id && $currentNetwork),
+		queryFn: () => apiGetTokenProofs(id, $currentNetwork!.chainId)
 	});
 
 	$: if ($query && $query.data) {

@@ -80,7 +80,10 @@ function takerTradeToCostBasis(trade: ApiTradeByAddress, userAddress: string): C
  * Fetch all trades for a user from the REST API (paginated).
  * Combines maker trades (user's orders were filled) and taker trades (user executed market orders).
  */
-export async function fetchAllUserTrades(userAddress: string): Promise<UserTradeHistory> {
+export async function fetchAllUserTrades(
+	userAddress: string,
+	chainId: number
+): Promise<UserTradeHistory> {
 	const costBasisTrades: CostBasisTrade[] = [];
 	const takerTrades: ApiTradeByAddress[] = [];
 	const seen = new Set<string>();
@@ -89,7 +92,7 @@ export async function fetchAllUserTrades(userAddress: string): Promise<UserTrade
 	let makerPage = 1;
 	let makerHasMore = true;
 	while (makerHasMore) {
-		const response = await apiGetTradesByAddress(userAddress, {
+		const response = await apiGetTradesByAddress(userAddress, chainId, {
 			page: makerPage,
 			pageSize: TRADE_HISTORY_PAGE_SIZE
 		});
@@ -109,7 +112,7 @@ export async function fetchAllUserTrades(userAddress: string): Promise<UserTrade
 	let takerPage = 1;
 	let takerHasMore = true;
 	while (takerHasMore) {
-		const response = await apiGetTakerTrades(userAddress, {
+		const response = await apiGetTakerTrades(userAddress, chainId, {
 			page: takerPage,
 			pageSize: TRADE_HISTORY_PAGE_SIZE
 		});
@@ -152,7 +155,10 @@ export function createCostBasisQuery(network: Network | null, userAddress: strin
 			}
 
 			// Fetch all trades for the user via REST API
-			const { costBasisTrades, takerTrades } = await fetchAllUserTrades(userAddress);
+			const { costBasisTrades, takerTrades } = await fetchAllUserTrades(
+				userAddress,
+				network.chainId
+			);
 
 			// Get payment token addresses for this network
 			const paymentTokens = PAYMENT_TOKENS_BY_NETWORK[network.chainId] ?? [];

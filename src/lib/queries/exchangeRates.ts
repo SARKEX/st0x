@@ -175,7 +175,10 @@ export function createExchangeRatesQuery(chainId: number = BASE_CHAIN_ID) {
 		staleTime: 60_000,
 		refetchOnWindowFocus: true,
 		queryFn: async () => {
-			const [apiTokens, wrapRatios] = await Promise.all([apiGetTokens(), apiGetWrapRatios()]);
+			const [apiTokens, wrapRatios] = await Promise.all([
+				apiGetTokens(chainId),
+				apiGetWrapRatios(chainId)
+			]);
 			warnWrapRatioErrors(wrapRatios);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
 			return buildLookup(wrapRatios.data.map((row) => mapApiWrapRatio(row, tokens)));
@@ -204,8 +207,8 @@ export function createExchangeRateHistoryQuery(
 				throw new Error('wrappedTokenAddress is required');
 			}
 			const [apiTokens, history] = await Promise.all([
-				apiGetTokens(),
-				apiGetWrapRatioHistory(wrappedTokenAddress, options)
+				apiGetTokens(chainId),
+				apiGetWrapRatioHistory(wrappedTokenAddress, chainId, options)
 			]);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
 			return mapApiWrapRatioHistory(history, tokens);

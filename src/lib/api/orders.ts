@@ -367,7 +367,10 @@ export async function fetchAndQuoteOwnerOrders(
 	let page = 1;
 	let hasMore = true;
 	while (hasMore && page <= MAX_ORDER_PAGES) {
-		const response = await apiGetOrdersByOwner(ownerAddress, { page, pageSize: 50 });
+		const response = await apiGetOrdersByOwner(ownerAddress, chainId ?? networkId, {
+			page,
+			pageSize: 50
+		});
 		for (const order of response.orders) {
 			if (chainId !== undefined && order.chainId !== chainId) continue;
 			if (seen.has(order.orderHash)) continue;
@@ -404,7 +407,7 @@ export async function fetchAndQuoteTokenOrders(
 	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
 
 	return collectProcessedOrderPages({
-		fetchPage: (page) => apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 }),
+		fetchPage: (page) => apiGetOrdersByToken(tokenAddress, networkId, { page, pageSize: 50 }),
 		paymentToken,
 		allTokens,
 		networkId,

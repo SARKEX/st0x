@@ -50,6 +50,7 @@ test.describe('TEST-06 — Buy market order via REST calldata', () => {
 
 		expect(await requestReceived).toEqual({
 			taker: fundedAccount.address,
+			chainId: 8453,
 			inputToken: tokens.USDC.address,
 			outputToken: tokens.wtCOIN.address,
 			mode: 'buyUpTo',

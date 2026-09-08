@@ -118,6 +118,7 @@ export function createApiTokensQuery(chainId: number | null | undefined) {
 		staleTime: 5 * 60_000, // 5 minutes
 		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
 		refetchOnWindowFocus: false,
-		queryFn: async () => normalizeApiTokensForNetwork(await apiGetTokens(), chainId as number)
+		queryFn: async () =>
+			normalizeApiTokensForNetwork(await apiGetTokens(chainId as number), chainId as number)
 	});
 }
