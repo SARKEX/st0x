@@ -20,6 +20,7 @@
 // Pattern lifted from albion.dex playwright.config.ts. webServer boots in
 // parallel with globalSetup; globalSetup waits for both before running specs.
 import { defineConfig } from '@playwright/test';
+import { ST0X_REGISTRY_MANIFEST_URL } from './src/lib/config/registry';
 
 export default defineConfig({
 	testDir: 'tests/integration/ui',
@@ -53,12 +54,11 @@ export default defineConfig({
 			// auth.ts (and other server modules) throw at load-time when this
 			// secret is unset. Synthetic value — the E2E suite never authenticates
 			// real users.
-			SESSION_SECRET: 'e2e-build-only-dummy-session-secret'
-			// PUBLIC_REGISTRY_URL deliberately UNSET — exercises the production
-			// default `/registry/manifest`, which resolves the REST API's active
-			// source commit to the matching public st0x.registry manifest. If you
-			// need an isolated registry in CI, set the env var to an immutable
-			// public registry URL.
+			SESSION_SECRET: 'e2e-build-only-dummy-session-secret',
+			// Pin dia-limit (and siblings) to the immutable st0x.registry commit
+			// from ST0x-Technology/st0x.registry#41 until the REST API registry
+			// source commit is bumped in production.
+			PUBLIC_REGISTRY_URL: ST0X_REGISTRY_MANIFEST_URL
 		}
 	}
 });
