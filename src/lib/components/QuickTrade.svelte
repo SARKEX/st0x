@@ -7,7 +7,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
-	import type { OrderbookQuoteCache } from '$lib/queries/orderbook';
+	import { createTokenOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createApiTokensQuery } from '$lib/queries/tokens';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { openAuthModal } from '$lib/stores/dynamicStore';
@@ -164,25 +164,13 @@
 				})
 			: null;
 
-	// TanStack Query for quotes — polls every 15s, retries on failure, preserves stale data
-	$: orderbookQuery = createQuery<OrderbookQuoteCache>({
-		queryKey: ['tokenOrderbookQuotes', $currentNetwork?.id, selectedTokenAddress],
-		enabled: browser && Boolean($currentNetwork && selectedTokenAddress),
-		staleTime: 30_000,
-		retry: 2,
-		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-		refetchOnMount: 'always',
-		refetchInterval: 15_000,
-		refetchOnWindowFocus: true,
-		refetchIntervalInBackground: false,
-		queryFn: async () => {
-			if (!browser || !$currentNetwork || !selectedTokenAddress) {
-				return { summary: {}, quotes: [] };
-			}
-			const { refreshTokenQuotes } = await import('$lib/queries/orderbook');
-			return refreshTokenQuotes($currentNetwork.id, selectedTokenAddress);
-		}
-	});
+	// Reuse the canonical query lifecycle so the homepage and trade page share one
+	// cache key, one in-flight request, and the same 429-aware retry policy.
+	$: orderbookQuery = createTokenOrderbookQuotesQuery(
+		$currentNetwork,
+		selectedTokenAddress,
+		60_000
+	);
 	$: quotes = $orderbookQuery.data?.quotes ?? [];
 	let marketQuoteRequest: ApiSwapQuoteV2Request | null;
 	$: marketQuoteRequest =

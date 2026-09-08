@@ -9,6 +9,7 @@
 import { env } from '$env/dynamic/private';
 import { getLogger, getRequestContext, requestIdOrUuid } from '$lib/server/logger';
 import { logSt0xRequestBudget } from '$lib/server/st0xBudgetTelemetry';
+import { getCachedSt0xResponse, type CachedSt0xResponse } from '$lib/server/st0xProxyCache';
 import type { RequestEvent, RequestHandler } from './$types';
 
 const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
@@ -49,54 +50,68 @@ function getAuthHeader(): string {
 	return 'Basic ' + btoa(`${key}:${secret}`);
 }
 
-const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: string }> = [
+const ALLOWED_PROXY_ROUTES: Array<{
+	method: string;
+	pattern: RegExp;
+	cache?: string;
+	originTtlSeconds?: number;
+}> = [
 	{ method: 'GET', pattern: /^health$/ },
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens$/,
-		cache: 'public, s-maxage=300, stale-while-revalidate=3600'
+		cache: 'public, s-maxage=300, stale-while-revalidate=3600',
+		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/details$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+		cache: 'public, s-maxage=300, stale-while-revalidate=3600',
+		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/[^/]+\/details$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+		cache: 'public, s-maxage=300, stale-while-revalidate=3600',
+		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/wrap-ratio$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+		cache: 'public, s-maxage=60, stale-while-revalidate=300',
+		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/wrap-ratio\/[^/]+$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+		cache: 'public, s-maxage=60, stale-while-revalidate=300',
+		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/wrap-ratio\/[^/]+\/history$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+		cache: 'public, s-maxage=60, stale-while-revalidate=300',
+		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/[^/]+\/proofs$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300'
+		cache: 'public, s-maxage=300, stale-while-revalidate=3600',
+		originTtlSeconds: 300
 	},
 	// Shared endpoints — same response for all users, cache at Vercel edge
 	{
 		method: 'GET',
 		pattern: /^v1\/orders\/token\/[^/]+$/,
-		cache: 'public, s-maxage=5, stale-while-revalidate=120'
+		cache: 'public, s-maxage=60, stale-while-revalidate=120',
+		originTtlSeconds: 60
 	},
 	{ method: 'POST', pattern: /^v1\/orders\/query$/ },
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=600'
+		cache: 'public, s-maxage=900, stale-while-revalidate=3600',
+		originTtlSeconds: 900
 	},
 	// Per-user endpoints — no shared caching
 	{ method: 'GET', pattern: /^v1\/orders\/owner\/[^/]+$/ },
@@ -110,9 +125,51 @@ const ALLOWED_PROXY_ROUTES: Array<{ method: string; pattern: RegExp; cache?: str
 	{ method: 'POST', pattern: /^v2\/swap\/calldata$/ }
 ];
 
-function matchProxyRoute(method: string, pathSuffix: string): { cache?: string } | null {
+function matchProxyRoute(
+	method: string,
+	pathSuffix: string
+): { cache?: string; originTtlSeconds?: number } | null {
 	const route = ALLOWED_PROXY_ROUTES.find((r) => r.method === method && r.pattern.test(pathSuffix));
-	return route ? { cache: route.cache } : null;
+	return route ? { cache: route.cache, originTtlSeconds: route.originTtlSeconds } : null;
+}
+
+function sharedCacheKey(
+	apiBase: string,
+	pathSuffix: string,
+	searchParams: URLSearchParams
+): string {
+	const canonical = new URLSearchParams();
+	const set = (name: string, fallback?: string) => {
+		const value = searchParams.get(name) ?? fallback;
+		if (value !== undefined) canonical.set(name, value);
+	};
+
+	if (/^v1\/orders\/token\/[^/]+$/.test(pathSuffix)) {
+		set('page', '1');
+		set('pageSize', '50');
+		set('side');
+		set('state', 'active');
+	} else if (/^v1\/trades\/token\/[^/]+$/.test(pathSuffix)) {
+		set('page', '1');
+		set('pageSize', '50');
+		set('startTime');
+		set('endTime');
+	} else if (/^v1\/tokens\/[^/]+\/details$/.test(pathSuffix)) {
+		set('chainId');
+		set('activityLimit', '5');
+	} else if (/^v1\/tokens\/[^/]+\/proofs$/.test(pathSuffix)) {
+		set('chainId');
+	} else if (/^v1\/tokens\/wrap-ratio\/[^/]+\/history$/.test(pathSuffix)) {
+		set('chainId');
+		set('page', '1');
+		set('pageSize', '50');
+	} else if (/^v1\/tokens\/wrap-ratio\/[^/]+$/.test(pathSuffix)) {
+		set('chainId');
+	}
+
+	const query = canonical.toString();
+	const normalizedPath = pathSuffix.replace(/0x[0-9a-f]+/gi, (address) => address.toLowerCase());
+	return `cache:st0x-proxy:${apiBase}/${normalizedPath}${query ? `?${query}` : ''}`;
 }
 
 async function shouldCacheResponse(pathSuffix: string, response: Response): Promise<boolean> {
@@ -190,10 +247,38 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 		init.body = body;
 	}
 
-	let response: Response;
-	try {
-		response = await fetch(targetUrl, init);
+	const fetchUpstream = async (shared: boolean): Promise<CachedSt0xResponse> => {
+		const upstreamInit = shared ? { ...init, signal: undefined } : init;
+		const response = await fetch(targetUrl, upstreamInit);
 		logSt0xRequestBudget(pathSuffix, 'general', response);
+		const body = await response.text();
+		const cacheable = Boolean(
+			matched.cache &&
+				matched.originTtlSeconds &&
+				(await shouldCacheResponse(
+					pathSuffix,
+					new Response(body, { status: response.status, headers: response.headers })
+				))
+		);
+		return {
+			status: response.status,
+			statusText: response.statusText,
+			contentType: response.headers.get('Content-Type') ?? 'application/json',
+			retryAfter: response.headers.get('Retry-After'),
+			body,
+			cacheable
+		};
+	};
+
+	let upstream: CachedSt0xResponse;
+	try {
+		upstream = matched.originTtlSeconds
+			? await getCachedSt0xResponse(
+					sharedCacheKey(apiBase, pathSuffix, url.searchParams),
+					matched.originTtlSeconds,
+					() => fetchUpstream(true)
+				)
+			: await fetchUpstream(false);
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Unknown upstream error';
 		getLogger().error(
@@ -204,20 +289,18 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	}
 
 	const responseHeaders = new Headers();
-	responseHeaders.set('Content-Type', response.headers.get('Content-Type') ?? 'application/json');
-	for (const headerName of ['x-request-id', 'retry-after']) {
-		const value = response.headers.get(headerName);
-		if (value) responseHeaders.set(headerName, value);
-	}
-	if (!response.ok) {
+	responseHeaders.set('Content-Type', upstream.contentType);
+	responseHeaders.set('X-Request-Id', requestId);
+	if (upstream.retryAfter) responseHeaders.set('Retry-After', upstream.retryAfter);
+	if (upstream.status < 200 || upstream.status >= 300) {
 		responseHeaders.set('Cache-Control', 'no-store');
-	} else if (matched.cache && (await shouldCacheResponse(pathSuffix, response))) {
+	} else if (matched.cache && upstream.cacheable) {
 		responseHeaders.set('Cache-Control', matched.cache);
 	}
 
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
+	return new Response(upstream.body, {
+		status: upstream.status,
+		statusText: upstream.statusText,
 		headers: responseHeaders
 	});
 };

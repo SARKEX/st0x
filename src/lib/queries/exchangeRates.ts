@@ -7,7 +7,6 @@
  */
 import { browser } from '$app/environment';
 import {
-	apiGetTokens,
 	apiGetWrapRatioHistory,
 	apiGetWrapRatios,
 	type ApiWrapRatio,
@@ -15,7 +14,11 @@ import {
 	type ApiWrapRatiosResponse
 } from '$lib/api/st0xApi';
 import type { CategorizedToken } from '$lib/config/tokens';
-import { findApiTokenByAnyAddress, normalizeApiTokensForNetwork } from '$lib/queries/tokens';
+import {
+	findApiTokenByAnyAddress,
+	getCachedApiTokens,
+	normalizeApiTokensForNetwork
+} from '$lib/queries/tokens';
 import { createQuery } from '@tanstack/svelte-query';
 
 const BASE_CHAIN_ID = 8453;
@@ -175,7 +178,7 @@ export function createExchangeRatesQuery(chainId: number = BASE_CHAIN_ID) {
 		staleTime: 60_000,
 		refetchOnWindowFocus: true,
 		queryFn: async () => {
-			const [apiTokens, wrapRatios] = await Promise.all([apiGetTokens(), apiGetWrapRatios()]);
+			const [apiTokens, wrapRatios] = await Promise.all([getCachedApiTokens(), apiGetWrapRatios()]);
 			warnWrapRatioErrors(wrapRatios);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
 			return buildLookup(wrapRatios.data.map((row) => mapApiWrapRatio(row, tokens)));
@@ -204,8 +207,8 @@ export function createExchangeRateHistoryQuery(
 				throw new Error('wrappedTokenAddress is required');
 			}
 			const [apiTokens, history] = await Promise.all([
-				apiGetTokens(),
-				apiGetWrapRatioHistory(wrappedTokenAddress, options)
+				getCachedApiTokens(),
+				apiGetWrapRatioHistory(wrappedTokenAddress, chainId, options)
 			]);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
 			return mapApiWrapRatioHistory(history, tokens);

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRequestEvent } from '../../hooks/_helpers';
 import { env } from '$env/dynamic/private';
 import { GET, POST } from '../../../src/routes/api/st0x/[...path]/+server';
+import { clearLocalSt0xProxyCache } from '$lib/server/st0xProxyCache';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: {}
@@ -29,6 +30,7 @@ function proxyEvent(
 
 describe('/api/st0x proxy', () => {
 	beforeEach(() => {
+		clearLocalSt0xProxyCache();
 		env.ST0X_API_URL = 'https://api.example.test/';
 		env.ST0X_API_KEY = 'test-key';
 		env.ST0X_API_SECRET = 'test-secret';
@@ -321,7 +323,7 @@ describe('/api/st0x proxy', () => {
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe(
-			'public, s-maxage=60, stale-while-revalidate=600'
+			'public, s-maxage=900, stale-while-revalidate=3600'
 		);
 	});
 
@@ -394,7 +396,7 @@ describe('/api/st0x proxy', () => {
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe(
-			'public, s-maxage=60, stale-while-revalidate=300'
+			'public, s-maxage=300, stale-while-revalidate=3600'
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
 			'https://api.example.test/v1/tokens/details?page=1',
@@ -464,12 +466,64 @@ describe('/api/st0x proxy', () => {
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe(
-			'public, s-maxage=60, stale-while-revalidate=300'
+			'public, s-maxage=300, stale-while-revalidate=3600'
 		);
 		expect(fetchMock).toHaveBeenCalledWith(
 			'https://api.example.test/v1/tokens/0xToken/details?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
+	});
+
+	it('coalesces concurrent cacheable requests and reuses the origin response', async () => {
+		let resolveFetch: ((response: Response) => void) | undefined;
+		const fetchMock = vi.fn().mockImplementation(
+			() =>
+				new Promise<Response>((resolve) => {
+					resolveFetch = resolve;
+				})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const first = GET(proxyEvent('GET', 'v1/orders/token/0xShared'));
+		const second = GET(proxyEvent('GET', 'v1/orders/token/0xShared'));
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		resolveFetch?.(
+			new Response(JSON.stringify({ orders: [], pagination: { hasMore: false } }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+
+		const [firstResponse, secondResponse] = await Promise.all([first, second]);
+		expect(firstResponse.status).toBe(200);
+		expect(secondResponse.status).toBe(200);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+
+		const thirdResponse = await GET(proxyEvent('GET', 'v1/orders/token/0xShared'));
+		expect(thirdResponse.status).toBe(200);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('normalizes equivalent cache keys and ignores irrelevant cache-busting params', async () => {
+		const fetchMock = vi.fn().mockImplementation(
+			async () =>
+				new Response(JSON.stringify({ orders: [], pagination: { hasMore: false } }), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const first = await GET(proxyEvent('GET', 'v1/orders/token/0xAbC'));
+		const secondEvent = proxyEvent('GET', 'v1/orders/token/0xabc');
+		secondEvent.url = new URL(
+			'http://localhost/api/st0x/v1/orders/token/0xabc?noise=unique&pageSize=50&page=1'
+		);
+		const second = await GET(secondEvent);
+
+		expect(first.status).toBe(200);
+		expect(second.status).toBe(200);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('forwards the website request id and preserves upstream correlation metadata', async () => {

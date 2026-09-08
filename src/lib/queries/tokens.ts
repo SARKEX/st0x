@@ -1,8 +1,20 @@
 import { browser } from '$app/environment';
 import { createQuery } from '@tanstack/svelte-query';
 import { apiGetTokens, type ApiToken } from '$lib/api/st0xApi';
+import { queryClient } from '$lib/clients/queryClient';
 import { isRateLimitError } from '$lib/clients/http';
 import type { CategorizedToken, TokenCategory } from '$lib/config/tokens';
+
+export const API_TOKENS_QUERY_KEY = ['st0xApiTokens'] as const;
+export const API_TOKENS_STALE_TIME_MS = 5 * 60_000;
+
+export function getCachedApiTokens(): Promise<ApiToken[]> {
+	return queryClient.fetchQuery({
+		queryKey: API_TOKENS_QUERY_KEY,
+		queryFn: apiGetTokens,
+		staleTime: API_TOKENS_STALE_TIME_MS
+	});
+}
 
 type ApiTokenExtensions = {
 	category?: unknown;
@@ -108,16 +120,17 @@ export function findApiTokenByAnyAddress(
 }
 
 export function createApiTokensQuery(chainId: number | null | undefined) {
-	return createQuery<CategorizedToken[]>({
-		queryKey: ['st0xApiTokens', chainId],
+	return createQuery<ApiToken[], Error, CategorizedToken[]>({
+		queryKey: API_TOKENS_QUERY_KEY,
 		enabled: Boolean(browser && chainId),
 		// The supported-token list is effectively static config; it does not need to be
 		// re-fetched on every mount/focus. Aggressive refetch here (staleTime:0 +
 		// refetchOnMount:'always' + refetchOnWindowFocus) fired /v1/tokens from ~9 mount
 		// sites and contributed to the upstream rate-limit storm.
-		staleTime: 5 * 60_000, // 5 minutes
+		staleTime: API_TOKENS_STALE_TIME_MS,
 		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
 		refetchOnWindowFocus: false,
-		queryFn: async () => normalizeApiTokensForNetwork(await apiGetTokens(), chainId as number)
+		queryFn: apiGetTokens,
+		select: (tokens) => normalizeApiTokensForNetwork(tokens, chainId as number)
 	});
 }

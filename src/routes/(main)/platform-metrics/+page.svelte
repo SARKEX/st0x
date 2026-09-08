@@ -2,7 +2,6 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import { networks } from '$lib/config/network';
 	import type { CategorizedToken, Network } from '$lib/config/network';
-	import { apiGetTokens } from '$lib/api/st0xApi';
 	import type { TradingViewQuote } from '$lib/api/tradingview';
 	import PageContainer from '$lib/components/ui/PageContainer.svelte';
 	import Table from '$lib/components/ui/table/Table.svelte';
@@ -16,7 +15,12 @@
 	import type { GetVaultsFilters, RaindexVault } from '@rainlanguage/raindex';
 	import { createOrderbookQuotesQuery } from '$lib/queries/orderbook';
 	import { createPriceFeedsQuery } from '$lib/queries/priceFeeds';
-	import { normalizeApiTokensForNetwork } from '$lib/queries/tokens';
+	import {
+		API_TOKENS_QUERY_KEY,
+		API_TOKENS_STALE_TIME_MS,
+		normalizeApiTokensForNetwork
+	} from '$lib/queries/tokens';
+	import { apiGetTokens, type ApiToken } from '$lib/api/st0xApi';
 	import type { PublicTradeActivityResponse } from '../../api/public/trade-activity/+server';
 	import { trackPageView } from '$lib/services/analytics';
 	import { initScrollTracking } from '$lib/utils/scrollTracking';
@@ -46,14 +50,13 @@
 
 	const priceFeedQueries = networks.map((network) => createPriceFeedsQuery(network));
 	const orderbookQueries = networks.map((network) => createOrderbookQuotesQuery(network));
-	const apiTokensQuery = createQuery<CategorizedToken[]>({
-		queryKey: ['st0xApiTokens', 'allNetworks'],
+	const apiTokensQuery = createQuery<ApiToken[], Error, CategorizedToken[]>({
+		queryKey: API_TOKENS_QUERY_KEY,
 		enabled: browser,
-		staleTime: 0,
-		refetchOnMount: 'always',
-		refetchOnWindowFocus: true,
-		queryFn: async () => {
-			const apiTokens = await apiGetTokens();
+		staleTime: API_TOKENS_STALE_TIME_MS,
+		refetchOnWindowFocus: false,
+		queryFn: apiGetTokens,
+		select: (apiTokens) => {
 			const tokens = networks.flatMap((network) =>
 				normalizeApiTokensForNetwork(apiTokens, network.chainId)
 			);

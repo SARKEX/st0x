@@ -85,9 +85,9 @@ export function createSftsQuery(network: Network | null) {
 			if (response.errors.length) {
 				console.warn('Some token details failed to load', response.errors);
 			}
-			return response.data.map((summary) =>
-				tokenDetailsSummaryToVault(summary, undefined, network?.chainId)
-			);
+			return response.data
+				.filter((summary) => summary.chainId === network?.chainId)
+				.map((summary) => tokenDetailsSummaryToVault(summary, undefined, summary.chainId));
 		}
 	});
 }
@@ -127,14 +127,16 @@ export function createSingleSftQuery(
 	return createQuery<OffchainAssetReceiptVault | null>({
 		queryKey: ['sft', network?.id, tokenId],
 		enabled: Boolean(browser && network && tokenId),
-		staleTime: 30_000,
+		staleTime: 5 * 60_000,
 		refetchInterval: false,
-		refetchOnWindowFocus: true, // Only refetch on focus if stale
+		refetchOnWindowFocus: false,
 		initialData: getCachedToken() ?? undefined,
 		initialDataUpdatedAt: getCachedTimestamp(),
 		queryFn: async () => {
 			if (!network || !tokenId) return null;
-			const detail = await apiGetTokenDetailsByAddress(tokenId, { activityLimit: 5 });
+			const detail = await apiGetTokenDetailsByAddress(tokenId, network.chainId, {
+				activityLimit: 5
+			});
 			return tokenDetailsSummaryToVault(detail, detail, network.chainId);
 		}
 	});

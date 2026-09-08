@@ -248,21 +248,21 @@ export async function refreshLegacyTokenQuotes(
  *
  * @param network - Current network
  * @param tokenAddress - Token address to fetch quotes for
- * @param pollInterval - Polling interval in ms (default: 15000 for trade pages)
+ * @param pollInterval - Polling interval in ms (default: 60000 for trade pages)
  */
 export function createTokenOrderbookQuotesQuery(
 	network: Network | null,
 	tokenAddress: string | null,
-	pollInterval: number | false = 15_000
+	pollInterval: number | false = 60_000
 ) {
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
 		enabled: Boolean(browser && network && tokenAddress),
-		staleTime: 30_000, // Stale after 30s (server caches at 15s)
+		staleTime: 60_000,
 		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-		refetchOnMount: 'always', // Always refresh when component mounts
-		refetchInterval: pollInterval, // Poll every 15s by default on trade pages
+		refetchOnMount: false,
+		refetchInterval: pollInterval,
 		// Focus refetch re-fired a token fan-out on every tab switch; the poll keeps it fresh.
 		refetchOnWindowFocus: false,
 		refetchIntervalInBackground: false,
