@@ -14,6 +14,7 @@ import type { RequestEvent, RequestHandler } from './$types';
 
 const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
 const TOKEN_LIST_PATH = 'v1/tokens';
+const TOKEN_DETAILS_PATH = /^v1\/tokens\/[^/]+\/details$/;
 
 function errorResponse(requestId: string, status: number, code: string, message: string): Response {
 	return new Response(
@@ -172,10 +173,55 @@ function sharedCacheKey(
 	return `cache:st0x-proxy:${apiBase}/${normalizedPath}${query ? `?${query}` : ''}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isTokenDetailsSummary(value: unknown): boolean {
+	if (!isRecord(value)) return false;
+	return (
+		typeof value.chainId === 'number' &&
+		Number.isInteger(value.chainId) &&
+		typeof value.address === 'string' &&
+		value.address.length > 0 &&
+		typeof value.name === 'string' &&
+		typeof value.symbol === 'string' &&
+		typeof value.decimals === 'number' &&
+		Number.isInteger(value.decimals) &&
+		typeof value.totalSupply === 'string' &&
+		typeof value.holderCount === 'number' &&
+		typeof value.transferCount === 'number' &&
+		typeof value.bridgedSupply === 'string' &&
+		typeof value.depositVolume === 'string' &&
+		typeof value.withdrawVolume === 'string' &&
+		typeof value.activityVolume === 'string'
+	);
+}
+
+function isTokenDetails(value: unknown): boolean {
+	if (!isTokenDetailsSummary(value) || !isRecord(value)) return false;
+	const activity = value.activity;
+	return (
+		typeof value.sftVaultAddress === 'string' &&
+		typeof value.deployTimestamp === 'number' &&
+		typeof value.deployer === 'string' &&
+		typeof value.admin === 'string' &&
+		isRecord(activity) &&
+		Array.isArray(activity.deposits) &&
+		Array.isArray(activity.withdraws)
+	);
+}
+
 async function shouldCacheResponse(pathSuffix: string, response: Response): Promise<boolean> {
 	if (!response.ok) return false;
 
-	if (pathSuffix !== TOKEN_DETAILS_LIST_PATH && pathSuffix !== TOKEN_LIST_PATH) return true;
+	if (
+		pathSuffix !== TOKEN_DETAILS_LIST_PATH &&
+		pathSuffix !== TOKEN_LIST_PATH &&
+		!TOKEN_DETAILS_PATH.test(pathSuffix)
+	) {
+		return true;
+	}
 
 	try {
 		const body = (await response.clone().json()) as unknown;
@@ -198,9 +244,10 @@ async function shouldCacheResponse(pathSuffix: string, response: Response): Prom
 				})
 			);
 		}
+		if (TOKEN_DETAILS_PATH.test(pathSuffix)) return isTokenDetails(body);
 
-		const details = body as { errors?: unknown };
-		return !Array.isArray(details.errors) || details.errors.length === 0;
+		if (!isRecord(body) || !Array.isArray(body.data) || !Array.isArray(body.errors)) return false;
+		return body.errors.length === 0 && body.data.every(isTokenDetailsSummary);
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'Unknown parse error';
 		console.warn('[st0x-proxy] Skipping token metadata cache for unreadable response:', msg);
@@ -292,7 +339,11 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 	responseHeaders.set('Content-Type', upstream.contentType);
 	responseHeaders.set('X-Request-Id', requestId);
 	if (upstream.retryAfter) responseHeaders.set('Retry-After', upstream.retryAfter);
-	if (upstream.status < 200 || upstream.status >= 300) {
+	if (
+		upstream.status < 200 ||
+		upstream.status >= 300 ||
+		(Boolean(matched.cache) && !upstream.cacheable)
+	) {
 		responseHeaders.set('Cache-Control', 'no-store');
 	} else if (matched.cache && upstream.cacheable) {
 		responseHeaders.set('Cache-Control', matched.cache);

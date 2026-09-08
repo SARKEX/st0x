@@ -258,7 +258,7 @@ export function createTokenOrderbookQuotesQuery(
 	return createQuery<OrderbookQuoteCache>({
 		queryKey: ['tokenOrderbookQuotes', network?.id, tokenAddress],
 		enabled: Boolean(browser && network && tokenAddress),
-		staleTime: 60_000,
+		staleTime: Infinity,
 		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2,
 		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
 		refetchOnMount: false,

@@ -74,6 +74,25 @@ function tokenDetailsSummaryToVault(
 	};
 }
 
+export function filterTokenDetailsSummariesForChain(
+	summaries: unknown[],
+	chainId: number
+): ApiTokenDetailsSummary[] {
+	return summaries.filter((summary): summary is ApiTokenDetailsSummary => {
+		if (
+			!summary ||
+			typeof summary !== 'object' ||
+			!('chainId' in summary) ||
+			typeof summary.chainId !== 'number' ||
+			!Number.isInteger(summary.chainId)
+		) {
+			console.warn('Ignoring token details summary with missing or invalid chainId', summary);
+			return false;
+		}
+		return summary.chainId === chainId;
+	});
+}
+
 export function createSftsQuery(network: Network | null) {
 	return createQuery<OffchainAssetReceiptVault[]>({
 		queryKey: ['sfts', network?.id],
@@ -85,9 +104,9 @@ export function createSftsQuery(network: Network | null) {
 			if (response.errors.length) {
 				console.warn('Some token details failed to load', response.errors);
 			}
-			return response.data
-				.filter((summary) => summary.chainId === network?.chainId)
-				.map((summary) => tokenDetailsSummaryToVault(summary, undefined, summary.chainId));
+			return filterTokenDetailsSummariesForChain(response.data, network?.chainId as number).map(
+				(summary) => tokenDetailsSummaryToVault(summary, undefined, summary.chainId)
+			);
 		}
 	});
 }
@@ -127,7 +146,7 @@ export function createSingleSftQuery(
 	return createQuery<OffchainAssetReceiptVault | null>({
 		queryKey: ['sft', network?.id, tokenId],
 		enabled: Boolean(browser && network && tokenId),
-		staleTime: 5 * 60_000,
+		staleTime: Infinity,
 		refetchInterval: false,
 		refetchOnWindowFocus: false,
 		initialData: getCachedToken() ?? undefined,

@@ -6,13 +6,14 @@ import { isRateLimitError } from '$lib/clients/http';
 import type { CategorizedToken, TokenCategory } from '$lib/config/tokens';
 
 export const API_TOKENS_QUERY_KEY = ['st0xApiTokens'] as const;
-export const API_TOKENS_STALE_TIME_MS = 5 * 60_000;
+export const API_TOKENS_STALE_TIME_MS = Infinity;
 
 export function getCachedApiTokens(): Promise<ApiToken[]> {
 	return queryClient.fetchQuery({
 		queryKey: API_TOKENS_QUERY_KEY,
 		queryFn: apiGetTokens,
-		staleTime: API_TOKENS_STALE_TIME_MS
+		staleTime: API_TOKENS_STALE_TIME_MS,
+		retry: (failureCount, error) => !isRateLimitError(error) && failureCount < 2
 	});
 }
 

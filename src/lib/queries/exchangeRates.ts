@@ -17,6 +17,7 @@ import type { CategorizedToken } from '$lib/config/tokens';
 import {
 	findApiTokenByAnyAddress,
 	getCachedApiTokens,
+	getTokenAddressVariants,
 	normalizeApiTokensForNetwork
 } from '$lib/queries/tokens';
 import { createQuery } from '@tanstack/svelte-query';
@@ -148,6 +149,17 @@ export function mapApiWrapRatioHistory(
 	};
 }
 
+export function filterApiWrapRatiosForTokens(
+	rows: ApiWrapRatio[],
+	tokens: CategorizedToken[]
+): ApiWrapRatio[] {
+	const networkAddresses = new Set(tokens.flatMap(getTokenAddressVariants));
+	return rows.filter(
+		(row) =>
+			networkAddresses.has(toKey(row.shareAddress)) || networkAddresses.has(toKey(row.assetAddress))
+	);
+}
+
 /**
  * Returns the wrap ratio (number of underlying t* per 1 wt*) for a given
  * token address — accepts either the share (wt*) or asset (t*) address.
@@ -181,7 +193,8 @@ export function createExchangeRatesQuery(chainId: number = BASE_CHAIN_ID) {
 			const [apiTokens, wrapRatios] = await Promise.all([getCachedApiTokens(), apiGetWrapRatios()]);
 			warnWrapRatioErrors(wrapRatios);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
-			return buildLookup(wrapRatios.data.map((row) => mapApiWrapRatio(row, tokens)));
+			const networkRows = filterApiWrapRatiosForTokens(wrapRatios.data, tokens);
+			return buildLookup(networkRows.map((row) => mapApiWrapRatio(row, tokens)));
 		}
 	});
 }

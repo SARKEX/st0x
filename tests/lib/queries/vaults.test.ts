@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRaindexClient } from '$lib/clients/raindex';
-import { fetchUserVaultsPage } from '$lib/queries/vaults';
+import { fetchUserVaultsPage, filterTokenDetailsSummariesForChain } from '$lib/queries/vaults';
 
 vi.mock('$lib/clients/raindex', () => ({
 	createRaindexClient: vi.fn()
@@ -86,5 +86,20 @@ describe('fetchUserVaultsPage', () => {
 
 		expect(getVaults).toHaveBeenCalledTimes(1);
 		expect(result.vaults).toHaveLength(1);
+	});
+});
+
+describe('filterTokenDetailsSummariesForChain', () => {
+	it('selects the requested chain and rejects summaries without a valid chainId', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const base = { chainId: 8453, address: '0xBase' };
+		const ethereum = { chainId: 1, address: '0xEthereum' };
+		const missingChain = { address: '0xMissing' };
+		const invalidChain = { chainId: '8453', address: '0xInvalid' };
+
+		expect(
+			filterTokenDetailsSummariesForChain([base, ethereum, missingChain, invalidChain], 8453)
+		).toEqual([base]);
+		expect(warn).toHaveBeenCalledTimes(2);
 	});
 });

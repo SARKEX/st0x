@@ -10,6 +10,28 @@ vi.mock('$env/dynamic/private', () => ({
 
 type St0xProxyEvent = Parameters<typeof GET>[0];
 
+function tokenDetailsBody() {
+	return {
+		chainId: 8453,
+		address: '0xToken',
+		name: 'Wrapped Token',
+		symbol: 'wtTOK',
+		decimals: 18,
+		totalSupply: '100',
+		holderCount: 1,
+		transferCount: 2,
+		bridgedSupply: '100',
+		depositVolume: '10',
+		withdrawVolume: '5',
+		activityVolume: '15',
+		sftVaultAddress: '0xVault',
+		deployTimestamp: 1,
+		deployer: '0xDeployer',
+		admin: '0xAdmin',
+		activity: { deposits: [], withdraws: [] }
+	};
+}
+
 function proxyEvent(
 	method: string,
 	path: string,
@@ -77,7 +99,7 @@ describe('/api/st0x proxy', () => {
 		const response = await GET(proxyEvent('GET', 'v1/tokens'));
 
 		expect(response.status).toBe(200);
-		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(response.headers.get('Cache-Control')).toBe('no-store');
 	});
 
 	it('allows POST /v1/swap/quote and forwards the JSON body without caching', async () => {
@@ -422,7 +444,7 @@ describe('/api/st0x proxy', () => {
 		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
 
 		expect(response.status).toBe(200);
-		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(response.headers.get('Cache-Control')).toBe('no-store');
 		expect(await response.json()).toEqual({
 			data: [{ address: '0xGood' }],
 			errors: [{ address: '0xMissing', message: 'subgraph returned error status' }]
@@ -442,7 +464,7 @@ describe('/api/st0x proxy', () => {
 		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
 
 		expect(response.status).toBe(200);
-		expect(response.headers.get('Cache-Control')).toBeNull();
+		expect(response.headers.get('Cache-Control')).toBe('no-store');
 		expect(await response.text()).toBe('not json');
 		expect(warn).toHaveBeenCalledWith(
 			'[st0x-proxy] Skipping token metadata cache for unreadable response:',
@@ -450,15 +472,32 @@ describe('/api/st0x proxy', () => {
 		);
 	});
 
-	it('allows cached token details by address endpoint', async () => {
-		const fetchMock = vi.fn().mockResolvedValue(
-			new Response(
-				JSON.stringify({ address: '0xToken', activity: { deposits: [], withdraws: [] } }),
-				{
+	it('does not cache malformed successful token details lists', async () => {
+		const fetchMock = vi.fn().mockImplementation(
+			async () =>
+				new Response('{}', {
 					status: 200,
 					headers: { 'Content-Type': 'application/json' }
-				}
-			)
+				})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const first = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const second = await GET(proxyEvent('GET', 'v1/tokens/details'));
+
+		expect(first.status).toBe(200);
+		expect(second.status).toBe(200);
+		expect(first.headers.get('Cache-Control')).toBe('no-store');
+		expect(second.headers.get('Cache-Control')).toBe('no-store');
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('allows cached token details by address endpoint', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify(tokenDetailsBody()), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
@@ -472,6 +511,26 @@ describe('/api/st0x proxy', () => {
 			'https://api.example.test/v1/tokens/0xToken/details?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
+	});
+
+	it('does not cache malformed successful token details responses', async () => {
+		const fetchMock = vi.fn().mockImplementation(
+			async () =>
+				new Response('{}', {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const first = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
+		const second = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
+
+		expect(first.status).toBe(200);
+		expect(second.status).toBe(200);
+		expect(first.headers.get('Cache-Control')).toBe('no-store');
+		expect(second.headers.get('Cache-Control')).toBe('no-store');
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it('coalesces concurrent cacheable requests and reuses the origin response', async () => {
