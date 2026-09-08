@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+	apiGetTokenDetailsByAddress,
+	apiGetTokenProofs,
+	apiGetWrapRatioHistory,
 	apiGetSwapCalldataV2,
 	apiGetSwapQuoteV2,
 	apiGetTradesByToken,
@@ -34,6 +37,26 @@ describe('st0x API client', () => {
 			'/api/st0x/v1/trades/token/0xToken?page=1&pageSize=200&startTime=1000&endTime=2000',
 			expect.objectContaining({ signal })
 		);
+	});
+
+	it('includes chainId in address-based token routes', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockImplementation(
+				async () =>
+					new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await apiGetTokenDetailsByAddress('0xToken', 8453, { activityLimit: 5 });
+		await apiGetTokenProofs('0xToken', 8453);
+		await apiGetWrapRatioHistory('0xToken', 8453, { page: 2, pageSize: 10 });
+
+		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+			'/api/st0x/v1/tokens/0xToken/details?chainId=8453&activityLimit=5',
+			'/api/st0x/v1/tokens/0xToken/proofs?chainId=8453',
+			'/api/st0x/v1/tokens/wrap-ratio/0xToken/history?chainId=8453&page=2&pageSize=10'
+		]);
 	});
 
 	it('posts v2 swap calldata requests through the authenticated proxy', async () => {

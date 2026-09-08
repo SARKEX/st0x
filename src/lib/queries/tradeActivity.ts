@@ -21,7 +21,7 @@ const WINDOW_SECONDS = 30 * 24 * 60 * 60; // 30 days
 export function createTokenTradeActivityQuery(
 	network: Network | null,
 	tokenAddress: string | null,
-	pollInterval: number = 900_000
+	pollInterval: number | false = 900_000
 ) {
 	// Resolve to wrapped (primary) address — the SFT subgraph returns the unwrapped
 	// vault address, but trades are indexed by the wrapped ERC20 token address.

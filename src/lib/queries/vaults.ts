@@ -74,6 +74,25 @@ function tokenDetailsSummaryToVault(
 	};
 }
 
+export function filterTokenDetailsSummariesForChain(
+	summaries: unknown[],
+	chainId: number
+): ApiTokenDetailsSummary[] {
+	return summaries.filter((summary): summary is ApiTokenDetailsSummary => {
+		if (
+			!summary ||
+			typeof summary !== 'object' ||
+			!('chainId' in summary) ||
+			typeof summary.chainId !== 'number' ||
+			!Number.isInteger(summary.chainId)
+		) {
+			console.warn('Ignoring token details summary with missing or invalid chainId', summary);
+			return false;
+		}
+		return summary.chainId === chainId;
+	});
+}
+
 export function createSftsQuery(network: Network | null) {
 	return createQuery<OffchainAssetReceiptVault[]>({
 		queryKey: ['sfts', network?.id],
@@ -85,8 +104,8 @@ export function createSftsQuery(network: Network | null) {
 			if (response.errors.length) {
 				console.warn('Some token details failed to load', response.errors);
 			}
-			return response.data.map((summary) =>
-				tokenDetailsSummaryToVault(summary, undefined, network?.chainId)
+			return filterTokenDetailsSummariesForChain(response.data, network?.chainId as number).map(
+				(summary) => tokenDetailsSummaryToVault(summary, undefined, summary.chainId)
 			);
 		}
 	});
@@ -127,14 +146,16 @@ export function createSingleSftQuery(
 	return createQuery<OffchainAssetReceiptVault | null>({
 		queryKey: ['sft', network?.id, tokenId],
 		enabled: Boolean(browser && network && tokenId),
-		staleTime: 30_000,
+		staleTime: Infinity,
 		refetchInterval: false,
-		refetchOnWindowFocus: true, // Only refetch on focus if stale
+		refetchOnWindowFocus: false,
 		initialData: getCachedToken() ?? undefined,
 		initialDataUpdatedAt: getCachedTimestamp(),
 		queryFn: async () => {
 			if (!network || !tokenId) return null;
-			const detail = await apiGetTokenDetailsByAddress(tokenId, { activityLimit: 5 });
+			const detail = await apiGetTokenDetailsByAddress(tokenId, network.chainId, {
+				activityLimit: 5
+			});
 			return tokenDetailsSummaryToVault(detail, detail, network.chainId);
 		}
 	});
