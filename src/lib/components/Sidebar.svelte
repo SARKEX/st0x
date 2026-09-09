@@ -188,7 +188,11 @@
 											aria-pressed={isFav}
 											on:click={(event) => onToggleFavorite(event, listKey)}
 										>
-											<Icon name="star" className="h-3.5 w-3.5" fill={isFav ? 'currentColor' : 'none'} />
+											<Icon
+												name="star"
+												className="h-3.5 w-3.5"
+												fill={isFav ? 'currentColor' : 'none'}
+											/>
 										</button>
 										<button
 											type="button"
