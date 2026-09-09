@@ -134,7 +134,9 @@ export type EarnIconName =
 	| 'chart'
 	| 'lock'
 	| 'swap'
-	| 'home';
+	| 'home'
+	| 'star'
+	| 'eye';
 
 export interface Pillar {
 	icon: EarnIconName;

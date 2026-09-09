@@ -3,7 +3,6 @@
 	import { onMount } from 'svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Header from '$lib/components/Header.svelte';
-	import TickerTape from '$lib/components/TickerTape.svelte';
 	import AmbientBackground from '$lib/components/AmbientBackground.svelte';
 	import MobileTabBar from '$lib/components/MobileTabBar.svelte';
 	import { page } from '$app/stores';
@@ -161,11 +160,6 @@
 		<!-- Old tokens banner (shown when user has legacy tokens that need to be swapped) -->
 		{#if OldTokensBanner}
 			<svelte:component this={OldTokensBanner} />
-		{/if}
-
-		<!-- Ticker tape underneath header (trade pages only) -->
-		{#if isTradePage}
-			<div class="hidden sm:block"><TickerTape /></div>
 		{/if}
 
 		<slot {sidebarExpanded} />

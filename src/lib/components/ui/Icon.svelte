@@ -10,12 +10,13 @@
 	export let name: IconName;
 	export let className = 'h-5 w-5';
 	export let stroke = 1.6;
+	export let fill = 'none';
 </script>
 
 <svg
 	viewBox="0 0 24 24"
 	class="icon-{name} {className}"
-	fill="none"
+	fill={fill}
 	stroke="currentColor"
 	stroke-width={stroke}
 	stroke-linecap="round"
@@ -88,5 +89,10 @@
 		<path d="M6 9l6 6 6-6" />
 	{:else if name === 'trendUp'}
 		<path d="M3 17l6-6 4 4 8-8M21 7h-5m5 0v5" />
+	{:else if name === 'star'}
+		<path d="M12 3.5l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 15.9 7.2 18.4l.9-5.4-3.9-3.8 5.4-.8L12 3.5z" />
+	{:else if name === 'eye'}
+		<path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" />
+		<circle cx="12" cy="12" r="2.5" />
 	{/if}
 </svg>
