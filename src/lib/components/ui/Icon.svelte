@@ -16,7 +16,7 @@
 <svg
 	viewBox="0 0 24 24"
 	class="icon-{name} {className}"
-	fill={fill}
+	{fill}
 	stroke="currentColor"
 	stroke-width={stroke}
 	stroke-linecap="round"
