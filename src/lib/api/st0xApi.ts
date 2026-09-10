@@ -284,6 +284,7 @@ export interface ApiTokenDetailsError {
 }
 
 export interface ApiTokenDetailsSummary {
+	chainId: number;
 	address: string;
 	deployTimestamp?: number;
 	receiptContractAddress?: string | null;

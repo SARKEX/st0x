@@ -74,6 +74,30 @@ function tokenDetailsSummaryToVault(
 	};
 }
 
+/**
+ * Token details is multi-chain; the home/sidebar keyed lists use address as id.
+ * Keep only the active network's rows and dedupe by address so Svelte keyed
+ * `{#each}` blocks never see duplicate keys (Ethereum + HyperEVM share many
+ * addresses that Base does not).
+ */
+export function filterTokenDetailsSummariesForChain(
+	summaries: ApiTokenDetailsSummary[],
+	chainId: number
+): ApiTokenDetailsSummary[] {
+	const seen = new Set<string>();
+	const result: ApiTokenDetailsSummary[] = [];
+
+	for (const summary of summaries) {
+		if (summary.chainId !== chainId) continue;
+		const addressKey = summary.address.toLowerCase();
+		if (seen.has(addressKey)) continue;
+		seen.add(addressKey);
+		result.push(summary);
+	}
+
+	return result;
+}
+
 export function createSftsQuery(network: Network | null) {
 	return createQuery<OffchainAssetReceiptVault[]>({
 		queryKey: ['sfts', network?.id],
@@ -85,8 +109,10 @@ export function createSftsQuery(network: Network | null) {
 			if (response.errors.length) {
 				console.warn('Some token details failed to load', response.errors);
 			}
-			return response.data.map((summary) =>
-				tokenDetailsSummaryToVault(summary, undefined, network?.chainId)
+			const chainId = network?.chainId;
+			if (typeof chainId !== 'number') return [];
+			return filterTokenDetailsSummariesForChain(response.data, chainId).map((summary) =>
+				tokenDetailsSummaryToVault(summary, undefined, summary.chainId)
 			);
 		}
 	});
