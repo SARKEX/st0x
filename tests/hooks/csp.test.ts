@@ -82,6 +82,12 @@ describe('hooks.server CSP', () => {
 		expect(csp).toContain('rain-oracle-server.fly.dev');
 	});
 
+	it('connect-src allows Goldsky and Ormi subgraph hosts', async () => {
+		const csp = await getCspForPath('/trade');
+		expect(csp).toContain('https://api.goldsky.com');
+		expect(csp).toContain('https://subgraph.api.ormilabs.com');
+	});
+
 	it('X-Frame-Options DENY is set (defense-in-depth alongside frame-ancestors)', async () => {
 		const { handle } = await import('../../src/hooks.server');
 		const event = createMockRequestEvent({ pathname: '/trade' });

@@ -74,11 +74,20 @@ function tokenDetailsSummaryToVault(
 	};
 }
 
+/**
+ * Token details is multi-chain; the home/sidebar keyed lists use address as id.
+ * Keep only the active network's rows and dedupe by address so Svelte keyed
+ * `{#each}` blocks never see duplicate keys (Ethereum + HyperEVM share many
+ * addresses that Base does not). Invalid/missing chainId rows are skipped.
+ */
 export function filterTokenDetailsSummariesForChain(
 	summaries: unknown[],
 	chainId: number
 ): ApiTokenDetailsSummary[] {
-	return summaries.filter((summary): summary is ApiTokenDetailsSummary => {
+	const seen = new Set<string>();
+	const result: ApiTokenDetailsSummary[] = [];
+
+	for (const summary of summaries) {
 		if (
 			!summary ||
 			typeof summary !== 'object' ||
@@ -87,10 +96,18 @@ export function filterTokenDetailsSummariesForChain(
 			!Number.isInteger(summary.chainId)
 		) {
 			console.warn('Ignoring token details summary with missing or invalid chainId', summary);
-			return false;
+			continue;
 		}
-		return summary.chainId === chainId;
-	});
+		if (summary.chainId !== chainId) continue;
+
+		const typed = summary as ApiTokenDetailsSummary;
+		const addressKey = typed.address.toLowerCase();
+		if (seen.has(addressKey)) continue;
+		seen.add(addressKey);
+		result.push(typed);
+	}
+
+	return result;
 }
 
 export function createSftsQuery(network: Network | null) {
@@ -104,8 +121,10 @@ export function createSftsQuery(network: Network | null) {
 			if (response.errors.length) {
 				console.warn('Some token details failed to load', response.errors);
 			}
-			return filterTokenDetailsSummariesForChain(response.data, network?.chainId as number).map(
-				(summary) => tokenDetailsSummaryToVault(summary, undefined, summary.chainId)
+			const chainId = network?.chainId;
+			if (typeof chainId !== 'number') return [];
+			return filterTokenDetailsSummariesForChain(response.data, chainId).map((summary) =>
+				tokenDetailsSummaryToVault(summary, undefined, summary.chainId)
 			);
 		}
 	});

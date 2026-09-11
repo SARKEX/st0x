@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRaindexClient } from '$lib/clients/raindex';
 import { fetchUserVaultsPage, filterTokenDetailsSummariesForChain } from '$lib/queries/vaults';
+import type { ApiTokenDetailsSummary } from '$lib/api/st0xApi';
 
 vi.mock('$lib/clients/raindex', () => ({
 	createRaindexClient: vi.fn()
@@ -26,6 +27,80 @@ function mockVault(id: string, balance = '1000') {
 		ordersAsInput: []
 	};
 }
+
+function summary(
+	overrides: Partial<ApiTokenDetailsSummary> & Pick<ApiTokenDetailsSummary, 'chainId' | 'address'>
+): ApiTokenDetailsSummary {
+	return {
+		name: 'Wrapped Test',
+		symbol: 'wtTEST',
+		decimals: 18,
+		totalSupply: '0',
+		holderCount: 0,
+		transferCount: 0,
+		bridgedSupply: '0',
+		depositVolume: '0',
+		withdrawVolume: '0',
+		activityVolume: '0',
+		...overrides
+	};
+}
+
+describe('filterTokenDetailsSummariesForChain', () => {
+	it('keeps only the requested chain and dedupes by address', () => {
+		const shared = '0x1d6f0763e58fa6d472d470eaaef0a4c08080d208';
+		const filtered = filterTokenDetailsSummariesForChain(
+			[
+				summary({ chainId: 999, address: shared, symbol: 'wtTTWO' }),
+				summary({ chainId: 1, address: shared, symbol: 'wtTTWO' }),
+				summary({
+					chainId: 8453,
+					address: '0x045fb493d970f94a54feaf931033622fc82192e6',
+					symbol: 'wtTTWO'
+				}),
+				summary({
+					chainId: 8453,
+					address: '0x045FB493d970f94A54FeAf931033622fc82192E6',
+					symbol: 'wtTTWO-DUP'
+				}),
+				summary({
+					chainId: 8453,
+					address: '0x78c31580c97101694C70022c83D570150c11e935',
+					symbol: 'wtSGOV'
+				})
+			],
+			8453
+		);
+
+		expect(
+			filtered.map((row) => ({ chainId: row.chainId, symbol: row.symbol, address: row.address }))
+		).toEqual([
+			{
+				chainId: 8453,
+				symbol: 'wtTTWO',
+				address: '0x045fb493d970f94a54feaf931033622fc82192e6'
+			},
+			{
+				chainId: 8453,
+				symbol: 'wtSGOV',
+				address: '0x78c31580c97101694C70022c83D570150c11e935'
+			}
+		]);
+	});
+
+	it('selects the requested chain and rejects summaries without a valid chainId', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const base = { chainId: 8453, address: '0xBase' };
+		const ethereum = { chainId: 1, address: '0xEthereum' };
+		const missingChain = { address: '0xMissing' };
+		const invalidChain = { chainId: '8453', address: '0xInvalid' };
+
+		expect(
+			filterTokenDetailsSummariesForChain([base, ethereum, missingChain, invalidChain], 8453)
+		).toEqual([base]);
+		expect(warn).toHaveBeenCalledTimes(2);
+	});
+});
 
 describe('fetchUserVaultsPage', () => {
 	const getVaults = vi.fn();
@@ -86,20 +161,5 @@ describe('fetchUserVaultsPage', () => {
 
 		expect(getVaults).toHaveBeenCalledTimes(1);
 		expect(result.vaults).toHaveLength(1);
-	});
-});
-
-describe('filterTokenDetailsSummariesForChain', () => {
-	it('selects the requested chain and rejects summaries without a valid chainId', () => {
-		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const base = { chainId: 8453, address: '0xBase' };
-		const ethereum = { chainId: 1, address: '0xEthereum' };
-		const missingChain = { address: '0xMissing' };
-		const invalidChain = { chainId: '8453', address: '0xInvalid' };
-
-		expect(
-			filterTokenDetailsSummariesForChain([base, ethereum, missingChain, invalidChain], 8453)
-		).toEqual([base]);
-		expect(warn).toHaveBeenCalledTimes(2);
 	});
 });
