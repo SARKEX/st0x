@@ -41,7 +41,9 @@
 	// programme is not equities-only (it holds ETFs, commodity trusts and a closed-end
 	// fund), so the label says "markets" and the number tracks what is actually listed.
 	$: marketCount = $currentNetwork ? getTokensByNetwork($currentNetwork.chainId).length : 0;
-	$: tradeQuery = createTokenTradeActivityQuery($currentNetwork, token?.address ?? null);
+	// The homepage chart is decorative context, not a live execution surface. Fetch its
+	// shared snapshot once and leave continuous activity polling to the trade page.
+	$: tradeQuery = createTokenTradeActivityQuery($currentNetwork, token?.address ?? null, false);
 
 	$: assetAddresses = (() => {
 		const set = new Set<string>();

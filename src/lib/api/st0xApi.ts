@@ -279,6 +279,7 @@ export interface ApiTokenProofsResponse {
 // ============================================================================
 
 export interface ApiTokenDetailsError {
+	chainId: number;
 	address: string;
 	message: string;
 }
@@ -485,9 +486,12 @@ export async function apiGetTokens(): Promise<ApiToken[]> {
 /**
  * Fetch raw proof/attestation metadata for a tokenized asset.
  */
-export async function apiGetTokenProofs(address: string): Promise<ApiTokenProofsResponse> {
+export async function apiGetTokenProofs(
+	address: string,
+	chainId: number
+): Promise<ApiTokenProofsResponse> {
 	assertBrowser('apiGetTokenProofs');
-	return fetchJson<ApiTokenProofsResponse>(apiUrl(`/v1/tokens/${address}/proofs`));
+	return fetchJson<ApiTokenProofsResponse>(apiUrl(`/v1/tokens/${address}/proofs`, { chainId }));
 }
 
 /**
@@ -503,11 +507,13 @@ export async function apiGetTokenDetails(): Promise<ApiTokenDetailsListResponse>
  */
 export async function apiGetTokenDetailsByAddress(
 	address: string,
+	chainId: number,
 	options?: { activityLimit?: number }
 ): Promise<ApiTokenDetails> {
 	assertBrowser('apiGetTokenDetailsByAddress');
 	return fetchJson<ApiTokenDetails>(
 		apiUrl(`/v1/tokens/${address}/details`, {
+			chainId,
 			activityLimit: options?.activityLimit
 		})
 	);
@@ -524,9 +530,14 @@ export async function apiGetWrapRatios(): Promise<ApiWrapRatiosResponse> {
 /**
  * Fetch current wrap ratio for a single wrapped token.
  */
-export async function apiGetWrapRatio(wrappedTokenAddress: string): Promise<ApiWrapRatio> {
+export async function apiGetWrapRatio(
+	wrappedTokenAddress: string,
+	chainId: number
+): Promise<ApiWrapRatio> {
 	assertBrowser('apiGetWrapRatio');
-	return fetchJson<ApiWrapRatio>(apiUrl(`/v1/tokens/wrap-ratio/${wrappedTokenAddress}`));
+	return fetchJson<ApiWrapRatio>(
+		apiUrl(`/v1/tokens/wrap-ratio/${wrappedTokenAddress}`, { chainId })
+	);
 }
 
 /**
@@ -534,11 +545,13 @@ export async function apiGetWrapRatio(wrappedTokenAddress: string): Promise<ApiW
  */
 export async function apiGetWrapRatioHistory(
 	wrappedTokenAddress: string,
+	chainId: number,
 	options?: { page?: number; pageSize?: number }
 ): Promise<ApiWrapRatioHistoryResponse> {
 	assertBrowser('apiGetWrapRatioHistory');
 	return fetchJson<ApiWrapRatioHistoryResponse>(
 		apiUrl(`/v1/tokens/wrap-ratio/${wrappedTokenAddress}/history`, {
+			chainId,
 			page: options?.page,
 			pageSize: options?.pageSize
 		})

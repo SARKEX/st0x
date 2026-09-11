@@ -7,7 +7,6 @@
  */
 import { browser } from '$app/environment';
 import {
-	apiGetTokens,
 	apiGetWrapRatioHistory,
 	apiGetWrapRatios,
 	type ApiWrapRatio,
@@ -15,7 +14,12 @@ import {
 	type ApiWrapRatiosResponse
 } from '$lib/api/st0xApi';
 import type { CategorizedToken } from '$lib/config/tokens';
-import { findApiTokenByAnyAddress, normalizeApiTokensForNetwork } from '$lib/queries/tokens';
+import {
+	findApiTokenByAnyAddress,
+	getCachedApiTokens,
+	getTokenAddressVariants,
+	normalizeApiTokensForNetwork
+} from '$lib/queries/tokens';
 import { createQuery } from '@tanstack/svelte-query';
 
 const BASE_CHAIN_ID = 8453;
@@ -145,6 +149,17 @@ export function mapApiWrapRatioHistory(
 	};
 }
 
+export function filterApiWrapRatiosForTokens(
+	rows: ApiWrapRatio[],
+	tokens: CategorizedToken[]
+): ApiWrapRatio[] {
+	const networkAddresses = new Set(tokens.flatMap(getTokenAddressVariants));
+	return rows.filter(
+		(row) =>
+			networkAddresses.has(toKey(row.shareAddress)) || networkAddresses.has(toKey(row.assetAddress))
+	);
+}
+
 /**
  * Returns the wrap ratio (number of underlying t* per 1 wt*) for a given
  * token address — accepts either the share (wt*) or asset (t*) address.
@@ -175,10 +190,11 @@ export function createExchangeRatesQuery(chainId: number = BASE_CHAIN_ID) {
 		staleTime: 60_000,
 		refetchOnWindowFocus: true,
 		queryFn: async () => {
-			const [apiTokens, wrapRatios] = await Promise.all([apiGetTokens(), apiGetWrapRatios()]);
+			const [apiTokens, wrapRatios] = await Promise.all([getCachedApiTokens(), apiGetWrapRatios()]);
 			warnWrapRatioErrors(wrapRatios);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
-			return buildLookup(wrapRatios.data.map((row) => mapApiWrapRatio(row, tokens)));
+			const networkRows = filterApiWrapRatiosForTokens(wrapRatios.data, tokens);
+			return buildLookup(networkRows.map((row) => mapApiWrapRatio(row, tokens)));
 		}
 	});
 }
@@ -204,8 +220,8 @@ export function createExchangeRateHistoryQuery(
 				throw new Error('wrappedTokenAddress is required');
 			}
 			const [apiTokens, history] = await Promise.all([
-				apiGetTokens(),
-				apiGetWrapRatioHistory(wrappedTokenAddress, options)
+				getCachedApiTokens(),
+				apiGetWrapRatioHistory(wrappedTokenAddress, chainId, options)
 			]);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
 			return mapApiWrapRatioHistory(history, tokens);

@@ -78,21 +78,33 @@ function tokenDetailsSummaryToVault(
  * Token details is multi-chain; the home/sidebar keyed lists use address as id.
  * Keep only the active network's rows and dedupe by address so Svelte keyed
  * `{#each}` blocks never see duplicate keys (Ethereum + HyperEVM share many
- * addresses that Base does not).
+ * addresses that Base does not). Invalid/missing chainId rows are skipped.
  */
 export function filterTokenDetailsSummariesForChain(
-	summaries: ApiTokenDetailsSummary[],
+	summaries: unknown[],
 	chainId: number
 ): ApiTokenDetailsSummary[] {
 	const seen = new Set<string>();
 	const result: ApiTokenDetailsSummary[] = [];
 
 	for (const summary of summaries) {
+		if (
+			!summary ||
+			typeof summary !== 'object' ||
+			!('chainId' in summary) ||
+			typeof summary.chainId !== 'number' ||
+			!Number.isInteger(summary.chainId)
+		) {
+			console.warn('Ignoring token details summary with missing or invalid chainId', summary);
+			continue;
+		}
 		if (summary.chainId !== chainId) continue;
-		const addressKey = summary.address.toLowerCase();
+
+		const typed = summary as ApiTokenDetailsSummary;
+		const addressKey = typed.address.toLowerCase();
 		if (seen.has(addressKey)) continue;
 		seen.add(addressKey);
-		result.push(summary);
+		result.push(typed);
 	}
 
 	return result;
@@ -153,14 +165,16 @@ export function createSingleSftQuery(
 	return createQuery<OffchainAssetReceiptVault | null>({
 		queryKey: ['sft', network?.id, tokenId],
 		enabled: Boolean(browser && network && tokenId),
-		staleTime: 30_000,
+		staleTime: Infinity,
 		refetchInterval: false,
-		refetchOnWindowFocus: true, // Only refetch on focus if stale
+		refetchOnWindowFocus: false,
 		initialData: getCachedToken() ?? undefined,
 		initialDataUpdatedAt: getCachedTimestamp(),
 		queryFn: async () => {
 			if (!network || !tokenId) return null;
-			const detail = await apiGetTokenDetailsByAddress(tokenId, { activityLimit: 5 });
+			const detail = await apiGetTokenDetailsByAddress(tokenId, network.chainId, {
+				activityLimit: 5
+			});
 			return tokenDetailsSummaryToVault(detail, detail, network.chainId);
 		}
 	});

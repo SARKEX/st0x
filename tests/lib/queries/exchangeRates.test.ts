@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	buildLookup,
+	filterApiWrapRatiosForTokens,
 	mapApiWrapRatio,
 	mapApiWrapRatioHistory,
 	resolveRatio
@@ -77,5 +78,23 @@ describe('exchangeRates REST adapters', () => {
 			}
 		]);
 		expect(history.asset.symbol).toBe('tSGOV');
+	});
+
+	it('keeps wrap ratios only for the selected network token set', () => {
+		const baseRow = {
+			shareAddress: '0xShare',
+			assetAddress: '0xAsset',
+			assetsPerShare: '1',
+			blockNumber: 1,
+			blockTimestamp: 1,
+			capturedAt: '1'
+		};
+		const otherNetworkRow = {
+			...baseRow,
+			shareAddress: '0xOtherShare',
+			assetAddress: '0xOtherAsset'
+		};
+
+		expect(filterApiWrapRatiosForTokens([baseRow, otherNetworkRow], tokens)).toEqual([baseRow]);
 	});
 });
