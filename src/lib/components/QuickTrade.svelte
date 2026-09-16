@@ -32,6 +32,7 @@
 		type ApiSwapQuoteV2Response
 	} from '$lib/api/st0xApi';
 	import { createDebouncedRequest } from '$lib/stores/debouncedValue';
+	import { MARKET_QUOTE_DEBOUNCE_MS } from '$lib/config/tradingTiming';
 	import {
 		buildMarketSwapQuoteRequest,
 		DEFAULT_MARKET_ORDER_SLIPPAGE_BPS
@@ -188,7 +189,9 @@
 					$walletAddress ?? undefined
 				)
 			: null;
-	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(300);
+	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(
+		MARKET_QUOTE_DEBOUNCE_MS
+	);
 	$: debouncedMarketQuoteRequest.set(marketQuoteRequest);
 	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['swapQuoteV2', undefined, null],

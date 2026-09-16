@@ -207,6 +207,7 @@ try { /* ... */ } catch (error) {
 - After ERC20 approvals, wait `APPROVAL_TX_CONFIRMATIONS = 2` blocks before the next call so all RPCs see the updated allowance (`src/lib/services/walletService.ts:122`).
 - Default take-leg confirmations: `TAKE_TX_CONFIRMATIONS = 1` (`src/lib/stores/transaction.ts:24`).
 - Aggregated calldata is cached for `AGGREGATED_TAKE_CACHE_TTL_MS = 10_000` ms.
+- Client trading latency knobs live in `src/lib/config/tradingTiming.ts` (SUP-19): quote debounce `150ms`, approval-settle retries `3×200ms` exponential, trade-index poll `2s`. Do **not** lower `APPROVAL_TX_CONFIRMATIONS` below 2.
 
 ## Gas Estimation
 
