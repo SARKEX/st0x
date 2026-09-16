@@ -87,7 +87,9 @@
 				? 'Last known midpoint (market closed or one-sided book)'
 				: ''}
 		>
-			${formatMarketPrice(priceData.price)}{#if priceData.source === 'cached'}<span class="text-text-3">
+			${formatMarketPrice(priceData.price)}{#if priceData.source === 'cached'}<span
+					class="text-text-3"
+				>
 					*</span
 				>{/if}
 		</td>
