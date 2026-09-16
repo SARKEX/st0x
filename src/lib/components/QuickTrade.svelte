@@ -26,6 +26,7 @@
 	import Icon from './ui/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { resolveMarketOrderAnchor } from '$lib/utils/marketOrderInput';
+	import { formatMarketPrice } from '$lib/utils/format';
 	import {
 		apiGetSwapQuoteV2,
 		type ApiSwapQuoteV2Request,
@@ -531,10 +532,8 @@
 	}
 
 	function formatPrice(price: number): string {
-		if (price >= 1000) return '$' + price.toFixed(0);
-		if (price >= 100) return '$' + price.toFixed(1);
-		if (price >= 1) return '$' + price.toFixed(2);
-		return '$' + price.toFixed(4);
+		const formatted = formatMarketPrice(price);
+		return formatted ? `$${formatted}` : 'N/A';
 	}
 </script>
 

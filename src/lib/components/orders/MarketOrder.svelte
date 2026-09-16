@@ -3,7 +3,7 @@
 	import { currentNetwork } from '$lib/stores';
 	import TradeAmountInput from '$lib/components/TradeAmountInput.svelte';
 	import { formatUnits } from 'viem';
-	import { formatUnitsSafe } from '$lib/utils/format';
+	import { formatMarketPrice, formatUnitsSafe } from '$lib/utils/format';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import { isAuthenticated, walletAddress } from '$lib/stores/authStore';
@@ -839,13 +839,13 @@
 							type="text"
 							value={!selectedAmount || selectedAmount === 0n
 								? displayedBestOrderbookPrice !== null
-									? `~${displayedBestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+									? `~${formatMarketPrice(displayedBestOrderbookPrice)} ${paymentTokenSymbol}`
 									: 'No quotes available'
 								: isLoadingPrice
 									? 'Loading...'
 									: priceError
 										? 'Price unavailable'
-										: `~${displayedMarketPrice.toFixed(2)} ${paymentTokenSymbol}`}
+										: `~${formatMarketPrice(displayedMarketPrice)} ${paymentTokenSymbol}`}
 							disabled
 							class="focus:ring-accent-line/20 w-full rounded-md border border-line bg-surface-2 px-3 py-2 text-text-2 placeholder-text-3 focus:border-accent-line focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
 						/>
@@ -955,14 +955,14 @@
 							<span class="font-mono font-medium tabular-nums">
 								{#if !selectedAmount || selectedAmount === 0n}
 									{bestOrderbookPrice !== null
-										? `~${bestOrderbookPrice.toFixed(2)} ${paymentTokenSymbol}`
+										? `~${formatMarketPrice(bestOrderbookPrice)} ${paymentTokenSymbol}`
 										: 'N/A'}
 								{:else if isLoadingPrice}
 									Loading...
 								{:else if priceError}
 									N/A
 								{:else}
-									~{marketPrice.toFixed(2)} {paymentTokenSymbol}
+									~{formatMarketPrice(marketPrice)} {paymentTokenSymbol}
 								{/if}
 							</span>
 							{#if displayDenom === 'unwrapped' && displayScale !== 1 && !isLoadingPrice && !priceError}
@@ -972,7 +972,7 @@
 										: displayedMarketPrice}
 								{#if perTPrice !== null}
 									<div class="text-[11px] text-text-3">
-										equivalent to ~{perTPrice.toFixed(2)}
+										equivalent to ~{formatMarketPrice(perTPrice)}
 										{paymentTokenSymbol} per {displayedAssetSymbol}
 									</div>
 								{/if}

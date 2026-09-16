@@ -5,6 +5,7 @@
 	import ExternalLink from '$lib/components/ui/ExternalLink.svelte';
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
+	import { formatMarketPrice } from '$lib/utils/format';
 
 	type CommonToken = Partial<CategorizedToken> & { address: string };
 	export let token: CommonToken;
@@ -86,13 +87,13 @@
 				? 'Last known midpoint (market closed or one-sided book)'
 				: ''}
 		>
-			${priceData.price.toFixed(5)}{#if priceData.source === 'cached'}<span class="text-text-3">
+			${formatMarketPrice(priceData.price)}{#if priceData.source === 'cached'}<span class="text-text-3">
 					*</span
 				>{/if}
 		</td>
 		<td class="whitespace-nowrap px-2 py-1 text-right text-text-2">
 			{#if priceData.bid != null && priceData.ask != null}
-				${priceData.bid.toFixed(4)} / ${priceData.ask.toFixed(4)}
+				${formatMarketPrice(priceData.bid)} / ${formatMarketPrice(priceData.ask)}
 			{/if}
 		</td>
 		<td class="px-2 py-1 text-right text-text-2">
