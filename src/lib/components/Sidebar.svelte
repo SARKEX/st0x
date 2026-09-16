@@ -6,6 +6,7 @@
 	import { formatUnits } from 'viem';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import { assetLists, partitionByLists } from '$lib/stores/assetListsStore';
 
 	export let visible: boolean = false; // controlled by parent
 	export let desktop: boolean = false; // is this the desktop sidebar?
@@ -44,9 +45,33 @@
 				.sort((a, b) => b.dollarVolume - a.dollarVolume)
 		: [];
 
+	function assetListKey(asset: AssetWithMetrics): string {
+		const tokenInfo = findApiTokenByAnyAddress(apiTokens, asset.address);
+		return (tokenInfo?.address ?? asset.address ?? asset.id).toLowerCase();
+	}
+
+	$: sections = partitionByLists(
+		sortedAssets,
+		assetListKey,
+		$assetLists.favorites,
+		$assetLists.watchlist
+	);
+
 	function toggleCollapse() {
 		collapsed = !collapsed;
 		dispatch('toggleCollapse', { collapsed });
+	}
+
+	function onToggleFavorite(event: MouseEvent, address: string) {
+		event.preventDefault();
+		event.stopPropagation();
+		assetLists.toggleFavorite(address);
+	}
+
+	function onToggleWatch(event: MouseEvent, address: string) {
+		event.preventDefault();
+		event.stopPropagation();
+		assetLists.toggleWatch(address);
 	}
 </script>
 
@@ -112,52 +137,87 @@
 	{#if (desktop && !collapsed) || (!desktop && visible)}
 		<!-- Assets List (scrollable) -->
 		<div class="flex-1 overflow-y-auto p-3">
-			<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-text-muted">
-				Assets
-			</div>
-			<div class="space-y-0.5">
-				{#each sortedAssets as asset}
-					{@const tokenInfo = findApiTokenByAnyAddress(apiTokens, asset.address)}
-					<a
-						href={`/trade/${tokenInfo?.address ?? asset.id}`}
-						on:click={() => {
-							if (!desktop) dispatch('close');
-						}}
-						class="block rounded-md px-2 py-2 transition-colors hover:bg-surface-2 {activePath ===
-						`/trade/${tokenInfo?.address ?? asset.id}`
-							? 'border-l-2 border-accent bg-accent-soft'
-							: ''}"
-					>
-						<div class="flex items-center justify-between gap-2">
-							<div class="flex min-w-0 flex-1 items-center gap-2">
-								{#if tokenInfo?.logoUrl}
-									<img
-										src={tokenInfo.logoUrl}
-										alt={asset.symbol}
-										class="h-6 w-6 shrink-0 rounded-full"
-									/>
-								{:else}
-									<div
-										class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-3 text-xs font-bold"
-									>
-										{asset.symbol.charAt(0)}
+			{#each [{ id: 'favorites', label: 'Favorites', items: sections.favorites }, { id: 'watchlist', label: 'Watchlist', items: sections.watchlist }, { id: 'all', label: 'Assets', items: sections.rest }] as section}
+				{#if section.items.length > 0 || (section.id === 'all' && sortedAssets.length === 0)}
+					<div class="mb-3 px-2 text-[10px] font-medium uppercase tracking-wider text-text-muted">
+						{section.label}
+					</div>
+					<div class="mb-4 space-y-0.5">
+						{#each section.items as asset}
+							{@const tokenInfo = findApiTokenByAnyAddress(apiTokens, asset.address)}
+							{@const listKey = assetListKey(asset)}
+							{@const isFav = assetLists.isFavorite($assetLists, listKey)}
+							{@const isWatched = assetLists.isWatched($assetLists, listKey)}
+							<a
+								href={`/trade/${tokenInfo?.address ?? asset.id}`}
+								on:click={() => {
+									if (!desktop) dispatch('close');
+								}}
+								class="block rounded-md px-2 py-2 transition-colors hover:bg-surface-2 {activePath ===
+								`/trade/${tokenInfo?.address ?? asset.id}`
+									? 'border-l-2 border-accent bg-accent-soft'
+									: ''}"
+							>
+								<div class="flex items-center justify-between gap-2">
+									<div class="flex min-w-0 flex-1 items-center gap-2">
+										{#if tokenInfo?.logoUrl}
+											<img
+												src={tokenInfo.logoUrl}
+												alt={asset.symbol}
+												class="h-6 w-6 shrink-0 rounded-full"
+											/>
+										{:else}
+											<div
+												class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-3 text-xs font-bold"
+											>
+												{asset.symbol.charAt(0)}
+											</div>
+										{/if}
+										<div class="min-w-0 flex-1">
+											<div class="truncate text-sm font-medium text-text">{asset.symbol}</div>
+											<div class="truncate text-xs text-text-3">{asset.name}</div>
+										</div>
 									</div>
-								{/if}
-								<div class="min-w-0 flex-1">
-									<div class="truncate text-sm font-medium text-text">{asset.symbol}</div>
-									<div class="truncate text-xs text-text-3">{asset.name}</div>
+									<div class="flex shrink-0 items-center gap-0.5">
+										<button
+											type="button"
+											class="rounded p-1 transition-colors {isFav
+												? 'text-accent'
+												: 'text-text-muted hover:text-text-2'}"
+											aria-label={isFav ? `Unfavorite ${asset.symbol}` : `Favorite ${asset.symbol}`}
+											aria-pressed={isFav}
+											on:click={(event) => onToggleFavorite(event, listKey)}
+										>
+											<Icon
+												name="star"
+												className="h-3.5 w-3.5"
+												fill={isFav ? 'currentColor' : 'none'}
+											/>
+										</button>
+										<button
+											type="button"
+											class="rounded p-1 transition-colors {isWatched
+												? 'text-accent'
+												: 'text-text-muted hover:text-text-2'}"
+											aria-label={isWatched ? `Unwatch ${asset.symbol}` : `Watch ${asset.symbol}`}
+											aria-pressed={isWatched}
+											on:click={(event) => onToggleWatch(event, listKey)}
+										>
+											<Icon name="eye" className="h-3.5 w-3.5" />
+										</button>
+										<div class="min-w-[3.25rem] text-right text-sm font-medium text-text">
+											${asset.price > 0 ? asset.price.toFixed(2) : 'N/A'}
+										</div>
+									</div>
 								</div>
-							</div>
-							<div class="text-sm font-medium text-text">
-								${asset.price > 0 ? asset.price.toFixed(2) : 'N/A'}
-							</div>
-						</div>
-					</a>
-				{/each}
-				{#if sortedAssets.length === 0}
-					<div class="py-8 text-center text-sm text-text-3">No assets available</div>
+							</a>
+						{/each}
+						{#if section.id === 'all' && sortedAssets.length === 0}
+							<div class="py-8 text-center text-sm text-text-3">No assets available</div>
+						{/if}
+					</div>
 				{/if}
-			</div>
+			{/each}
 		</div>
 	{/if}
 </div>
