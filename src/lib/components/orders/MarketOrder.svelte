@@ -402,9 +402,8 @@
 					$walletAddress ?? undefined
 				)
 			: null;
-	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(
-		MARKET_QUOTE_DEBOUNCE_MS
-	);
+	const debouncedMarketQuoteRequest =
+		createDebouncedRequest<ApiSwapQuoteV2Request>(MARKET_QUOTE_DEBOUNCE_MS);
 	$: debouncedMarketQuoteRequest.set(marketQuoteRequest);
 	let marketQuoteQuery = createQuery<ApiSwapQuoteV2Response>({
 		queryKey: ['marketSwapQuoteV2', undefined, null],

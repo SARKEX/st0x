@@ -112,9 +112,8 @@
 					$walletAddress ?? undefined
 				)
 			: null;
-	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(
-		MARKET_QUOTE_DEBOUNCE_MS
-	);
+	const debouncedMarketQuoteRequest =
+		createDebouncedRequest<ApiSwapQuoteV2Request>(MARKET_QUOTE_DEBOUNCE_MS);
 	$: debouncedMarketQuoteRequest.set(marketQuoteRequest);
 	const marketQuoteOptions = derived(
 		[showSaveEarnModal, currentNetwork, debouncedMarketQuoteRequest],
