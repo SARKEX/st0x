@@ -2,13 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Float } from '@rainlanguage/float';
 import { fetchAndQuotePaymentTokenOrders, fetchAndQuoteTokenOrders } from '$lib/api/orders';
 import { HttpError } from '$lib/clients/http';
-import { apiGetOrdersByToken, apiQueryOrders, type ApiOrderSummary } from '$lib/api/st0xApi';
+import { apiQueryOrders, type ApiOrderSummary } from '$lib/api/st0xApi';
 
 vi.mock('$lib/api/st0xApi', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/st0xApi')>();
 	return {
 		...actual,
-		apiGetOrdersByToken: vi.fn(),
 		apiQueryOrders: vi.fn()
 	};
 });
@@ -55,7 +54,7 @@ function orderSummary(overrides: Partial<ApiOrderSummary> = {}): ApiOrderSummary
 }
 
 function mockOrders(orders: ApiOrderSummary[]) {
-	vi.mocked(apiGetOrdersByToken).mockResolvedValueOnce({
+	vi.mocked(apiQueryOrders).mockResolvedValueOnce({
 		orders,
 		pagination: {
 			page: 1,
@@ -68,7 +67,6 @@ function mockOrders(orders: ApiOrderSummary[]) {
 }
 
 beforeEach(() => {
-	vi.mocked(apiGetOrdersByToken).mockReset();
 	vi.mocked(apiQueryOrders).mockReset();
 });
 
@@ -100,7 +98,7 @@ describe('fetchAndQuoteTokenOrders', () => {
 	});
 
 	it('propagates REST failures instead of presenting an empty orderbook', async () => {
-		vi.mocked(apiGetOrdersByToken).mockRejectedValueOnce(new Error('REST unavailable'));
+		vi.mocked(apiQueryOrders).mockRejectedValueOnce(new Error('REST unavailable'));
 
 		await expect(fetchAndQuoteTokenOrders(8453, stockToken.address, paymentToken)).rejects.toThrow(
 			'REST unavailable'
@@ -108,7 +106,7 @@ describe('fetchAndQuoteTokenOrders', () => {
 	});
 
 	it('returns earlier pages when a later page fails', async () => {
-		vi.mocked(apiGetOrdersByToken)
+		vi.mocked(apiQueryOrders)
 			.mockResolvedValueOnce({
 				orders: [orderSummary()],
 				pagination: { page: 1, pageSize: 50, totalOrders: 2, totalPages: 2, hasMore: true }
@@ -124,6 +122,21 @@ describe('fetchAndQuoteTokenOrders', () => {
 			expect.any(Error)
 		);
 		warn.mockRestore();
+	});
+
+	it('uses the bounded batch endpoint for token-specific refreshes', async () => {
+		mockOrders([]);
+
+		await fetchAndQuoteTokenOrders(8453, stockToken.address, paymentToken);
+
+		expect(apiQueryOrders).toHaveBeenCalledWith({
+			chainId: 8453,
+			tokenAddresses: [stockToken.address.toLowerCase()],
+			state: 'active',
+			page: 1,
+			pageSize: 50,
+			denomination: 'wrapped'
+		});
 	});
 });
 
@@ -198,7 +211,7 @@ describe('fetchAndQuotePaymentTokenOrders', () => {
 		});
 
 		await expect(fetchAndQuotePaymentTokenOrders(8453, paymentToken)).resolves.toEqual([]);
-		expect(apiGetOrdersByToken).not.toHaveBeenCalled();
+		expect(apiQueryOrders).toHaveBeenCalledOnce();
 	});
 
 	it('keeps usable quotes when another batch order has no live quote', async () => {

@@ -26,7 +26,6 @@ import {
 	walkOrderbook
 } from '$lib/utils/orderbook';
 import {
-	apiGetOrdersByToken,
 	apiGetOrdersByOwner,
 	apiQueryOrders,
 	type ApiOrderSummary,
@@ -404,7 +403,15 @@ export async function fetchAndQuoteTokenOrders(
 	const { paymentToken, allTokens } = resolveNetworkTokens(networkId, overridePaymentToken);
 
 	return collectProcessedOrderPages({
-		fetchPage: (page) => apiGetOrdersByToken(tokenAddress, { page, pageSize: 50 }),
+		fetchPage: (page) =>
+			apiQueryOrders({
+				chainId: networkId,
+				tokenAddresses: [tokenAddress.toLowerCase()],
+				state: 'active',
+				page,
+				pageSize: 50,
+				denomination: 'wrapped'
+			}),
 		paymentToken,
 		allTokens,
 		networkId,

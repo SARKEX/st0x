@@ -438,28 +438,6 @@ function apiUrl(path: string, params?: Record<string, string | number | undefine
 }
 
 /**
- * Fetch orders by token address from the REST API
- */
-export async function apiGetOrdersByToken(
-	tokenAddress: string,
-	options?: {
-		page?: number;
-		pageSize?: number;
-		side?: 'input' | 'output';
-		state?: 'active' | 'inactive' | 'all';
-	}
-): Promise<ApiOrdersListResponse> {
-	assertBrowser('apiGetOrdersByToken');
-	const url = apiUrl(`/v1/orders/token/${tokenAddress}`, {
-		page: options?.page,
-		pageSize: options?.pageSize,
-		side: options?.side,
-		state: options?.state
-	});
-	return fetchJson<ApiOrdersListResponse>(url);
-}
-
-/**
  * Fetch a bounded page of orders matching a token set.
  */
 export async function apiQueryOrders(

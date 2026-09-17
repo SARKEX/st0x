@@ -229,6 +229,11 @@ export const rateLimiters = {
 	permissive: (identifier: string) =>
 		checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 200 }),
 
+	// Website-to-ST0x API bridge. Strict fallback prevents a missing Redis
+	// connection from turning the production credential into an open proxy.
+	st0xProxy: (identifier: string) =>
+		checkRateLimitStrict(identifier, { windowMs: 60 * 1000, maxRequests: 30 }),
+
 	// Authentication/registration: 5 requests/minute (prevent brute force)
 	// Uses FAIL-OPEN mode - consider using authStrict for critical endpoints
 	auth: (identifier: string) => checkRateLimit(identifier, { windowMs: 60 * 1000, maxRequests: 5 }),

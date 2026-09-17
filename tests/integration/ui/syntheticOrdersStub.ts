@@ -5,7 +5,7 @@
 // anvil. The subgraph never sees these orders (it indexes LIVE Base mainnet).
 // To make the UI see them, we synthesize:
 //   1. `SgOrdersListQuery` Goldsky GraphQL responses
-//   2. `/api/st0x/v1/orders/token/<addr>` REST API responses
+//   2. `/api/st0x/v1/orders/query` REST API responses
 //
 // The shape of the Goldsky response is captured in
 // `tests/integration/ui/__fixtures__/sample-sgorder-response.json` from a
@@ -258,7 +258,7 @@ export function handleGoldskyRequest(body: string | null): string | null {
 
 /**
  * Convert a DeployedMakerOrder to the ApiOrderSummary shape the production
- * /api/st0x/v1/orders/token proxy returns. `ioRatio`, `maxOutput`, and
+ * /api/st0x/v1/orders/query endpoint returns. `ioRatio`, `maxOutput`, and
  * `outputVaultBalance` are decimal strings (NOT hex) — `convertApiOrderToProcessedQuote`
  * in src/lib/api/orders.ts:61 runs `Float.parse()` on `ioRatio`/`maxOutput`
  * and `parseFloat()` on `outputVaultBalance` (it drops the order if
@@ -292,20 +292,20 @@ function makerOrderToApiSummary(o: DeployedMakerOrder): ApiOrderSummary {
 }
 
 /**
- * Build a fully-synthetic /api/st0x/v1/orders/token response from the maker
- * registry, filtered to orders involving `tokenAddress` on the given `side`.
+ * Build a fully-synthetic /api/st0x/v1/orders/query response from the maker
+ * registry, filtered to orders involving one of `tokenAddresses` on the given `side`.
  *   side='output' → orders that GIVE this token (sells of this asset)
  *   side='input'  → orders that RECEIVE this token (buys of this asset)
  *   side=undefined → both
  */
 export function buildSyntheticOrdersResponse(
-	tokenAddress: string,
+	tokenAddresses: string[],
 	side?: 'input' | 'output'
 ): ApiOrdersListResponse {
-	const addr = tokenAddress.toLowerCase();
+	const addresses = new Set(tokenAddresses.map((address) => address.toLowerCase()));
 	const filtered = makerOrders.filter((o) => {
-		const isInput = o.inputToken.address.toLowerCase() === addr;
-		const isOutput = o.outputToken.address.toLowerCase() === addr;
+		const isInput = addresses.has(o.inputToken.address.toLowerCase());
+		const isOutput = addresses.has(o.outputToken.address.toLowerCase());
 		if (side === 'input') return isInput;
 		if (side === 'output') return isOutput;
 		return isInput || isOutput;
