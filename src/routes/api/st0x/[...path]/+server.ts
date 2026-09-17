@@ -7,6 +7,7 @@
  */
 
 import { env } from '$env/dynamic/private';
+import { checkBotId } from 'botid/server';
 import { getLogger, getRequestContext, requestIdOrUuid } from '$lib/server/logger';
 import { logSt0xRequestBudget } from '$lib/server/st0xBudgetTelemetry';
 import { getCachedSt0xResponse, type CachedSt0xResponse } from '$lib/server/st0xProxyCache';
@@ -272,8 +273,40 @@ const proxyRequest = async (event: RequestEvent) => {
 		return errorResponse(requestId, 403, 'FORBIDDEN', 'Website request required');
 	}
 
+	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
+	const matched = matchProxyRoute(request.method, pathSuffix);
+	if (!matched) {
+		return errorResponse(requestId, 404, 'NOT_FOUND', 'Proxy route not found');
+	}
+
 	const rateLimitResponse = await applyRateLimit(request, rateLimiters.st0xProxy, 'st0x-proxy');
 	if (rateLimitResponse) return rateLimitResponse;
+
+	// Server-side SvelteKit fetches cannot complete the browser challenge. They
+	// are trusted in-process subrequests; direct requests must pass BotID before
+	// we read the private upstream credentials.
+	if (!event.isSubRequest) {
+		try {
+			const verification = await checkBotId();
+			if (verification.isBot) {
+				getLogger().warn({ request_id: requestId }, 'st0x proxy bot request rejected');
+				return errorResponse(requestId, 403, 'FORBIDDEN', 'Website request required');
+			}
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : 'Unknown BotID verification error';
+			getLogger().error(
+				{ error: { message: msg }, request_id: requestId },
+				'st0x proxy bot verification failed'
+			);
+			return errorResponse(
+				requestId,
+				503,
+				'BOT_VERIFICATION_UNAVAILABLE',
+				'Website verification is unavailable'
+			);
+		}
+	}
+
 	let apiBase: string;
 	let authHeader: string;
 	try {
@@ -285,11 +318,6 @@ const proxyRequest = async (event: RequestEvent) => {
 		return errorResponse(requestId, 503, 'UPSTREAM_UNAVAILABLE', 'The trading API is unavailable');
 	}
 
-	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
-	const matched = matchProxyRoute(request.method, pathSuffix);
-	if (!matched) {
-		return errorResponse(requestId, 404, 'NOT_FOUND', 'Proxy route not found');
-	}
 	const targetUrl = `${apiBase}/${pathSuffix}${url.search}`;
 
 	const headers = new Headers();

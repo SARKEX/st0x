@@ -85,6 +85,7 @@
 		"@wagmi/connectors": "5.11.2",
 		"@wagmi/core": "2.22.1",
 		"ajv": "8.17.1",
+		"botid": "^1.5.11",
 		"cbor-web": "9.0.2",
 		"ethers": "6.15.0",
 		"flowbite-svelte-icons": "0.4.5",

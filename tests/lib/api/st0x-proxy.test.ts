@@ -4,6 +4,12 @@ import { env } from '$env/dynamic/private';
 import { GET, POST } from '../../../src/routes/api/st0x/[...path]/+server';
 import { clearLocalSt0xProxyCache } from '$lib/server/st0xProxyCache';
 
+const checkBotIdMock = vi.hoisted(() => vi.fn());
+
+vi.mock('botid/server', () => ({
+	checkBotId: checkBotIdMock
+}));
+
 vi.mock('$env/dynamic/private', () => ({
 	env: {}
 }));
@@ -61,6 +67,8 @@ describe('/api/st0x proxy', () => {
 		env.ST0X_API_KEY = 'test-key';
 		env.ST0X_API_SECRET = 'test-secret';
 		vi.restoreAllMocks();
+		checkBotIdMock.mockReset();
+		checkBotIdMock.mockResolvedValue({ isBot: false });
 	});
 
 	it('server-caches GET /v1/tokens without exposing a public edge cache', async () => {
@@ -176,6 +184,7 @@ describe('/api/st0x proxy', () => {
 		const response = await GET(proxyEvent('GET', 'v1/orders/token/0xToken'));
 
 		expect(response.status).toBe(404);
+		expect(checkBotIdMock).not.toHaveBeenCalled();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
@@ -188,6 +197,7 @@ describe('/api/st0x proxy', () => {
 		const response = await GET(event);
 
 		expect(response.status).toBe(403);
+		expect(checkBotIdMock).not.toHaveBeenCalled();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
@@ -204,6 +214,56 @@ describe('/api/st0x proxy', () => {
 
 		expect(response.status).toBe(403);
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('rejects bots even when they forge same-origin browser headers', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+		checkBotIdMock.mockResolvedValue({ isBot: true });
+
+		const response = await GET(
+			proxyEvent('GET', 'v1/tokens', undefined, {
+				Origin: 'http://localhost',
+				'Sec-Fetch-Site': 'same-origin'
+			})
+		);
+
+		expect(response.status).toBe(403);
+		expect(checkBotIdMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('fails closed when bot verification is unavailable', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+		checkBotIdMock.mockRejectedValue(new Error('verification unavailable'));
+
+		const response = await GET(proxyEvent('GET', 'v1/tokens'));
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({
+			error: { code: 'BOT_VERIFICATION_UNAVAILABLE' }
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('keeps server-rendered anonymous website reads working without a browser challenge', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify([{ address: '0xToken', symbol: 'TOK', decimals: 18 }]), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		checkBotIdMock.mockRejectedValue(new Error('must not be called for a subrequest'));
+		const event = proxyEvent('GET', 'v1/tokens');
+		event.isSubRequest = true;
+
+		const response = await GET(event);
+
+		expect(response.status).toBe(200);
+		expect(checkBotIdMock).not.toHaveBeenCalled();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('allows POST /v1/trades/query without unsafe URI-only shared caching', async () => {
