@@ -3,6 +3,7 @@ import type { ApiToken } from '$lib/api/st0xApi';
 import { findApiTokenByAnyAddress, normalizeApiTokensForNetwork } from '$lib/queries/tokens';
 import { getTokenByAnyAddress } from '$lib/config/tokens';
 import { buildTradeDescription, buildTradeTitle, getTradeSeoMetadata } from '$lib/seo/trade';
+import { initSt0xBotProtection } from '$lib/client/botId';
 
 export const ssr = false;
 export const prerender = false;
@@ -22,6 +23,9 @@ export async function load({ params, fetch }) {
 
 	const fallbackMetadata = getTradeSeoMetadata(`/trade/${tokenId}`);
 
+	// This client-only load can run before the root layout component is created
+	// on a cold deep-link, so initialise protection before its proxy request.
+	initSt0xBotProtection();
 	const response = await fetch('/api/st0x/v1/tokens');
 	if (!response.ok) {
 		return {

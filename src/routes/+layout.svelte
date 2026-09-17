@@ -6,6 +6,11 @@
 	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
 	import { removeInjectedTradeSeoHead, syncTradeRobotsMeta } from '$lib/seo/trade';
+	import { initSt0xBotProtection } from '$lib/client/botId';
+
+	// Root component creation happens after SvelteKit installs its fetch wrapper,
+	// and before child components mount and begin client-side API requests.
+	if (browser) initSt0xBotProtection();
 
 	// Site-wide SEO defaults. Pages override the title via their own <svelte:head>
 	// (Svelte keeps the last <title>), or by returning `title`/`description` from a

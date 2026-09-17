@@ -363,7 +363,7 @@ export const test = base.extend<UiFixtures>({
 				headers: { 'access-control-allow-origin': '*' }
 			});
 		});
-		await page.route('**/api/st0x/v1/orders/token/**', async (route) => {
+		await page.route('**/api/st0x/v1/orders/query**', async (route) => {
 			// When maker orders are registered, serve a fully-synthetic
 			// response built from the maker registry. Specs that don't
 			// register any maker (e.g. limitDeploy, which only deploys and
@@ -371,13 +371,15 @@ export const test = base.extend<UiFixtures>({
 			// orderbook gracefully and there's no LIVE/fork divergence to
 			// bridge here.
 			if (getMakerOrders().length > 0) {
-				const url = new URL(route.request().url());
-				const segments = url.pathname.split('/');
-				const tokenAddr = segments[segments.length - 1];
-				const sideParam = url.searchParams.get('side') as 'input' | 'output' | null;
-				const resp = buildSyntheticOrdersResponse(tokenAddr, sideParam ?? undefined);
+				const requestBody = route.request().postDataJSON() as {
+					tokenAddresses?: string[];
+					side?: 'input' | 'output';
+				};
+				const tokenAddresses = requestBody.tokenAddresses ?? [];
+				const sideParam = requestBody.side ?? null;
+				const resp = buildSyntheticOrdersResponse(tokenAddresses, sideParam ?? undefined);
 				console.log(
-					`[orders-synth] token=${tokenAddr} side=${sideParam ?? 'both'} orders=${
+					`[orders-synth] tokens=${tokenAddresses.length} side=${sideParam ?? 'both'} orders=${
 						resp.orders.length
 					}`
 				);
@@ -417,8 +419,8 @@ export const test = base.extend<UiFixtures>({
 		);
 		await use(page);
 		// Drain in-flight route handlers BEFORE Playwright tears down the
-		// page/context. The trade page polls /api/st0x/v1/orders/token/* every
-		// 15s, and a `route.fetch` mid-flight at teardown throws "Target page
+		// page/context. The trade page polls /api/st0x/v1/orders/query, and a
+		// `route.fetch` mid-flight at teardown throws "Target page
 		// closed" — Playwright then reports that as a test failure even though
 		// the assertions all passed. `ignoreErrors` swallows still-pending
 		// callbacks gracefully.

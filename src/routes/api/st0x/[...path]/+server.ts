@@ -7,14 +7,17 @@
  */
 
 import { env } from '$env/dynamic/private';
+import { checkBotId } from 'botid/server';
 import { getLogger, getRequestContext, requestIdOrUuid } from '$lib/server/logger';
 import { logSt0xRequestBudget } from '$lib/server/st0xBudgetTelemetry';
 import { getCachedSt0xResponse, type CachedSt0xResponse } from '$lib/server/st0xProxyCache';
+import { applyRateLimit, rateLimiters } from '$lib/server/rateLimit';
 import type { RequestEvent, RequestHandler } from './$types';
 
 const TOKEN_DETAILS_LIST_PATH = 'v1/tokens/details';
 const TOKEN_LIST_PATH = 'v1/tokens';
 const TOKEN_DETAILS_PATH = /^v1\/tokens\/[^/]+\/details$/;
+const WEBSITE_ONLY_CACHE_CONTROL = 'private, no-store';
 
 function errorResponse(requestId: string, status: number, code: string, message: string): Response {
 	return new Response(
@@ -61,57 +64,52 @@ const ALLOWED_PROXY_ROUTES: Array<{
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens$/,
-		cache: 'public, s-maxage=300, stale-while-revalidate=3600',
+		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/details$/,
-		cache: 'public, s-maxage=300, stale-while-revalidate=3600',
+		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/[^/]+\/details$/,
-		cache: 'public, s-maxage=300, stale-while-revalidate=3600',
+		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 300
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/wrap-ratio$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300',
+		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/wrap-ratio\/[^/]+$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300',
+		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/wrap-ratio\/[^/]+\/history$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=300',
+		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 60
 	},
 	{
 		method: 'GET',
 		pattern: /^v1\/tokens\/[^/]+\/proofs$/,
-		cache: 'public, s-maxage=300, stale-while-revalidate=3600',
+		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 300
 	},
-	// Shared endpoints — same response for all users, cache at Vercel edge
-	{
-		method: 'GET',
-		pattern: /^v1\/orders\/token\/[^/]+$/,
-		cache: 'public, s-maxage=60, stale-while-revalidate=120',
-		originTtlSeconds: 60
-	},
+	// Order reads use the bounded POST query below. Do not expose the API's
+	// per-token GET endpoint as a public authenticated pass-through.
 	{ method: 'POST', pattern: /^v1\/orders\/query$/ },
 	{
 		method: 'GET',
 		pattern: /^v1\/trades\/token\/[^/]+$/,
-		cache: 'public, s-maxage=900, stale-while-revalidate=3600',
+		cache: WEBSITE_ONLY_CACHE_CONTROL,
 		originTtlSeconds: 900
 	},
 	// Per-user endpoints — no shared caching
@@ -145,12 +143,7 @@ function sharedCacheKey(
 		if (value !== null) canonical.set(name, value);
 	};
 
-	if (/^v1\/orders\/token\/[^/]+$/.test(pathSuffix)) {
-		set('page');
-		set('pageSize');
-		set('side');
-		set('state');
-	} else if (/^v1\/trades\/token\/[^/]+$/.test(pathSuffix)) {
+	if (/^v1\/trades\/token\/[^/]+$/.test(pathSuffix)) {
 		set('page');
 		set('pageSize');
 		set('startTime');
@@ -255,10 +248,65 @@ async function shouldCacheResponse(pathSuffix: string, response: Response): Prom
 	}
 }
 
-const proxyRequest = async ({ request, params, url }: RequestEvent) => {
+function isSameOriginWebsiteRequest(event: RequestEvent): boolean {
+	if (event.isSubRequest) return true;
+
+	const fetchSite = event.request.headers.get('Sec-Fetch-Site');
+	if (fetchSite !== 'same-origin') return false;
+
+	const source = event.request.headers.get('Origin') ?? event.request.headers.get('Referer');
+	if (!source) return false;
+
+	try {
+		return new URL(source).origin === event.url.origin;
+	} catch {
+		return false;
+	}
+}
+
+const proxyRequest = async (event: RequestEvent) => {
+	const { request, params, url } = event;
 	const requestId = requestIdOrUuid(
 		getRequestContext()?.request_id ?? request.headers.get('x-request-id')
 	);
+	if (!isSameOriginWebsiteRequest(event)) {
+		return errorResponse(requestId, 403, 'FORBIDDEN', 'Website request required');
+	}
+
+	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
+	const matched = matchProxyRoute(request.method, pathSuffix);
+	if (!matched) {
+		return errorResponse(requestId, 404, 'NOT_FOUND', 'Proxy route not found');
+	}
+
+	const rateLimitResponse = await applyRateLimit(request, rateLimiters.st0xProxy, 'st0x-proxy');
+	if (rateLimitResponse) return rateLimitResponse;
+
+	// Server-side SvelteKit fetches cannot complete the browser challenge. They
+	// are trusted in-process subrequests; direct requests must pass BotID before
+	// we read the private upstream credentials.
+	if (!event.isSubRequest) {
+		try {
+			const verification = await checkBotId();
+			if (verification.isBot) {
+				getLogger().warn({ request_id: requestId }, 'st0x proxy bot request rejected');
+				return errorResponse(requestId, 403, 'FORBIDDEN', 'Website request required');
+			}
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : 'Unknown BotID verification error';
+			getLogger().error(
+				{ error: { message: msg }, request_id: requestId },
+				'st0x proxy bot verification failed'
+			);
+			return errorResponse(
+				requestId,
+				503,
+				'BOT_VERIFICATION_UNAVAILABLE',
+				'Website verification is unavailable'
+			);
+		}
+	}
+
 	let apiBase: string;
 	let authHeader: string;
 	try {
@@ -270,11 +318,6 @@ const proxyRequest = async ({ request, params, url }: RequestEvent) => {
 		return errorResponse(requestId, 503, 'UPSTREAM_UNAVAILABLE', 'The trading API is unavailable');
 	}
 
-	const pathSuffix = Array.isArray(params.path) ? params.path.join('/') : params.path ?? '';
-	const matched = matchProxyRoute(request.method, pathSuffix);
-	if (!matched) {
-		return errorResponse(requestId, 404, 'NOT_FOUND', 'Proxy route not found');
-	}
 	const targetUrl = `${apiBase}/${pathSuffix}${url.search}`;
 
 	const headers = new Headers();

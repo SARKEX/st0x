@@ -39,3 +39,30 @@ describe('rateLimiters.admin', () => {
 		warnSpy.mockRestore();
 	});
 });
+
+describe('rateLimiters.st0xProxy', () => {
+	beforeEach(() => {
+		vi.resetModules();
+		vi.clearAllMocks();
+		mockGetKv.mockResolvedValue(null);
+	});
+
+	it('strictly limits each client to 30 requests per minute without Redis', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const { rateLimiters } = await import('./rateLimit');
+		const identifier = `st0x-proxy-test-${Date.now()}-${Math.random()}`;
+
+		for (let i = 0; i < 30; i++) {
+			const result = await rateLimiters.st0xProxy(identifier);
+			expect(result.allowed).toBe(true);
+			expect(result.failedClosed).toBe(true);
+		}
+
+		const blocked = await rateLimiters.st0xProxy(identifier);
+		expect(blocked.allowed).toBe(false);
+		expect(blocked.remaining).toBe(0);
+		expect(blocked.failedClosed).toBe(true);
+
+		warnSpy.mockRestore();
+	});
+});
