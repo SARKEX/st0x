@@ -47,6 +47,7 @@
 		toReferenceIoRatio
 	} from '$lib/services/marketOrderExecution';
 	import { createDebouncedRequest } from '$lib/stores/debouncedValue';
+	import { MARKET_QUOTE_DEBOUNCE_MS } from '$lib/config/tradingTiming';
 	import { createMidpointPricesQuery, getMidpointPrice } from '$lib/queries/midpointPrices';
 	import { isOutsideMarketHours } from '$lib/utils/marketHours';
 	import { track } from '$lib/services/analytics';
@@ -111,7 +112,8 @@
 					$walletAddress ?? undefined
 				)
 			: null;
-	const debouncedMarketQuoteRequest = createDebouncedRequest<ApiSwapQuoteV2Request>(300);
+	const debouncedMarketQuoteRequest =
+		createDebouncedRequest<ApiSwapQuoteV2Request>(MARKET_QUOTE_DEBOUNCE_MS);
 	$: debouncedMarketQuoteRequest.set(marketQuoteRequest);
 	const marketQuoteOptions = derived(
 		[showSaveEarnModal, currentNetwork, debouncedMarketQuoteRequest],

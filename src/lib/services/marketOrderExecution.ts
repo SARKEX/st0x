@@ -20,6 +20,12 @@ import {
 } from '$lib/api/st0xApi';
 import type { Network } from '$lib/config/network';
 import {
+	APPROVAL_SETTLE_ATTEMPTS,
+	APPROVAL_SETTLE_DELAY_MS,
+	TRADE_INDEX_MAX_ATTEMPTS,
+	TRADE_INDEX_POLL_INTERVAL_MS
+} from '$lib/config/tradingTiming';
+import {
 	invalidateCostBasis,
 	invalidateDashboardBalances,
 	invalidateTakerTrades
@@ -211,9 +217,6 @@ async function submitApprovals(
 	}
 }
 
-const APPROVAL_SETTLE_ATTEMPTS = 4;
-const APPROVAL_SETTLE_DELAY_MS = 400;
-
 async function fetchSwapCalldataUntilApproved(
 	request: ApiSwapCalldataV2Request
 ): Promise<ApiSwapCalldataV2Response> {
@@ -306,9 +309,6 @@ function validateReadyCalldata(
 	}
 	return { to: response.to, data: response.data, value };
 }
-
-const TRADE_INDEX_MAX_ATTEMPTS = 60;
-const TRADE_INDEX_POLL_INTERVAL_MS = 5_000;
 
 async function pollForIndexedTrade(hash: string): Promise<ApiTradesByTxResponse | null> {
 	for (let attempt = 0; attempt < TRADE_INDEX_MAX_ATTEMPTS; attempt++) {

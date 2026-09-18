@@ -29,6 +29,7 @@ import {
 	waitForTransaction as walletServiceWaitForTransaction,
 	APPROVAL_TX_CONFIRMATIONS
 } from '$lib/services/walletService';
+import { TRADE_INDEX_MAX_ATTEMPTS, TRADE_INDEX_POLL_INTERVAL_MS } from '$lib/config/tradingTiming';
 import { isStaleWalletSessionError, handleStaleWalletSession } from '$lib/utils/walletUtils';
 import { detectPartialFill } from './partialFillDetection';
 import { ensureAllowance } from './approvalStore';
@@ -360,10 +361,9 @@ export const pollAndFinalizeTakeOrders = async (
 	const hash = allTransactionHashes[allTransactionHashes.length - 1];
 
 	const pollPendingTrades = async () => {
-		const MAX_ATTEMPTS = 60;
 		const totalBatches = allTransactionHashes.length;
 
-		for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+		for (let attempt = 0; attempt < TRADE_INDEX_MAX_ATTEMPTS; attempt++) {
 			const now = Math.floor(Date.now() / 1000);
 			const trades = await getTrades(now - 600, now, network);
 			const allTrades = trades.filter((t) =>
@@ -394,7 +394,7 @@ export const pollAndFinalizeTakeOrders = async (
 				if (validTrades.length > 0) return validTrades;
 			}
 
-			await new Promise((resolve) => setTimeout(resolve, 5_000));
+			await new Promise((resolve) => setTimeout(resolve, TRADE_INDEX_POLL_INTERVAL_MS));
 		}
 		return [];
 	};
