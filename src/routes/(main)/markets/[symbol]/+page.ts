@@ -14,7 +14,7 @@ export const load = ({ params }) => {
 	}
 
 	const title = `Trade Tokenized ${asset.companyName} (${asset.ticker}) 24/7 | ST0x`;
-	const description = `Buy and sell tokenized ${asset.companyName} (${asset.ticker}) on ST0x with 24/7 on-chain execution and non-custodial settlement on Base.`;
+	const description = `Buy and sell tokenized ${asset.companyName} (${asset.ticker}) on ST0x with 24/7 on-chain execution and non-custodial settlement on supported networks.`;
 
 	return { asset, title, description };
 };

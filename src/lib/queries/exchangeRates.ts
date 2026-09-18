@@ -2,7 +2,7 @@
  * Wrap-ratio (exchange-rate) data source.
  *
  * The REST API returns wrap-ratio rows with share/asset addresses. The website
- * composes display metadata from /v1/tokens so existing UI surfaces can keep
+ * composes display metadata from /v2/tokens so existing UI surfaces can keep
  * working with token refs instead of doing local chain/indexer reads.
  */
 import { browser } from '$app/environment';
@@ -21,8 +21,6 @@ import {
 	normalizeApiTokensForNetwork
 } from '$lib/queries/tokens';
 import { createQuery } from '@tanstack/svelte-query';
-
-const BASE_CHAIN_ID = 8453;
 
 export interface TokenRef {
 	address: string;
@@ -183,14 +181,18 @@ function warnWrapRatioErrors(response: ApiWrapRatiosResponse): void {
 	}
 }
 
-export function createExchangeRatesQuery(chainId: number = BASE_CHAIN_ID) {
+export function createExchangeRatesQuery(chainId: number | null | undefined) {
 	return createQuery<ExchangeRateLookup>({
 		queryKey: ['exchangeRates', chainId],
-		enabled: browser,
-		staleTime: 60_000,
-		refetchOnWindowFocus: true,
+		enabled: browser && Boolean(chainId),
+		staleTime: Infinity,
+		refetchInterval: 60_000,
 		queryFn: async () => {
-			const [apiTokens, wrapRatios] = await Promise.all([getCachedApiTokens(), apiGetWrapRatios()]);
+			if (!chainId) throw new Error('chainId is required');
+			const [apiTokens, wrapRatios] = await Promise.all([
+				getCachedApiTokens(chainId),
+				apiGetWrapRatios(chainId)
+			]);
 			warnWrapRatioErrors(wrapRatios);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);
 			const networkRows = filterApiWrapRatiosForTokens(wrapRatios.data, tokens);
@@ -201,8 +203,8 @@ export function createExchangeRatesQuery(chainId: number = BASE_CHAIN_ID) {
 
 export function createExchangeRateHistoryQuery(
 	wrappedTokenAddress: string | null | undefined,
-	options?: { page?: number; pageSize?: number },
-	chainId: number = BASE_CHAIN_ID
+	chainId: number | null | undefined,
+	options?: { page?: number; pageSize?: number }
 ) {
 	return createQuery<ExchangeRateHistoryResponse>({
 		queryKey: [
@@ -212,15 +214,16 @@ export function createExchangeRateHistoryQuery(
 			options?.page ?? 1,
 			options?.pageSize ?? 50
 		],
-		enabled: browser && Boolean(wrappedTokenAddress),
-		staleTime: 60_000,
+		enabled: browser && Boolean(wrappedTokenAddress && chainId),
+		staleTime: Infinity,
+		refetchInterval: 60_000,
 		retry: false,
 		queryFn: async () => {
-			if (!wrappedTokenAddress) {
-				throw new Error('wrappedTokenAddress is required');
+			if (!wrappedTokenAddress || !chainId) {
+				throw new Error('wrappedTokenAddress and chainId are required');
 			}
 			const [apiTokens, history] = await Promise.all([
-				getCachedApiTokens(),
+				getCachedApiTokens(chainId),
 				apiGetWrapRatioHistory(wrappedTokenAddress, chainId, options)
 			]);
 			const tokens = normalizeApiTokensForNetwork(apiTokens, chainId);

@@ -56,7 +56,7 @@ export const isAuthenticated = derived(authMethod, ($authMethod) => $authMethod 
  * Check if user is on the wrong network (for wallet users)
  * Uses lazy import to avoid circular dependency initialization issues
  */
-let _currentNetworkStore: Readable<Network> | null = null;
+let _currentNetworkStore: Readable<Network | null> | null = null;
 
 export const wrongNetwork = derived(
 	[chainId, walletAddress],
@@ -67,9 +67,16 @@ export const wrongNetwork = derived(
 		let isActive = true;
 
 		// Helper to compute and set the value
-		const updateValue = ($currentNetwork: Network) => {
+		const updateValue = ($currentNetwork: Network | null) => {
 			if (isActive) {
-				set(!!($walletAddress && $chainId !== $currentNetwork.id));
+				set(
+					!!(
+						$walletAddress &&
+						$currentNetwork &&
+						$chainId != null &&
+						$chainId !== $currentNetwork.id
+					)
+				);
 			}
 		};
 

@@ -4,13 +4,18 @@ import { findApiTokenByAnyAddress, normalizeApiTokensForNetwork } from '$lib/que
 import { getTokenByAnyAddress } from '$lib/config/tokens';
 import { buildTradeDescription, buildTradeTitle, getTradeSeoMetadata } from '$lib/seo/trade';
 import { initSt0xBotProtection } from '$lib/client/botId';
+import { currentNetwork } from '$lib/stores';
+import { get } from 'svelte/store';
 
 export const ssr = false;
 export const prerender = false;
 
-export async function load({ params, fetch }) {
+export async function load({ params, fetch, parent }) {
 	const tokenId = params.id;
-	const staticToken = getTokenByAnyAddress(tokenId);
+	const parentData = await parent();
+	const chainId = get(currentNetwork)?.chainId ?? parentData.networkCatalog?.[0]?.chainId;
+	if (!chainId) return getTradeSeoMetadata(`/trade/${tokenId}`) ?? {};
+	const staticToken = getTokenByAnyAddress(tokenId, chainId);
 	if (staticToken && staticToken.address.toLowerCase() !== tokenId.toLowerCase()) {
 		throw redirect(301, `/trade/${staticToken.address}`);
 	}
@@ -26,7 +31,7 @@ export async function load({ params, fetch }) {
 	// This client-only load can run before the root layout component is created
 	// on a cold deep-link, so initialise protection before its proxy request.
 	initSt0xBotProtection();
-	const response = await fetch('/api/st0x/v1/tokens');
+	const response = await fetch(`/api/st0x/v2/tokens?chainId=${chainId}`);
 	if (!response.ok) {
 		return {
 			title: fallbackMetadata?.title,
@@ -34,7 +39,7 @@ export async function load({ params, fetch }) {
 		};
 	}
 
-	const tokens = normalizeApiTokensForNetwork((await response.json()) as ApiToken[], 8453);
+	const tokens = normalizeApiTokensForNetwork((await response.json()) as ApiToken[], chainId);
 	const token = findApiTokenByAnyAddress(tokens, tokenId);
 	if (token && token.address.toLowerCase() !== tokenId.toLowerCase()) {
 		throw redirect(301, `/trade/${token.address}`);

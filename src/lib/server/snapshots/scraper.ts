@@ -1,21 +1,30 @@
 // Scraper for fetching SFT transfers from the subgraph
 // Modeled after albion.rewards/src/processor.ts
 
-import { networks } from '$lib/config/networks';
-import { TOKENS, getAllTokenAddressesFlat } from '$lib/config/tokens';
+import type { Network } from '$lib/config/networks';
+import { getTokenAddressVariants, onTokenCatalogChange } from '$lib/config/tokens';
 import type { Transfer, SubgraphTransfer, SubgraphWrappedTokenTransfer } from './types';
 
 const BATCH_SIZE = 1000;
 
-// Get SFT subgraph URLs from network config (current + legacy)
-const SFT_SUBGRAPH_URL = networks[0].subgraph_url;
-const SFT_SUBGRAPH_URLS_LEGACY = networks[0].subgraph_urls_legacy ?? [];
-
 // Get all token addresses from config (lowercase)
-export const TOKEN_ADDRESSES = TOKENS.map((t) => t.address.toLowerCase());
+export const TOKEN_ADDRESSES: string[] = [];
 
 // All token addresses including unwrapped and legacy (for expanded snapshots)
-export const ALL_TOKEN_ADDRESSES = getAllTokenAddressesFlat();
+export const ALL_TOKEN_ADDRESSES: string[] = [];
+
+onTokenCatalogChange((tokens) => {
+	TOKEN_ADDRESSES.splice(
+		0,
+		TOKEN_ADDRESSES.length,
+		...tokens.map((token) => token.address.toLowerCase())
+	);
+	ALL_TOKEN_ADDRESSES.splice(
+		0,
+		ALL_TOKEN_ADDRESSES.length,
+		...tokens.flatMap((token) => getTokenAddressVariants(token))
+	);
+});
 
 /**
  * Fetch transfers from a specific SFT subgraph up to a specific block
@@ -254,16 +263,17 @@ async function fetchFromSubgraph(
  */
 export async function fetchAllTransfers(
 	untilBlock: number,
-	tokenAddresses: string[] = ALL_TOKEN_ADDRESSES
+	tokenAddresses: string[],
+	network: Network
 ): Promise<Transfer[]> {
-	const subgraphUrls = [SFT_SUBGRAPH_URL, ...SFT_SUBGRAPH_URLS_LEGACY];
+	const subgraphUrls = [network.subgraph_url, ...network.subgraph_urls_legacy].filter(Boolean);
 
 	console.log(
 		`[Scraper] Fetching transfers up to block ${untilBlock} for ${tokenAddresses.length} tokens from ${subgraphUrls.length} subgraph(s)`
 	);
 
 	// Query all subgraphs in parallel
-	const legacyUrlSet = new Set(SFT_SUBGRAPH_URLS_LEGACY);
+	const legacyUrlSet = new Set(network.subgraph_urls_legacy);
 	const results = await Promise.all(
 		subgraphUrls.map(async (url, i) => {
 			try {

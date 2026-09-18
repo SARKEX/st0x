@@ -18,6 +18,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiMarketPrice } from '$lib/api/st0xApi';
 
+const TEST_NETWORK = {
+	chainId: 8453,
+	rpcUrl: 'https://rpc-primary.example/key',
+	fallbackRpcUrls: ['https://rpc-fallback-1.example', 'https://rpc-fallback-2.example']
+} as never;
+
 const { mockRecordRpcAttempt, mockReportChainExhausted, mockFetchMarketPrices } = vi.hoisted(
 	() => ({
 		mockRecordRpcAttempt: vi.fn(),
@@ -53,6 +59,10 @@ vi.mock('$lib/config/tokens', () => ({
 
 vi.mock('$lib/server/kv', () => ({
 	getRewardsExcludedWalletsSet: vi.fn(async () => new Set<string>())
+}));
+
+vi.mock('$lib/server/tokenCatalog', () => ({
+	ensureServerTokenCatalog: vi.fn(async () => undefined)
 }));
 
 vi.mock('./scraper', () => ({
@@ -97,7 +107,7 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 			jsonResponse({ result: '0xdeadbeef' })
 		);
 		const { callRpc } = await import('./generator');
-		const result = await callRpc('eth_blockNumber', []);
+		const result = await callRpc(TEST_NETWORK, 'eth_blockNumber', []);
 		expect(result).toBe('0xdeadbeef');
 		expect(mockRecordRpcAttempt).toHaveBeenCalledTimes(1);
 		expect(mockRecordRpcAttempt).toHaveBeenCalledWith(
@@ -112,7 +122,7 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 			.mockRejectedValueOnce(new Error('header not found'))
 			.mockResolvedValueOnce(jsonResponse({ result: '0xabc' }));
 		const { callRpc } = await import('./generator');
-		const result = await callRpc('eth_blockNumber', []);
+		const result = await callRpc(TEST_NETWORK, 'eth_blockNumber', []);
 		expect(result).toBe('0xabc');
 		// fetch called twice = 1 retry inside RPC #1, no fall-through to RPC #2
 		expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -133,7 +143,9 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 	it('Test 3: throws when all RPCs × all retries fail; reportChainExhausted fires once', async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('header not found'));
 		const { callRpc } = await import('./generator');
-		await expect(callRpc('eth_blockNumber', [])).rejects.toThrow(/all .* RPCs exhausted/);
+		await expect(callRpc(TEST_NETWORK, 'eth_blockNumber', [])).rejects.toThrow(
+			/all .* RPCs exhausted/
+		);
 		// 3 RPCs × 1 outer record per RPC = 3 recordRpcAttempt calls (all failures)
 		expect(mockRecordRpcAttempt).toHaveBeenCalledTimes(3);
 		expect(
@@ -151,7 +163,9 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 	it('Test 4: empty result throws inside fetchOnce → retry → fall-through → exhaustion throws', async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse({ result: null }));
 		const { callRpc } = await import('./generator');
-		await expect(callRpc('eth_blockNumber', [])).rejects.toThrow(/all .* RPCs exhausted/);
+		await expect(callRpc(TEST_NETWORK, 'eth_blockNumber', [])).rejects.toThrow(
+			/all .* RPCs exhausted/
+		);
 		expect(mockReportChainExhausted).toHaveBeenCalledTimes(1);
 		// Every per-RPC outcome was a failure
 		expect(mockRecordRpcAttempt).toHaveBeenCalledTimes(3);
@@ -182,7 +196,7 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 			throw new Error('header not found');
 		});
 		const { getBlockNumberForTimestamp } = await import('./generator');
-		await expect(getBlockNumberForTimestamp(1_700_000_000)).rejects.toThrow(
+		await expect(getBlockNumberForTimestamp(TEST_NETWORK, 1_700_000_000)).rejects.toThrow(
 			/no block lookup succeeded/
 		);
 	});
@@ -223,7 +237,7 @@ describe('REL-01 callRpc + getBlockNumberForTimestamp', () => {
 		});
 		const { getBlockNumberForTimestamp } = await import('./generator');
 		// Must reject — not resolve to a number (which would indicate a swallow regression).
-		const promise = getBlockNumberForTimestamp(1_700_000_000);
+		const promise = getBlockNumberForTimestamp(TEST_NETWORK, 1_700_000_000);
 		await expect(promise).rejects.toBeInstanceOf(Error);
 		await expect(promise).rejects.toThrow(/no block lookup succeeded/);
 	});
@@ -247,7 +261,7 @@ describe('snapshot market prices', () => {
 		]);
 		const { fetchSnapshotPrices } = await import('./generator');
 
-		const prices = await fetchSnapshotPrices(1_784_800_000);
+		const prices = await fetchSnapshotPrices(TEST_NETWORK, 1_784_800_000);
 
 		expect(mockFetchMarketPrices).toHaveBeenCalledWith(8453, { at: 1_784_800_000 });
 		expect(prices.get('0xabcd')?.midpoint).toBe('100');

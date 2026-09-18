@@ -53,6 +53,7 @@ import { invalidateUserVaultQueries } from '$lib/queries/vaults';
 import { invalidateDashboardBalances } from '$lib/queries/balances';
 import { walletAddress } from '$lib/stores/authStore';
 import { currentNetwork } from '$lib/stores';
+import type { Network } from '$lib/config/network';
 import { rainlangConfirmationModal, reviewStrategyOnDeploy } from '$lib/stores';
 import { getRaindexOrderUrl, getRaindexVaultUrl, isPaymentToken } from '$lib/utils/tokenMath';
 import { ZERO_FLOAT_HEX } from '$lib/config/constants';
@@ -185,13 +186,19 @@ function createRaindexLink(
 	return { url, text: linkText };
 }
 
+function getSelectedNetwork(): Network {
+	const network = get(currentNetwork);
+	if (!network) throw new Error('No network selected');
+	return network;
+}
+
 export const handleStrategyDeployment = async (
 	deploymentArgs: DeploymentTransactionArgs,
 	assetTokenInfo?: AssetTokenInfo,
 	eventContext?: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'submission', 'wallet_config', network?.id);
@@ -276,7 +283,8 @@ export const handleStrategyDeployment = async (
 						abi: erc20Abi,
 						address: d.approval.token as `0x${string}`,
 						functionName: 'balanceOf',
-						args: [$signerAddress as Hex]
+						args: [$signerAddress as Hex],
+						chainId: network.chainId
 					})
 				)
 			)) as bigint[];
@@ -344,7 +352,8 @@ export const handleStrategyDeployment = async (
 
 		hash = await sendTransaction({
 			to: deploymentArgs.raindexAddress as `0x${string}`,
-			data: deploymentArgs.deploymentCalldata as Hex
+			data: deploymentArgs.deploymentCalldata as Hex,
+			chainId: network.chainId
 		});
 		if (submitContext) addTradeFlowBreadcrumb(submitContext, 'completed');
 		// OBS-07 (Plan 02-03 Task 2c): tx hash returned post-dispatch — emit
@@ -516,7 +525,7 @@ export const showRainlangConfirmation = async (
 export const handleDsfDeploy = async (args: MarketMakingDeploymentArgs) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	awaitWalletConfirmation(`Preparing strategy...`);
 	const { composedRainlang, deploymentArgs } = await getMarketMakingDeploymentArgs(network, args);
 
@@ -528,7 +537,7 @@ export const handleDcaDeploy = async (
 	eventContext: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'calldata', 'prepare_dca', network?.id);
@@ -578,7 +587,7 @@ export const handleLimitDeploy = async (
 	eventContext: DeployEventContext
 ) => {
 	const config = get(wagmiConfig);
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	if (!config) {
 		const error = new Error('Wagmi config not found');
 		reportDeployFailure(error, eventContext, 'calldata', 'prepare_limit', network?.id);
@@ -655,18 +664,21 @@ export const handleWithdraw = async (vault: RaindexVault) => {
 		}
 
 		// Security: Validate orderbook address is trusted before sending transaction
-		const network = get(currentNetwork);
+		const network = getSelectedNetwork();
 		validateOrderbookAddress(vault.raindex, network);
 
 		awaitWalletConfirmation(`Awaiting wallet confirmation for withdrawal...`);
 
 		hash = await sendTransaction({
 			to: vault.raindex as `0x${string}`,
-			data: vaultCalldatas.value.withdraw as Hex
+			data: vaultCalldatas.value.withdraw as Hex,
+			chainId: network.chainId
 		});
 		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
-		await waitForTransaction(hash, { confirmations: TAKE_TX_CONFIRMATIONS });
+		await waitForTransaction(hash, network.chainId, {
+			confirmations: TAKE_TX_CONFIRMATIONS
+		});
 
 		const $signer = get(walletAddress);
 		const raindexLink = {
@@ -705,7 +717,8 @@ export const handleWrapUnwrap = async (
 	amount: bigint,
 	userAddress: `0x${string}`,
 	tokenSymbol: string,
-	targetSymbol: string
+	targetSymbol: string,
+	chainId: number
 ) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
@@ -717,13 +730,13 @@ export const handleWrapUnwrap = async (
 		awaitWalletConfirmation(`Awaiting wallet confirmation to ${mode} ${tokenSymbol}...`);
 
 		if (mode === 'wrap') {
-			hash = await wrapToken(tokenAddress, amount, userAddress);
+			hash = await wrapToken(tokenAddress, amount, userAddress, chainId);
 		} else {
-			hash = await unwrapToken(tokenAddress, amount, userAddress, userAddress);
+			hash = await unwrapToken(tokenAddress, amount, userAddress, userAddress, chainId);
 		}
 
 		awaitWalletConfirmation(`Awaiting transaction confirmation...`);
-		await waitForTransaction(hash);
+		await waitForTransaction(hash, chainId);
 
 		// Invalidate balance queries (same pattern as handleWithdraw)
 		invalidateDashboardBalances();
@@ -766,7 +779,7 @@ export const handleRemoveOrder = async (quote: {
 }) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	const $signerAddress = get(walletAddress);
 
 	if (!$signerAddress) {
@@ -917,12 +930,13 @@ export const handleRemoveOrder = async (quote: {
 
 				const withdrawHash = await sendTransaction({
 					to: vault.raindex as `0x${string}`,
-					data: vaultCalldatas.value.withdraw as Hex
+					data: vaultCalldatas.value.withdraw as Hex,
+					chainId: network.chainId
 				});
 
 				awaitWalletConfirmation(`Awaiting withdrawal confirmation...`);
 
-				await waitForTransaction(withdrawHash);
+				await waitForTransaction(withdrawHash, network.chainId);
 			}
 		}
 
@@ -939,12 +953,13 @@ export const handleRemoveOrder = async (quote: {
 
 		const hash = await sendTransaction({
 			to: order.raindex as `0x${string}`,
-			data: removeCalldata.value as Hex
+			data: removeCalldata.value as Hex,
+			chainId: network.chainId
 		});
 
 		awaitWalletConfirmation('Awaiting transaction confirmation...');
 
-		await waitForTransaction(hash);
+		await waitForTransaction(hash, network.chainId);
 
 		const raindexLink = createRaindexLink(network.id, order.raindex, quote.orderHash);
 
@@ -998,7 +1013,7 @@ export const handleWithdrawFromOrder = async (quote: {
 }) => {
 	const config = get(wagmiConfig);
 	if (!config) throw new Error('Wagmi config not found');
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	const $signerAddress = get(walletAddress);
 
 	if (!$signerAddress) {
@@ -1055,12 +1070,13 @@ export const handleWithdrawFromOrder = async (quote: {
 
 				const removeHash = await sendTransaction({
 					to: order.raindex as `0x${string}`,
-					data: removeCalldata.value as Hex
+					data: removeCalldata.value as Hex,
+					chainId: network.chainId
 				});
 
 				awaitWalletConfirmation('Awaiting deactivation confirmation...');
 
-				await waitForTransaction(removeHash);
+				await waitForTransaction(removeHash, network.chainId);
 			}
 		}
 
@@ -1182,12 +1198,13 @@ export const handleWithdrawFromOrder = async (quote: {
 
 			lastHash = await sendTransaction({
 				to: vault.raindex as `0x${string}`,
-				data: vaultCalldatas.value.withdraw as Hex
+				data: vaultCalldatas.value.withdraw as Hex,
+				chainId: network.chainId
 			});
 
 			awaitWalletConfirmation(`Awaiting transaction confirmation...`);
 
-			await waitForTransaction(lastHash);
+			await waitForTransaction(lastHash, network.chainId);
 		}
 
 		const chainId = network.id;
@@ -1227,7 +1244,7 @@ export const handleWithdrawFromOrder = async (quote: {
 };
 
 export const handleFolioDeploy = async (args: FolioDeploymentArgs) => {
-	const network = get(currentNetwork);
+	const network = getSelectedNetwork();
 	awaitWalletConfirmation(`Preparing strategy...`);
 	const { composedRainlang, deploymentArgs } = await getFolioDeploymentArgs(network, args);
 

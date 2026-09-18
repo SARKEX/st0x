@@ -71,7 +71,7 @@ describe('/api/st0x proxy', () => {
 		checkBotIdMock.mockResolvedValue({ isBot: false });
 	});
 
-	it('server-caches GET /v1/tokens without exposing a public edge cache', async () => {
+	it('server-caches GET /v2/tokens without exposing a public edge cache', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify([{ address: '0xToken', symbol: 'TOK', decimals: 18 }]), {
 				status: 200,
@@ -80,12 +80,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store');
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens?page=1',
+			'https://api.example.test/v2/tokens?page=1',
 			expect.objectContaining({
 				method: 'GET',
 				headers: expect.any(Headers)
@@ -106,13 +106,13 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('no-store');
 	});
 
-	it('allows POST /v1/swap/quote and forwards the JSON body without caching', async () => {
+	it('allows POST /v2/swap/quote and forwards the JSON body without caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ estimatedInput: '100' }), {
 				status: 200,
@@ -126,19 +126,19 @@ describe('/api/st0x proxy', () => {
 			outputAmount: '1'
 		});
 
-		const response = await POST(proxyEvent('POST', 'v1/swap/quote', body));
+		const response = await POST(proxyEvent('POST', 'v2/swap/quote', body));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/swap/quote?page=1',
+			'https://api.example.test/v2/swap/quote?page=1',
 			expect.objectContaining({ method: 'POST' })
 		);
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
-	it('allows POST /v1/orders/query without unsafe URI-only shared caching', async () => {
+	it('allows POST /v2/orders/query without unsafe URI-only shared caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(
 				JSON.stringify({
@@ -165,23 +165,23 @@ describe('/api/st0x proxy', () => {
 			pageSize: 50
 		});
 
-		const response = await POST(proxyEvent('POST', 'v1/orders/query', body));
+		const response = await POST(proxyEvent('POST', 'v2/orders/query', body));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/orders/query?page=1',
+			'https://api.example.test/v2/orders/query?page=1',
 			expect.objectContaining({ method: 'POST' })
 		);
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
-	it('does not expose GET /v1/orders/token as an authenticated pass-through', async () => {
+	it('does not expose GET /v2/orders/token as an authenticated pass-through', async () => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/orders/token/0xToken'));
+		const response = await GET(proxyEvent('GET', 'v2/orders/token/0xToken'));
 
 		expect(response.status).toBe(404);
 		expect(checkBotIdMock).not.toHaveBeenCalled();
@@ -191,7 +191,7 @@ describe('/api/st0x proxy', () => {
 	it('rejects requests without same-origin browser context before proxying upstream', async () => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal('fetch', fetchMock);
-		const event = proxyEvent('GET', 'v1/tokens');
+		const event = proxyEvent('GET', 'v2/tokens');
 		event.request = new Request(event.url, { method: 'GET' });
 
 		const response = await GET(event);
@@ -206,7 +206,7 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const response = await GET(
-			proxyEvent('GET', 'v1/tokens', undefined, {
+			proxyEvent('GET', 'v2/tokens', undefined, {
 				Origin: 'http://localhost',
 				'Sec-Fetch-Site': 'cross-site'
 			})
@@ -222,7 +222,7 @@ describe('/api/st0x proxy', () => {
 		checkBotIdMock.mockResolvedValue({ isBot: true });
 
 		const response = await GET(
-			proxyEvent('GET', 'v1/tokens', undefined, {
+			proxyEvent('GET', 'v2/tokens', undefined, {
 				Origin: 'http://localhost',
 				'Sec-Fetch-Site': 'same-origin'
 			})
@@ -238,7 +238,7 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', fetchMock);
 		checkBotIdMock.mockRejectedValue(new Error('verification unavailable'));
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens'));
 
 		expect(response.status).toBe(503);
 		expect(await response.json()).toMatchObject({
@@ -256,7 +256,7 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 		checkBotIdMock.mockRejectedValue(new Error('must not be called for a subrequest'));
-		const event = proxyEvent('GET', 'v1/tokens');
+		const event = proxyEvent('GET', 'v2/tokens');
 		event.isSubRequest = true;
 
 		const response = await GET(event);
@@ -266,7 +266,7 @@ describe('/api/st0x proxy', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('allows POST /v1/trades/query without unsafe URI-only shared caching', async () => {
+	it('allows POST /v2/trades/query without unsafe URI-only shared caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(
 				JSON.stringify({
@@ -295,19 +295,19 @@ describe('/api/st0x proxy', () => {
 			pageSize: 50
 		});
 
-		const response = await POST(proxyEvent('POST', 'v1/trades/query', body));
+		const response = await POST(proxyEvent('POST', 'v2/trades/query', body));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/trades/query?page=1',
+			'https://api.example.test/v2/trades/query?page=1',
 			expect.objectContaining({ method: 'POST' })
 		);
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
-	it('allows POST /v1/swap/calldata without caching', async () => {
+	it('allows POST /v2/swap/calldata without caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ to: '0xOrderbook', data: '0x', value: '0', approvals: [] }), {
 				status: 200,
@@ -316,12 +316,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await POST(proxyEvent('POST', 'v1/swap/calldata', '{}'));
+		const response = await POST(proxyEvent('POST', 'v2/swap/calldata', '{}'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/swap/calldata?page=1',
+			'https://api.example.test/v2/swap/calldata?page=1',
 			expect.objectContaining({ method: 'POST' })
 		);
 	});
@@ -403,7 +403,7 @@ describe('/api/st0x proxy', () => {
 		expect(await new Response(init.body).text()).toBe(body);
 	});
 
-	it('allows GET /v1/trades/tx/:hash without caching', async () => {
+	it('allows GET /v2/trades/tx/:hash without caching', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(JSON.stringify({ txHash: '0x1234', trades: [], totals: {} }), {
 				status: 200,
@@ -412,12 +412,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/trades/tx/0x1234'));
+		const response = await GET(proxyEvent('GET', 'v2/trades/tx/0x1234'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBeNull();
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/trades/tx/0x1234?page=1',
+			'https://api.example.test/v2/trades/tx/0x1234?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -440,7 +440,7 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/trades/token/0xToken'));
+		const response = await GET(proxyEvent('GET', 'v2/trades/token/0xToken'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store');
@@ -455,12 +455,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/wrap-ratio'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/wrap-ratio'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store');
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens/wrap-ratio?page=1',
+			'https://api.example.test/v2/tokens/wrap-ratio?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -488,12 +488,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/wrap-ratio/0xShare/history'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/wrap-ratio/0xShare/history'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store');
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens/wrap-ratio/0xShare/history?page=1',
+			'https://api.example.test/v2/tokens/wrap-ratio/0xShare/history?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -507,12 +507,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/details'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store');
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens/details?page=1',
+			'https://api.example.test/v2/tokens/details?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -532,7 +532,7 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/details'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('no-store');
@@ -552,7 +552,7 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/details'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('no-store');
@@ -573,8 +573,8 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const first = await GET(proxyEvent('GET', 'v1/tokens/details'));
-		const second = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const first = await GET(proxyEvent('GET', 'v2/tokens/details'));
+		const second = await GET(proxyEvent('GET', 'v2/tokens/details'));
 
 		expect(first.status).toBe(200);
 		expect(second.status).toBe(200);
@@ -592,12 +592,12 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
+		const response = await GET(proxyEvent('GET', 'v2/tokens/0xToken/details'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store');
 		expect(fetchMock).toHaveBeenCalledWith(
-			'https://api.example.test/v1/tokens/0xToken/details?page=1',
+			'https://api.example.test/v2/tokens/0xToken/details?page=1',
 			expect.objectContaining({ method: 'GET' })
 		);
 	});
@@ -612,8 +612,8 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const first = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
-		const second = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
+		const first = await GET(proxyEvent('GET', 'v2/tokens/0xToken/details'));
+		const second = await GET(proxyEvent('GET', 'v2/tokens/0xToken/details'));
 
 		expect(first.status).toBe(200);
 		expect(second.status).toBe(200);
@@ -642,7 +642,7 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const response = await GET(
-			proxyEvent('GET', 'v1/trades/token/0xToken', undefined, {
+			proxyEvent('GET', 'v2/trades/token/0xToken', undefined, {
 				'X-Request-Id': 'web-request-123'
 			})
 		);
@@ -677,7 +677,7 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const response = await GET(
-			proxyEvent('GET', 'v1/trades/token/0xToken', undefined, {
+			proxyEvent('GET', 'v2/trades/token/0xToken', undefined, {
 				'X-Request-Id': incomingId
 			})
 		);
@@ -694,7 +694,7 @@ describe('/api/st0x proxy', () => {
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('private DNS detail')));
 
 		const response = await GET(
-			proxyEvent('GET', 'v1/trades/token/0xToken', undefined, {
+			proxyEvent('GET', 'v2/trades/token/0xToken', undefined, {
 				'X-Request-Id': 'web-request-503'
 			})
 		);

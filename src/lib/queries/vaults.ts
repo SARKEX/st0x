@@ -100,12 +100,13 @@ export function createSftsQuery(network: Network | null) {
 		staleTime: Infinity,
 		refetchInterval: false,
 		queryFn: async () => {
-			const response = await apiGetTokenDetails();
+			if (!network) return [];
+			const response = await apiGetTokenDetails(network.chainId);
 			if (response.errors.length) {
 				console.warn('Some token details failed to load', response.errors);
 			}
-			return filterTokenDetailsSummariesForChain(response.data, network?.chainId as number).map(
-				(summary) => tokenDetailsSummaryToVault(summary, undefined, summary.chainId)
+			return filterTokenDetailsSummariesForChain(response.data, network.chainId).map((summary) =>
+				tokenDetailsSummaryToVault(summary, undefined, summary.chainId)
 			);
 		}
 	});

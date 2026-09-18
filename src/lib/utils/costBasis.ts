@@ -204,7 +204,8 @@ export function calculateCostBasisForToken(
 export function calculateAllCostBases(
 	trades: CostBasisTrade[],
 	paymentTokenAddresses: Set<string>,
-	userAddress: string
+	userAddress: string,
+	chainId?: number
 ): Map<string, CostBasisData> {
 	const costBasisMap = new Map<string, CostBasisData>();
 
@@ -240,7 +241,7 @@ export function calculateAllCostBases(
 	// wrapped token has no trades yet (i.e. is not already in the map).
 	for (const [tokenAddress, costBasis] of Array.from(costBasisMap.entries())) {
 		// Check if this is an old (legacy) token with a migration to a new wrapped token
-		const migrationMapping = getMigrationMappingByAddress(tokenAddress);
+		const migrationMapping = getMigrationMappingByAddress(tokenAddress, chainId);
 		if (!migrationMapping) continue;
 		if (costBasis.totalAcquired <= 0) continue;
 

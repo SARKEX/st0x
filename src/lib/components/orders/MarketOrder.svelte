@@ -43,7 +43,7 @@
 	} from '$lib/services/tradeError';
 	import TradeErrorPanel from '$lib/components/trade/TradeErrorPanel.svelte';
 	import { selectVisibleTradeError } from '$lib/components/trade/tradeErrorUi';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 
 	export let orderSide: 'Buy' | 'Sell' = 'Buy';
 
@@ -217,7 +217,6 @@
 	}
 
 	// Cleanup interval on component destroy
-	import { onDestroy } from 'svelte';
 	onDestroy(() => {
 		debouncedMarketQuoteRequest.destroy();
 		if (quoteFreshnessInterval) clearInterval(quoteFreshnessInterval);
@@ -444,7 +443,6 @@
 		orderSide === 'Buy'
 			? 'bg-green-500 hover:bg-green-600 text-text'
 			: 'bg-red-500 hover:bg-red-600 text-text';
-
 	$: disableDeploy =
 		!selectedAmount ||
 		!assetToken ||
@@ -574,6 +572,8 @@
 		if (!selectedAmount) {
 			return;
 		}
+		const selectedNetwork = $currentNetwork;
+		if (!selectedNetwork) return;
 
 		if (isSubmittingMarketOrder) {
 			return;
@@ -661,7 +661,7 @@
 						decimals: paymentToken.decimals,
 						symbol: paymentToken.symbol
 					},
-					network: $currentNetwork
+					network: selectedNetwork
 				});
 
 				if (!result.success && result.error) {
@@ -733,7 +733,7 @@
 	}}
 />
 
-{#if $currentNetwork && assetToken}
+{#if $currentNetwork && assetToken && paymentToken}
 	<div data-testid="market-form" data-mode="market" data-side={orderSide.toLowerCase()}>
 		<div
 			class="space-y-4"

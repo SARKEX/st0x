@@ -1,10 +1,18 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
-import {  web3ModalStore } from './tests/mocks/mockStores';
+import { web3ModalStore } from './tests/mocks/mockStores';
 import { mockCurrentNetwork } from './tests/mocks/mockCurrentNetwork';
+import { TEST_CRYPTO_TOKENS, TEST_ST0X_TOKENS } from './tests/fixtures/st0xTokenCatalog';
+import { replaceTokenCatalog } from './src/lib/config/tokens';
+import { replaceNetworkCatalog, type Network } from './src/lib/config/networks';
 
-const { mockWagmiConfigStore, mockSignerAddressStore, mockChainIdStore, mockConnectedStore, mockWrongNetworkStore } =
-	await vi.hoisted(() => import('./tests/mocks/mockStores'));
+const {
+	mockWagmiConfigStore,
+	mockSignerAddressStore,
+	mockChainIdStore,
+	mockConnectedStore,
+	mockWrongNetworkStore
+} = await vi.hoisted(() => import('./tests/mocks/mockStores'));
 
 // SvelteKit's vitest resolver produces a virtual module for `$env/dynamic/public`
 // whose `env` is undefined in the test environment. Provide a default empty `env`;
@@ -22,7 +30,7 @@ vi.mock('svelte-wagmi', async () => {
 });
 
 vi.mock('$lib/stores', async (importOriginal) => {
-	const actual = await importOriginal() as object;
+	const actual = (await importOriginal()) as object;
 	return {
 		...actual,
 		wrongNetwork: mockWrongNetworkStore,
@@ -44,8 +52,10 @@ vi.mock('$lib/stores', async (importOriginal) => {
 // unaffected — Sentry init is gated on !dev && DSN in hooks.{client,server}.ts.
 vi.mock('@sentry/sveltekit', async () => {
 	const noop = () => {};
-	const noopHandler = () => async ({ event, resolve }: { event: unknown; resolve: (e: unknown) => unknown }) =>
-		resolve(event);
+	const noopHandler =
+		() =>
+		async ({ event, resolve }: { event: unknown; resolve: (e: unknown) => unknown }) =>
+			resolve(event);
 	return {
 		init: noop,
 		captureException: noop,
@@ -55,7 +65,8 @@ vi.mock('@sentry/sveltekit', async () => {
 		setTag: noop,
 		setContext: noop,
 		setExtra: noop,
-		withScope: (fn: (scope: unknown) => void) => fn({ setTag: noop, setContext: noop, setExtra: noop }),
+		withScope: (fn: (scope: unknown) => void) =>
+			fn({ setTag: noop, setContext: noop, setExtra: noop }),
 		sentryHandle: noopHandler,
 		handleErrorWithSentry: () => () => undefined,
 		// Vite plugin export is referenced by vite.config.js but tests don't run Vite plugins.
@@ -109,3 +120,8 @@ vi.mock('$app/stores', async () => {
 		updated
 	};
 });
+
+// Runtime catalogs are intentionally empty until the application hydrates them.
+// Unit tests use an explicit registry/API fixture so they exercise the same dynamic path.
+replaceTokenCatalog([...TEST_ST0X_TOKENS, ...TEST_CRYPTO_TOKENS]);
+replaceNetworkCatalog([mockCurrentNetwork as Network]);

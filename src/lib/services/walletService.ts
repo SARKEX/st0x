@@ -42,6 +42,7 @@ export async function sendTransaction(params: {
 	to: `0x${string}`;
 	data?: Hex;
 	value?: bigint;
+	chainId: number;
 }): Promise<Hash> {
 	const method = get(authMethod);
 	const config = get(wagmiConfig);
@@ -57,14 +58,17 @@ export async function sendTransaction(params: {
 			throw new Error('Dynamic wallet address not available');
 		}
 
-		// Ensure we're on Base network (chain ID 8453)
-		try {
-			await dynamicWalletProvider!.request({
-				method: 'wallet_switchEthereumChain',
-				params: [{ chainId: '0x2105' }] // 8453 in hex
-			});
-		} catch {
-			// Chain might already be correct, or not supported - continue anyway
+		// Bind the complete operation to the caller's captured chain. A failed switch
+		// must stop submission instead of allowing the transaction on another network.
+		await dynamicWalletProvider.request({
+			method: 'wallet_switchEthereumChain',
+			params: [{ chainId: `0x${params.chainId.toString(16)}` }]
+		});
+		const activeChain = await dynamicWalletProvider.request({ method: 'eth_chainId' });
+		const activeChainId =
+			typeof activeChain === 'string' ? Number.parseInt(activeChain, 16) : Number.NaN;
+		if (activeChainId !== params.chainId) {
+			throw new Error(`Wallet did not switch to chain ${params.chainId}`);
 		}
 
 		// Build transaction params - let wallet handle gas estimation
@@ -103,12 +107,12 @@ export async function sendTransaction(params: {
 		if (!config) {
 			throw new Error('Wagmi config not available');
 		}
-
 		const hash = await withRetry(() =>
 			wagmiSendTransaction(config, {
 				to: params.to,
 				data: params.data,
-				value: params.value
+				value: params.value,
+				chainId: params.chainId
 			})
 		);
 
@@ -127,16 +131,17 @@ export const APPROVAL_TX_CONFIRMATIONS = 2;
  */
 export async function waitForTransaction(
 	hash: Hash,
+	chainId: number,
 	options?: { confirmations?: number }
 ): Promise<void> {
 	const config = get(wagmiConfig);
 	if (!config) {
 		throw new Error('Wagmi config not available');
 	}
-
 	await withRetry(() =>
 		wagmiWaitForTransactionReceipt(config, {
 			hash,
+			chainId,
 			...(options?.confirmations != null ? { confirmations: options.confirmations } : {})
 		})
 	);

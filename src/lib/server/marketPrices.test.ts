@@ -84,7 +84,7 @@ describe('fetchMarketPrices', () => {
 		]);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 		expect(fetchMock.mock.calls[0][0]).toBe(
-			'https://api.example.test/v1/prices?chainId=8453&at=1784800000'
+			'https://api.example.test/v2/prices?chainId=8453&at=1784800000'
 		);
 	});
 

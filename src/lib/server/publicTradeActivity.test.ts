@@ -24,6 +24,7 @@ function trade(
 	outputAmount: string
 ): ApiTradeByAddress {
 	return {
+		chainId: 8453,
 		txHash,
 		inputAmount,
 		outputAmount,

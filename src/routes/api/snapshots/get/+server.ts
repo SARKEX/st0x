@@ -3,42 +3,59 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { list } from '@vercel/blob';
 import { env } from '$env/dynamic/private';
-import { TOKENS } from '$lib/config/tokens';
+import { TOKENS, onTokenCatalogChange } from '$lib/config/tokens';
 import { TOKEN_MIGRATION_MAPPINGS } from '$lib/config/tokenMigration';
+import { getServerApplicationCatalog } from '$lib/server/applicationCatalog';
 
-const LEGACY_BY_WRAPPED = new Map(
-	TOKEN_MIGRATION_MAPPINGS.map((m) => [m.newToken.symbol.toLowerCase(), m.oldToken.symbol])
-);
-const WRAPPED_BY_LEGACY = new Map(
-	TOKEN_MIGRATION_MAPPINGS.map((m) => [m.oldToken.symbol.toLowerCase(), m.newToken.symbol])
-);
-const LEGACY_SYMBOLS = new Set([
-	...TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.symbol.toLowerCase()),
-	...TOKENS.flatMap((t) => t.previousSymbols ?? []).map((s) => s.toLowerCase())
-]);
+const LEGACY_BY_WRAPPED = new Map<string, string>();
+const WRAPPED_BY_LEGACY = new Map<string, string>();
+const LEGACY_SYMBOLS = new Set<string>();
 
 // Build a map from current/legacy symbols to their historical (previous) symbols
 // e.g., 'wtspym' -> ['wtSPLG', 'tSPLG']
 const PREVIOUS_SYMBOLS_BY_CURRENT = new Map<string, string[]>();
-for (const t of TOKENS) {
-	if (t.previousSymbols?.length) {
-		PREVIOUS_SYMBOLS_BY_CURRENT.set(t.symbol.toLowerCase(), t.previousSymbols);
-		// Also map the legacy symbol to previous symbols
-		if (t.legacySymbol) {
-			PREVIOUS_SYMBOLS_BY_CURRENT.set(t.legacySymbol.toLowerCase(), t.previousSymbols);
-		}
-	}
-}
 
 // Reverse map: previous symbol -> canonical (current wrapped) symbol
 const CANONICAL_BY_PREVIOUS = new Map<string, string>();
-for (const t of TOKENS) {
-	if (t.previousSymbols?.length) {
-		for (const prev of t.previousSymbols) {
-			CANONICAL_BY_PREVIOUS.set(prev.toLowerCase(), t.symbol);
+
+onTokenCatalogChange((tokens) => {
+	LEGACY_BY_WRAPPED.clear();
+	WRAPPED_BY_LEGACY.clear();
+	LEGACY_SYMBOLS.clear();
+	PREVIOUS_SYMBOLS_BY_CURRENT.clear();
+	CANONICAL_BY_PREVIOUS.clear();
+
+	for (const mapping of TOKEN_MIGRATION_MAPPINGS) {
+		LEGACY_BY_WRAPPED.set(
+			`${mapping.chainId}:${mapping.newToken.symbol.toLowerCase()}`,
+			mapping.oldToken.symbol
+		);
+		WRAPPED_BY_LEGACY.set(
+			`${mapping.chainId}:${mapping.oldToken.symbol.toLowerCase()}`,
+			mapping.newToken.symbol
+		);
+		LEGACY_SYMBOLS.add(`${mapping.chainId}:${mapping.oldToken.symbol.toLowerCase()}`);
+	}
+
+	for (const token of tokens) {
+		for (const previousSymbol of token.previousSymbols ?? []) {
+			LEGACY_SYMBOLS.add(`${token.chainId}:${previousSymbol.toLowerCase()}`);
+			CANONICAL_BY_PREVIOUS.set(`${token.chainId}:${previousSymbol.toLowerCase()}`, token.symbol);
+		}
+		if (token.previousSymbols?.length) {
+			PREVIOUS_SYMBOLS_BY_CURRENT.set(
+				`${token.chainId}:${token.symbol.toLowerCase()}`,
+				token.previousSymbols
+			);
+			if (token.legacySymbol) {
+				PREVIOUS_SYMBOLS_BY_CURRENT.set(
+					`${token.chainId}:${token.legacySymbol.toLowerCase()}`,
+					token.previousSymbols
+				);
+			}
 		}
 	}
-}
+});
 
 function uniqueSymbols(symbols: string[]): string[] {
 	const seen = new Set<string>();
@@ -54,15 +71,16 @@ function uniqueSymbols(symbols: string[]): string[] {
 	return out;
 }
 
-function getTokenSymbolCandidates(tokenSymbol: string): string[] {
+function getTokenSymbolCandidates(chainId: number, tokenSymbol: string): string[] {
 	const symbol = tokenSymbol.trim();
 	const lower = symbol.toLowerCase();
+	const key = `${chainId}:${lower}`;
 	const candidates: string[] = [symbol];
 
-	const mappedLegacy = LEGACY_BY_WRAPPED.get(lower);
+	const mappedLegacy = LEGACY_BY_WRAPPED.get(key);
 	if (mappedLegacy) candidates.push(mappedLegacy);
 
-	const mappedWrapped = WRAPPED_BY_LEGACY.get(lower);
+	const mappedWrapped = WRAPPED_BY_LEGACY.get(key);
 	if (mappedWrapped) candidates.push(mappedWrapped);
 
 	// Generic fallbacks (covers default wtXXX <-> tXXX naming)
@@ -70,28 +88,59 @@ function getTokenSymbolCandidates(tokenSymbol: string): string[] {
 	if (symbol.startsWith('t')) candidates.push(`wt${symbol.slice(1)}`);
 
 	// Historical symbol names (e.g., wtSPYM -> wtSPLG, tSPLG)
-	const prevSymbols = PREVIOUS_SYMBOLS_BY_CURRENT.get(lower);
+	const prevSymbols = PREVIOUS_SYMBOLS_BY_CURRENT.get(key);
 	if (prevSymbols) candidates.push(...prevSymbols);
 
 	return uniqueSymbols(candidates);
 }
 
-function getCanonicalSymbol(symbol: string): string {
+function getCanonicalSymbol(chainId: number, symbol: string): string {
+	const key = `${chainId}:${symbol.toLowerCase()}`;
 	// Check if this is a previous/renamed symbol
-	const canonical = CANONICAL_BY_PREVIOUS.get(symbol.toLowerCase());
+	const canonical = CANONICAL_BY_PREVIOUS.get(key);
 	if (canonical) return canonical;
-	return WRAPPED_BY_LEGACY.get(symbol.toLowerCase()) ?? symbol;
+	return WRAPPED_BY_LEGACY.get(key) ?? symbol;
 }
 
-function getAllSnapshotTokenSymbols(): string[] {
+function getAllSnapshotTokenSymbols(chainId: number): string[] {
 	return uniqueSymbols([
-		...TOKENS.map((t) => t.symbol),
-		...TOKEN_MIGRATION_MAPPINGS.map((m) => m.oldToken.symbol),
-		...TOKENS.flatMap((t) => t.previousSymbols ?? [])
+		...TOKENS.filter((token) => token.chainId === chainId).map((token) => token.symbol),
+		...TOKEN_MIGRATION_MAPPINGS.filter((mapping) => mapping.chainId === chainId).map(
+			(mapping) => mapping.oldToken.symbol
+		),
+		...TOKENS.filter((token) => token.chainId === chainId).flatMap(
+			(token) => token.previousSymbols ?? []
+		)
 	]);
 }
 
 export const GET: RequestHandler = async ({ url }) => {
+	const { networkCatalog } = await getServerApplicationCatalog();
+	const requestedChain = url.searchParams.get('chainId');
+	const chainId = requestedChain === null ? networkCatalog[0]?.chainId : Number(requestedChain);
+	if (requestedChain === null && networkCatalog.length !== 1) {
+		return json({ error: 'Missing chainId parameter' }, { status: 400 });
+	}
+	if (
+		!Number.isSafeInteger(chainId) ||
+		!networkCatalog.some((network) => network.chainId === chainId)
+	) {
+		return json({ error: 'Unsupported chainId parameter' }, { status: 400 });
+	}
+	const snapshotPrefix = (symbol: string, blockNumber: string) =>
+		`snapshots/${chainId}/${symbol}/${blockNumber}.json`;
+	const allowLegacySnapshots = networkCatalog.length === 1;
+	const legacySnapshotPrefix = (symbol: string, blockNumber: string) =>
+		`snapshots/${symbol}/${blockNumber}.json`;
+	const findSnapshot = async (symbol: string, blockNumber: string) => {
+		const prefixes = [snapshotPrefix(symbol, blockNumber)];
+		if (allowLegacySnapshots) prefixes.push(legacySnapshotPrefix(symbol, blockNumber));
+		for (const prefix of prefixes) {
+			const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
+			if (blobs[0]) return blobs[0];
+		}
+		return null;
+	};
 	// Check if Blob token is available (required for Vercel Blob storage)
 	if (!env.BLOB_READ_WRITE_TOKEN) {
 		return json(
@@ -110,12 +159,10 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// If token is specified, get that specific snapshot
 		if (tokenSymbol) {
-			const candidateSymbols = getTokenSymbolCandidates(tokenSymbol);
+			const candidateSymbols = getTokenSymbolCandidates(chainId, tokenSymbol);
 			const lookupResults = await Promise.all(
 				candidateSymbols.map(async (symbol) => {
-					const prefix = `snapshots/${symbol}/${blockNumber}.json`;
-					const { blobs } = await list({ prefix, limit: 1, token: env.BLOB_READ_WRITE_TOKEN });
-					return { symbol, blob: blobs[0] ?? null };
+					return { symbol, blob: await findSnapshot(symbol, blockNumber) };
 				})
 			);
 			const match = lookupResults.find((r) => r.blob);
@@ -142,6 +189,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			return json({
 				success: true,
 				blockNumber: parseInt(blockNumber),
+				chainId,
 				token: tokenSymbol,
 				resolvedToken: match.symbol,
 				url: match.blob.url,
@@ -151,36 +199,31 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// If no token specified, get all token snapshots for this block
 		// Query each token's specific blob path in parallel to avoid pagination issues
-		const tokenSymbols = getAllSnapshotTokenSymbols();
+		const tokenSymbols = getAllSnapshotTokenSymbols(chainId);
 
 		const snapshotsRaw = (
 			await Promise.all(
 				tokenSymbols.map(async (symbol) => {
-					const prefix = `snapshots/${symbol}/${blockNumber}.json`;
 					try {
-						const { blobs } = await list({
-							prefix,
-							limit: 1,
-							token: env.BLOB_READ_WRITE_TOKEN
-						});
-						if (blobs.length === 0) return null;
+						const blob = await findSnapshot(symbol, blockNumber);
+						if (!blob) return null;
 
-						const response = await fetch(blobs[0].url);
+						const response = await fetch(blob.url);
 						if (!response.ok)
 							return {
 								token: symbol,
-								canonicalToken: getCanonicalSymbol(symbol),
-								isLegacy: LEGACY_SYMBOLS.has(symbol.toLowerCase()),
-								url: blobs[0].url,
+								canonicalToken: getCanonicalSymbol(chainId, symbol),
+								isLegacy: LEGACY_SYMBOLS.has(`${chainId}:${symbol.toLowerCase()}`),
+								url: blob.url,
 								snapshot: null
 							};
 
 						const data = await response.json();
 						return {
 							token: symbol,
-							canonicalToken: getCanonicalSymbol(symbol),
-							isLegacy: LEGACY_SYMBOLS.has(symbol.toLowerCase()),
-							url: blobs[0].url,
+							canonicalToken: getCanonicalSymbol(chainId, symbol),
+							isLegacy: LEGACY_SYMBOLS.has(`${chainId}:${symbol.toLowerCase()}`),
+							url: blob.url,
 							snapshot: data
 						};
 					} catch {
@@ -232,6 +275,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		return json({
 			success: true,
+			chainId,
 			blockNumber: parseInt(blockNumber),
 			tokensFound: snapshots.length,
 			snapshots

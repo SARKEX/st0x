@@ -32,12 +32,14 @@ export interface ApiToken extends ApiTokenRef {
 // ============================================================================
 
 export interface ApiSwapQuoteRequest {
+	chainId: number;
 	inputToken: string;
 	outputToken: string;
 	outputAmount: string;
 }
 
 export interface ApiSwapQuoteResponse {
+	chainId: number;
 	inputToken: string;
 	outputToken: string;
 	outputAmount: string;
@@ -60,6 +62,7 @@ export interface ApiApproval {
 }
 
 export interface ApiSwapCalldataResponse {
+	chainId: number;
 	to: string;
 	data: string;
 	value: string;
@@ -70,6 +73,7 @@ export interface ApiSwapCalldataResponse {
 export type ApiSwapCalldataMode = 'buyUpTo' | 'spendExact' | 'spendUpTo';
 
 export interface ApiSwapV2RequestCommon {
+	chainId: number;
 	inputToken: string;
 	outputToken: string;
 	mode: ApiSwapCalldataMode;
@@ -156,6 +160,7 @@ export interface ApiOrdersQueryRequest {
 // ============================================================================
 
 export interface ApiTradeByAddress {
+	chainId: number;
 	txHash: string;
 	inputAmount: string;
 	outputAmount: string;
@@ -180,6 +185,7 @@ export interface ApiTradesByAddressResponse {
 }
 
 export interface ApiTradeByTxEntry {
+	chainId: number;
 	orderHash: string;
 	orderOwner: string;
 	request: {
@@ -196,6 +202,7 @@ export interface ApiTradeByTxEntry {
 }
 
 export interface ApiTradesByTxResponse {
+	chainId: number;
 	txHash: string;
 	blockNumber: number;
 	timestamp: number;
@@ -225,7 +232,7 @@ export interface ApiTradesBatchResponse {
 export interface ApiTradesOrderHashesQueryRequest {
 	orderHashes: string[];
 	tokenAddresses?: string[];
-	chainId?: number;
+	chainId: number;
 	startTime?: number;
 	endTime?: number;
 	denomination?: 'wrapped' | 'unwrapped';
@@ -268,6 +275,7 @@ export interface ApiTokenProofReceipt {
 }
 
 export interface ApiTokenProofsResponse {
+	chainId: number;
 	address: string;
 	metadata: MetaV1S[];
 	schemas: ApiTokenProofSchema[];
@@ -331,6 +339,7 @@ export interface ApiTokenDetailsListResponse {
 // ============================================================================
 
 export interface ApiWrapRatio {
+	chainId: number;
 	shareAddress: string;
 	assetAddress: string;
 	assetsPerShare: string;
@@ -340,6 +349,7 @@ export interface ApiWrapRatio {
 }
 
 export interface ApiWrapRatioError {
+	chainId: number;
 	shareAddress: string;
 	message: string;
 }
@@ -358,6 +368,7 @@ export interface ApiWrapRatioHistoryEvent {
 }
 
 export interface ApiWrapRatioHistoryResponse {
+	chainId: number;
 	shareAddress: string;
 	assetAddress: string;
 	events: ApiWrapRatioHistoryEvent[];
@@ -445,7 +456,7 @@ export async function apiQueryOrders(
 	signal?: AbortSignal
 ): Promise<ApiOrdersListResponse> {
 	assertBrowser('apiQueryOrders');
-	return fetchJson<ApiOrdersListResponse>(apiUrl('/v1/orders/query'), {
+	return fetchJson<ApiOrdersListResponse>(apiUrl('/v2/orders/query'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(request),
@@ -456,9 +467,9 @@ export async function apiQueryOrders(
 /**
  * Fetch the canonical supported token list from the REST API.
  */
-export async function apiGetTokens(): Promise<ApiToken[]> {
+export async function apiGetTokens(chainId?: number): Promise<ApiToken[]> {
 	assertBrowser('apiGetTokens');
-	return fetchJson<ApiToken[]>(apiUrl('/v1/tokens'));
+	return fetchJson<ApiToken[]>(apiUrl('/v2/tokens', { chainId }));
 }
 
 /**
@@ -469,15 +480,15 @@ export async function apiGetTokenProofs(
 	chainId: number
 ): Promise<ApiTokenProofsResponse> {
 	assertBrowser('apiGetTokenProofs');
-	return fetchJson<ApiTokenProofsResponse>(apiUrl(`/v1/tokens/${address}/proofs`, { chainId }));
+	return fetchJson<ApiTokenProofsResponse>(apiUrl(`/v2/tokens/${address}/proofs`, { chainId }));
 }
 
 /**
  * Fetch ST0x token detail summaries from the REST API.
  */
-export async function apiGetTokenDetails(): Promise<ApiTokenDetailsListResponse> {
+export async function apiGetTokenDetails(chainId?: number): Promise<ApiTokenDetailsListResponse> {
 	assertBrowser('apiGetTokenDetails');
-	return fetchJson<ApiTokenDetailsListResponse>(apiUrl('/v1/tokens/details'));
+	return fetchJson<ApiTokenDetailsListResponse>(apiUrl('/v2/tokens/details', { chainId }));
 }
 
 /**
@@ -490,7 +501,7 @@ export async function apiGetTokenDetailsByAddress(
 ): Promise<ApiTokenDetails> {
 	assertBrowser('apiGetTokenDetailsByAddress');
 	return fetchJson<ApiTokenDetails>(
-		apiUrl(`/v1/tokens/${address}/details`, {
+		apiUrl(`/v2/tokens/${address}/details`, {
 			chainId,
 			activityLimit: options?.activityLimit
 		})
@@ -500,9 +511,9 @@ export async function apiGetTokenDetailsByAddress(
 /**
  * Fetch current wrap ratios for supported wrapped tokens.
  */
-export async function apiGetWrapRatios(): Promise<ApiWrapRatiosResponse> {
+export async function apiGetWrapRatios(chainId?: number): Promise<ApiWrapRatiosResponse> {
 	assertBrowser('apiGetWrapRatios');
-	return fetchJson<ApiWrapRatiosResponse>(apiUrl('/v1/tokens/wrap-ratio'));
+	return fetchJson<ApiWrapRatiosResponse>(apiUrl('/v2/tokens/wrap-ratio', { chainId }));
 }
 
 /**
@@ -514,7 +525,7 @@ export async function apiGetWrapRatio(
 ): Promise<ApiWrapRatio> {
 	assertBrowser('apiGetWrapRatio');
 	return fetchJson<ApiWrapRatio>(
-		apiUrl(`/v1/tokens/wrap-ratio/${wrappedTokenAddress}`, { chainId })
+		apiUrl(`/v2/tokens/wrap-ratio/${wrappedTokenAddress}`, { chainId })
 	);
 }
 
@@ -528,7 +539,7 @@ export async function apiGetWrapRatioHistory(
 ): Promise<ApiWrapRatioHistoryResponse> {
 	assertBrowser('apiGetWrapRatioHistory');
 	return fetchJson<ApiWrapRatioHistoryResponse>(
-		apiUrl(`/v1/tokens/wrap-ratio/${wrappedTokenAddress}/history`, {
+		apiUrl(`/v2/tokens/wrap-ratio/${wrappedTokenAddress}/history`, {
 			chainId,
 			page: options?.page,
 			pageSize: options?.pageSize
@@ -541,7 +552,7 @@ export async function apiGetWrapRatioHistory(
  */
 export async function apiGetSwapQuote(request: ApiSwapQuoteRequest): Promise<ApiSwapQuoteResponse> {
 	assertBrowser('apiGetSwapQuote');
-	return fetchJson<ApiSwapQuoteResponse>(apiUrl('/v1/swap/quote'), {
+	return fetchJson<ApiSwapQuoteResponse>(apiUrl('/v2/swap/quote'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(request)
@@ -572,7 +583,7 @@ export async function apiGetSwapCalldata(
 	request: ApiSwapCalldataRequest
 ): Promise<ApiSwapCalldataResponse> {
 	assertBrowser('apiGetSwapCalldata');
-	return fetchJson<ApiSwapCalldataResponse>(apiUrl('/v1/swap/calldata'), {
+	return fetchJson<ApiSwapCalldataResponse>(apiUrl('/v2/swap/calldata'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(request)
@@ -599,10 +610,12 @@ export async function apiGetSwapCalldataV2(
  */
 export async function apiGetTradesByAddress(
 	address: string,
+	chainId: number,
 	options?: { page?: number; pageSize?: number; startTime?: number; endTime?: number }
 ): Promise<ApiTradesByAddressResponse> {
 	assertBrowser('apiGetTradesByAddress');
-	const url = apiUrl(`/v1/trades/${address}`, {
+	const url = apiUrl(`/v2/trades/${address}`, {
+		chainId,
 		page: options?.page,
 		pageSize: options?.pageSize,
 		startTime: options?.startTime,
@@ -616,10 +629,12 @@ export async function apiGetTradesByAddress(
  */
 export async function apiGetTakerTrades(
 	address: string,
+	chainId: number,
 	options?: { page?: number; pageSize?: number }
 ): Promise<ApiTradesByAddressResponse> {
 	assertBrowser('apiGetTakerTrades');
-	const url = apiUrl(`/v1/trades/taker/${address}`, {
+	const url = apiUrl(`/v2/trades/taker/${address}`, {
+		chainId,
 		page: options?.page,
 		pageSize: options?.pageSize
 	});
@@ -627,9 +642,14 @@ export async function apiGetTakerTrades(
 }
 
 /** Fetch the indexed trade totals for one confirmed transaction. */
-export async function apiGetTradesByTx(txHash: string): Promise<ApiTradesByTxResponse> {
+export async function apiGetTradesByTx(
+	txHash: string,
+	chainId: number
+): Promise<ApiTradesByTxResponse> {
 	assertBrowser('apiGetTradesByTx');
-	return fetchJson<ApiTradesByTxResponse>(apiUrl(`/v1/trades/tx/${txHash}`), { retries: 0 });
+	return fetchJson<ApiTradesByTxResponse>(apiUrl(`/v2/trades/tx/${txHash}`, { chainId }), {
+		retries: 0
+	});
 }
 
 /**
@@ -637,10 +657,12 @@ export async function apiGetTradesByTx(txHash: string): Promise<ApiTradesByTxRes
  */
 export async function apiGetOrdersByOwner(
 	ownerAddress: string,
+	chainId: number,
 	options?: { page?: number; pageSize?: number; state?: 'active' | 'inactive' | 'all' }
 ): Promise<ApiOrdersListResponse> {
 	assertBrowser('apiGetOrdersByOwner');
-	const url = apiUrl(`/v1/orders/owner/${ownerAddress}`, {
+	const url = apiUrl(`/v2/orders/owner/${ownerAddress}`, {
+		chainId,
 		page: options?.page,
 		pageSize: options?.pageSize,
 		state: options?.state
@@ -669,7 +691,7 @@ export async function apiQueryTrades(
 	signal?: AbortSignal
 ): Promise<ApiTradesQueryResponse> {
 	assertBrowser('apiQueryTrades');
-	return fetchJson<ApiTradesQueryResponse>(apiUrl('/v1/trades/query'), {
+	return fetchJson<ApiTradesQueryResponse>(apiUrl('/v2/trades/query'), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(request),
@@ -681,8 +703,11 @@ export async function apiQueryTrades(
  * Fetch trades for multiple orders in a single query request.
  * Used to compute filled amounts for a user's deployed orders.
  */
-export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTradesBatchResponse> {
-	return apiQueryTrades({ orderHashes });
+export async function apiGetTradesBatch(
+	orderHashes: string[],
+	chainId: number
+): Promise<ApiTradesBatchResponse> {
+	return apiQueryTrades({ orderHashes, chainId });
 }
 
 /**
@@ -690,6 +715,7 @@ export async function apiGetTradesBatch(orderHashes: string[]): Promise<ApiTrade
  */
 export async function apiGetTradesByToken(
 	tokenAddress: string,
+	chainId: number,
 	page: number = 1,
 	pageSize: number = 200,
 	startTime?: number,
@@ -698,13 +724,14 @@ export async function apiGetTradesByToken(
 ): Promise<ApiTradesByAddressResponse> {
 	assertBrowser('apiGetTradesByToken');
 	const params = new URLSearchParams({
+		chainId: String(chainId),
 		page: String(page),
 		pageSize: String(pageSize)
 	});
 	if (startTime !== undefined) params.set('startTime', String(startTime));
 	if (endTime !== undefined) params.set('endTime', String(endTime));
 	return fetchJson<ApiTradesByAddressResponse>(
-		`/api/st0x/v1/trades/token/${tokenAddress}?${params}`,
+		`/api/st0x/v2/trades/token/${tokenAddress}?${params}`,
 		{ signal }
 	);
 }

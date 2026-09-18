@@ -26,6 +26,8 @@ export interface SnapshotPrice {
 }
 
 export interface BlockSnapshot {
+	/** Present on multichain snapshots; absent only on historical legacy blobs. */
+	chainId?: number;
 	blockNumber: number;
 	timestamp: number;
 	generatedAt: string;

@@ -37,7 +37,7 @@ export async function fetchMarketPrices(
 	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
 		let response: Response;
 		try {
-			response = await fetch(`${apiBase}/v1/prices?${params}`, {
+			response = await fetch(`${apiBase}/v2/prices?${params}`, {
 				headers: { Authorization: authHeader, Accept: 'application/json' },
 				signal: AbortSignal.timeout(options?.timeoutMs ?? 10_000)
 			});
@@ -48,7 +48,7 @@ export async function fetchMarketPrices(
 			}
 			continue;
 		}
-		logSt0xRequestBudget('v1/prices', credentialLabel, response);
+		logSt0xRequestBudget('v2/prices', credentialLabel, response);
 		if (response.ok) {
 			const body = (await response.json()) as ApiMarketPricesResponse;
 			return body.data;

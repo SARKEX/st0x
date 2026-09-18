@@ -5,7 +5,7 @@
 // anvil. The subgraph never sees these orders (it indexes LIVE Base mainnet).
 // To make the UI see them, we synthesize:
 //   1. `SgOrdersListQuery` Goldsky GraphQL responses
-//   2. `/api/st0x/v1/orders/query` REST API responses
+//   2. `/api/st0x/v2/orders/query` REST API responses
 //
 // The shape of the Goldsky response is captured in
 // `tests/integration/ui/__fixtures__/sample-sgorder-response.json` from a
@@ -258,7 +258,7 @@ export function handleGoldskyRequest(body: string | null): string | null {
 
 /**
  * Convert a DeployedMakerOrder to the ApiOrderSummary shape the production
- * /api/st0x/v1/orders/query endpoint returns. `ioRatio`, `maxOutput`, and
+ * /api/st0x/v2/orders/query endpoint returns. `ioRatio`, `maxOutput`, and
  * `outputVaultBalance` are decimal strings (NOT hex) — `convertApiOrderToProcessedQuote`
  * in src/lib/api/orders.ts:61 runs `Float.parse()` on `ioRatio`/`maxOutput`
  * and `parseFloat()` on `outputVaultBalance` (it drops the order if
@@ -292,7 +292,7 @@ function makerOrderToApiSummary(o: DeployedMakerOrder): ApiOrderSummary {
 }
 
 /**
- * Build a fully-synthetic /api/st0x/v1/orders/query response from the maker
+ * Build a fully-synthetic /api/st0x/v2/orders/query response from the maker
  * registry, filtered to orders involving one of `tokenAddresses` on the given `side`.
  *   side='output' → orders that GIVE this token (sells of this asset)
  *   side='input'  → orders that RECEIVE this token (buys of this asset)
