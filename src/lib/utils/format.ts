@@ -55,6 +55,25 @@ export function formatUsd(amount: number): string {
 	return '$' + amount.toFixed(2);
 }
 
+/** Default fraction digits for unit market prices (SUP-17). */
+export const MARKET_PRICE_FRACTION_DIGITS = 6;
+
+/**
+ * Format a per-token market / avg / best-bid-ask price for display.
+ * Keeps sub-cent precision so DEX-agg comparisons (e.g. wtSGOV) stay honest.
+ */
+export function formatMarketPrice(
+	price: number,
+	fractionDigits: number = MARKET_PRICE_FRACTION_DIGITS
+): string {
+	if (!Number.isFinite(price)) return '';
+	const digits =
+		Number.isFinite(fractionDigits) && fractionDigits >= 0
+			? fractionDigits
+			: MARKET_PRICE_FRACTION_DIGITS;
+	return price.toFixed(digits);
+}
+
 /**
  * Format points with M/K suffixes
  */

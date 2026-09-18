@@ -7,7 +7,8 @@ import {
 	formatUsd,
 	formatPoints,
 	formatApy,
-	formatUnitsSafe
+	formatUnitsSafe,
+	formatMarketPrice
 } from '$lib/utils/format';
 
 describe('format utilities', () => {
@@ -97,6 +98,25 @@ describe('format utilities', () => {
 			[1.2, '1.2%']
 		])('should format %s as %s', (value, expected) => {
 			expect(formatApy(value)).toBe(expected);
+		});
+	});
+
+	// SUP-17: unit market prices must keep sub-cent precision (e.g. wtSGOV vs DEX aggs).
+	describe('formatMarketPrice', () => {
+		it('keeps 6 decimal places for prices that would round to the nearest cent', () => {
+			expect(formatMarketPrice(101.637)).toBe('101.637000');
+			expect(formatMarketPrice(101.64)).toBe('101.640000');
+		});
+
+		it('returns an empty string for non-finite values', () => {
+			expect(formatMarketPrice(NaN)).toBe('');
+			expect(formatMarketPrice(Infinity)).toBe('');
+			expect(formatMarketPrice(-Infinity)).toBe('');
+		});
+
+		it('supports a custom fraction digit count', () => {
+			expect(formatMarketPrice(101.6371234, 6)).toBe('101.637123');
+			expect(formatMarketPrice(0.01234567, 4)).toBe('0.0123');
 		});
 	});
 });

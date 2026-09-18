@@ -8,6 +8,7 @@
 	// currentNetwork not needed directly; TxLink uses it from store
 	import TxLink from '$lib/components/ui/TxLink.svelte';
 	import { formatUnits } from 'viem';
+	import { formatMarketPrice } from '$lib/utils/format';
 	import { translateMarketOrderForDisplay } from '$lib/utils/transactionDisplay';
 	import { addTokenToWallet } from '$lib/utils/walletUtils';
 	import { authMethod } from '$lib/stores/authStore';
@@ -251,7 +252,7 @@
 							<div class="mt-2 flex justify-between">
 								<span class="text-text-2">Average Price</span>
 								<span class="font-medium">
-									{marketOrderDisplay.price.toFixed(6)}
+									{formatMarketPrice(marketOrderDisplay.price)}
 									{marketOrderDisplay.paymentSymbol}
 								</span>
 							</div>

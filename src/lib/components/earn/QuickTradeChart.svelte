@@ -10,6 +10,7 @@
 	import { getTokensByNetwork } from '$lib/config/tokens';
 	import { createTokenTradeActivityQuery } from '$lib/queries/tradeActivity';
 	import { apiTradesToHistoryPoints } from '$lib/utils/ohlc';
+	import { formatMarketPrice } from '$lib/utils/format';
 
 	export let token: CategorizedToken | undefined;
 	// Best live quote price, used as the headline number when the token has no
@@ -129,9 +130,7 @@
 	})();
 
 	function fmtPrice(n: number): string {
-		if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
-		if (n >= 1) return n.toFixed(2);
-		return n.toFixed(4);
+		return formatMarketPrice(n);
 	}
 </script>
 
