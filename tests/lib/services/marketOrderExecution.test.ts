@@ -474,6 +474,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 
 	it('refreshes ready calldata immediately before wallet broadcast', async () => {
 		const initialRequest = {
+			chainId: 8453,
 			taker: TAKER,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
@@ -483,6 +484,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 			denomination: 'wrapped' as const
 		};
 		const refreshRequest = {
+			chainId: 8453,
 			taker: TAKER,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
@@ -519,7 +521,8 @@ describe('executeMarketOrder REST calldata execution', () => {
 		expect(mocks.sendTransaction).toHaveBeenCalledWith({
 			to: ORDERBOOK,
 			data: freshData,
-			value: 0n
+			value: 0n,
+			chainId: 8453
 		});
 		expect(mocks.sendTransaction).not.toHaveBeenCalledWith(
 			expect.objectContaining({ data: staleData })
@@ -590,6 +593,7 @@ describe('executeMarketOrder REST calldata execution', () => {
 			args: [ORDERBOOK, 100_000_000n]
 		});
 		const retryRequest = {
+			chainId: 8453,
 			taker: TAKER,
 			inputToken: PAYMENT,
 			outputToken: ASSET,
@@ -635,7 +639,8 @@ describe('executeMarketOrder REST calldata execution', () => {
 			expect(result.success).toBe(true);
 			expect(mocks.sendTransaction).toHaveBeenNthCalledWith(1, {
 				to: PAYMENT,
-				data: approvalData
+				data: approvalData,
+				chainId: 8453
 			});
 			expect(mocks.apiGetSwapCalldataV2.mock.calls.length).toBeGreaterThanOrEqual(4);
 		} finally {

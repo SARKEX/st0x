@@ -30,11 +30,11 @@ describe('st0x API client', () => {
 		vi.stubGlobal('fetch', fetchMock);
 		const signal = new AbortController().signal;
 
-		await expect(apiGetTradesByToken('0xToken', 1, 200, 1_000, 2_000, signal)).resolves.toEqual(
-			responseBody
-		);
+		await expect(
+			apiGetTradesByToken('0xToken', 8453, 1, 200, 1_000, 2_000, signal)
+		).resolves.toEqual(responseBody);
 		expect(fetchMock).toHaveBeenCalledWith(
-			'/api/st0x/v1/trades/token/0xToken?page=1&pageSize=200&startTime=1000&endTime=2000',
+			'/api/st0x/v2/trades/token/0xToken?chainId=8453&page=1&pageSize=200&startTime=1000&endTime=2000',
 			expect.objectContaining({ signal })
 		);
 	});
@@ -53,9 +53,9 @@ describe('st0x API client', () => {
 		await apiGetWrapRatioHistory('0xToken', 8453, { page: 2, pageSize: 10 });
 
 		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-			'/api/st0x/v1/tokens/0xToken/details?chainId=8453&activityLimit=5',
-			'/api/st0x/v1/tokens/0xToken/proofs?chainId=8453',
-			'/api/st0x/v1/tokens/wrap-ratio/0xToken/history?chainId=8453&page=2&pageSize=10'
+			'/api/st0x/v2/tokens/0xToken/details?chainId=8453&activityLimit=5',
+			'/api/st0x/v2/tokens/0xToken/proofs?chainId=8453',
+			'/api/st0x/v2/tokens/wrap-ratio/0xToken/history?chainId=8453&page=2&pageSize=10'
 		]);
 	});
 

@@ -440,7 +440,7 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const response = await GET(proxyEvent('GET', 'v1/trades/token/0xToken'));
+		const response = await GET(proxyEvent('GET', 'v2/trades/token/0xToken'));
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('Cache-Control')).toBe('private, no-store');
@@ -573,8 +573,8 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const first = await GET(proxyEvent('GET', 'v1/tokens/details'));
-		const second = await GET(proxyEvent('GET', 'v1/tokens/details'));
+		const first = await GET(proxyEvent('GET', 'v2/tokens/details'));
+		const second = await GET(proxyEvent('GET', 'v2/tokens/details'));
 
 		expect(first.status).toBe(200);
 		expect(second.status).toBe(200);
@@ -612,8 +612,8 @@ describe('/api/st0x proxy', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		const first = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
-		const second = await GET(proxyEvent('GET', 'v1/tokens/0xToken/details'));
+		const first = await GET(proxyEvent('GET', 'v2/tokens/0xToken/details'));
+		const second = await GET(proxyEvent('GET', 'v2/tokens/0xToken/details'));
 
 		expect(first.status).toBe(200);
 		expect(second.status).toBe(200);

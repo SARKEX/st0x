@@ -95,6 +95,20 @@ describe('registry-backed network catalog', () => {
 		expect(catalog[0]?.fallbackRpcUrls).toEqual(['https://alpha-fallback.example/rpc']);
 	});
 
+	it('uses Robinhood Chain explorer metadata for chain 4663', async () => {
+		const robinhoodSettings = SETTINGS.replace('chain-id: 111', 'chain-id: 4663').replace(
+			'chain-id: 222',
+			'chain-id: 2220'
+		);
+		const robinhoodTokens = TOKENS.map((item) =>
+			item.chainId === 111 ? { ...item, chainId: 4663 } : { ...item, chainId: 2220 }
+		);
+		const catalog = await buildNetworkCatalog(robinhoodSettings, robinhoodTokens);
+		replaceNetworkCatalog(catalog);
+		expect(getNetworkByChainId(4663)?.blockExplorer).toBe('https://robinhoodchain.blockscout.com');
+		expect(getNetworkByChainId(4663)?.sftExplorer).toBe('https://robinhoodchain.blockscout.com');
+	});
+
 	it('keeps same-address tokens isolated by chain', () => {
 		replaceTokenCatalog(TOKENS);
 		expect(getTokenByAnyAddress(TOKENS[0].address)).toBeNull();

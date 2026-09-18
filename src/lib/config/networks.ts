@@ -82,6 +82,34 @@ function paymentTokensForChain(
 	return tokens.filter((token) => token.chainId === chainId && token.category === 'CRYPTO');
 }
 
+const KNOWN_NETWORK_EXPLORERS: Record<
+	number,
+	{ blockExplorer: string; sftExplorer: string; blockExplorerIcon: string }
+> = {
+	8453: {
+		blockExplorer: 'https://basescan.org',
+		sftExplorer: 'https://stox2.h20.market',
+		blockExplorerIcon: 'etherscan'
+	},
+	// Robinhood Chain (Arbitrum Orbit L2). Registry networks with this chain-id
+	// get native explorer links instead of the generic blockscan fallback.
+	4663: {
+		blockExplorer: 'https://robinhoodchain.blockscout.com',
+		sftExplorer: 'https://robinhoodchain.blockscout.com',
+		blockExplorerIcon: 'etherscan'
+	}
+};
+
+function explorerMetadata(chainId: number) {
+	return (
+		KNOWN_NETWORK_EXPLORERS[chainId] ?? {
+			blockExplorer: 'https://blockscan.com',
+			sftExplorer: 'https://blockscan.com',
+			blockExplorerIcon: 'etherscan'
+		}
+	);
+}
+
 async function buildNetworkCatalogFromClient(
 	settingsYaml: string,
 	tokens: readonly CategorizedToken[],
@@ -117,6 +145,7 @@ async function buildNetworkCatalogFromClient(
 		const defaultPaymentToken =
 			paymentTokens.find((token) => token.paymentToken) ??
 			paymentTokens.find((token) => token.symbol.toUpperCase() === 'USDC') ??
+			paymentTokens.find((token) => token.symbol.toUpperCase() === 'USDG') ??
 			paymentTokens[0];
 		if (!defaultPaymentToken) {
 			throw new Error(`REST token catalog has no payment token for chain ${chainId}`);
@@ -130,6 +159,7 @@ async function buildNetworkCatalogFromClient(
 			if (!orderbookSubgraph) orderbookSubgraph = raindex.subgraph.url;
 		}
 
+		const explorers = explorerMetadata(chainId);
 		result.push({
 			id: chainId,
 			chainId,
@@ -137,9 +167,9 @@ async function buildNetworkCatalogFromClient(
 			raindexNetworkSlug: slug,
 			displayName: sdkNetwork.label ?? networkLabel(tokens, chainId, slug),
 			currencySymbol: sdkNetwork.currency ?? 'ETH',
-			blockExplorer: 'https://blockscan.com',
-			sftExplorer: 'https://blockscan.com',
-			blockExplorerIcon: 'etherscan',
+			blockExplorer: explorers.blockExplorer,
+			sftExplorer: explorers.sftExplorer,
+			blockExplorerIcon: explorers.blockExplorerIcon,
 			rpcUrl: rpcs[0],
 			fallbackRpcUrls: rpcs.slice(1),
 			// The registry SDK does not currently expose a network icon URL.

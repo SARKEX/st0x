@@ -106,6 +106,7 @@ function rebuildPaymentTokens(): void {
 		const selected =
 			tokens.find((token) => token.paymentToken) ??
 			tokens.find((token) => token.symbol.toUpperCase() === 'USDC') ??
+			tokens.find((token) => token.symbol.toUpperCase() === 'USDG') ??
 			tokens[0];
 		if (selected) defaults[Number(chainIdText)] = selected;
 	}
